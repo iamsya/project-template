@@ -458,9 +458,6 @@ class TemplateData(Base):
     metadata_json = Column('METADATA_JSON', JSON, nullable=True)
     
     # 시간 정보
-    started_at = Column(DateTime, default=datetime.utcnow)
-    completed_at = Column(DateTime, nullable=True)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     created_at = Column('CREATED_AT', DateTime, nullable=False, server_default=func.now())
 
     def __repr__(self):
@@ -478,10 +475,13 @@ class KnowledgeReference(Base):
     version = Column('VERSION', String(50), nullable=True)
     is_latest = Column('IS_LATEST', Boolean, nullable=False, server_default=false())
     
+    # 레포 내 데이터 삭제 여부
+    is_deleted = Column('IS_DELETED', Boolean, nullable=False, server_default=false())
+    
     # 레포 및 데이터소스 정보
     repo_id = Column('REPO_ID', String(255), nullable=False, index=True)
     datasource_id = Column('DATASOURCE_ID', String(255), nullable=False, index=True)
-    file_id = Column('FILE_ID', String(255), nullable=True)
+
     
     # 설명 및 메타데이터
     description = Column('DESCRIPTION', Text, nullable=True)

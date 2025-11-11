@@ -7,7 +7,7 @@ import tempfile
 import zipfile
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict
 
 from fastapi import UploadFile
 
@@ -174,114 +174,148 @@ class ProgramUploader:
     async def preprocess_and_create_json(
         self,
         program_id: str,
+        program_title: str,
         user_id: str,
         unzipped_files: list,
         classification_xlsx_path: str,
         device_comment_csv_path: str,
-        chunk_size: int = 50,
+        db_session,
+        document_crud,
+        template_data_crud,
+        failure_crud,
+        template_data_map: Dict[str, Dict],
+        chunk_commit_size: int = 50,
     ) -> Dict[str, Dict]:
         """
-        ZIP 압축 해제 파일들을 전처리하여 JSON 파일 생성 및 S3 업로드
+        ZIP 압축 해제 파일들을 전처리하여 JSON 파일 생성, S3 업로드 및 Document 저장
 
-        전략: 개별 처리 (JSON 생성 → S3 업로드) + 청크 단위 반환
-        - 각 파일을 개별적으로 처리하여 중간 실패 시에도 부분 재시도 가능
-        - 청크 단위로 결과 반환하여 Document 저장을 청크 단위로 수행
+        전략: 개별 처리 및 즉시 DB 반영
+        - 각 파일을 개별적으로 처리
+        - 전처리 성공 시 즉시 Document 테이블에 저장 및 template_data 연결
+        - 실패 시 즉시 ProcessingFailure 테이블에 저장
+        - 청크 단위로 commit (성능 최적화)
 
         Args:
             program_id: 프로그램 ID
+            program_title: 프로그램 제목
             user_id: 사용자 ID
             unzipped_files: 압축 해제된 파일 목록 (S3 경로)
             classification_xlsx_path: 분류 XLSX 파일 S3 경로
             device_comment_csv_path: 디바이스 코멘트 CSV 파일 S3 경로
-            chunk_size: 청크 크기 (기본값: 50)
+            db_session: 데이터베이스 세션
+            document_crud: DocumentCRUD 인스턴스
+            template_data_crud: TemplateDataCRUD 인스턴스
+            failure_crud: ProcessingFailureCRUD 인스턴스
+            template_data_map: logic_id -> template_data 매핑 딕셔너리
+            chunk_commit_size: 청크 commit 크기 (기본값: 50)
 
         Returns:
             Dict: 전처리 결과
                 {
-                    'processed_files': {
-                        'json_file_0': {
-                            's3_path': 's3://...',
-                            's3_key': 'programs/{id}/processed/...',
-                            'filename': 'processed_{id}_0.json',
-                            'json_content': '...',
-                        },
-                        ...
-                    },
-                    'failed_files': [
-                        {
-                            'file_path': 's3://...',
-                            'index': 0,
-                            'error': '에러 메시지',
-                            'retry_count': 0,
-                        },
-                        ...
-                    ],
                     'summary': {
                         'total': 300,
                         'success': 295,
                         'failed': 5,
-                    }
+                    },
+                    'created_documents': [...],  # 생성된 Document 정보
+                    'failed_files': [...]  # 실패한 파일 정보
                 }
         """
         try:
+            from src.utils.uuid_gen import gen
+            from src.database.models.program_models import ProcessingFailure
+            import os
+
             logger.info(
                 f"전처리 시작: program_id={program_id}, "
-                f"unzipped_files={len(unzipped_files)}개, "
-                f"chunk_size={chunk_size}"
+                f"unzipped_files={len(unzipped_files)}개"
             )
 
-            # TODO: S3에서 파일 다운로드 및 전처리 로직 구현
-            # 1. S3에서 압축 해제된 CSV 파일들 다운로드
-            # 2. classification_xlsx 파일 다운로드
-            # 3. device_comment_csv 파일 다운로드
-            # 4. 전처리 로직 수행 (파일 분석, 변환 등)
-
-            processed_json_files = {}
+            created_documents = []
             failed_files = []
 
-            for idx, unzipped_file_path in enumerate(unzipped_files):
+            for idx, unzipped_file_path in enumerate(unzipped_files, start=1):
                 try:
-                    # 1. 전처리 로직 수행
-                    # processed_data = await self._preprocess_file(
-                    #     unzipped_file_path,
-                    #     classification_xlsx_path,
-                    #     device_comment_csv_path
-                    # )
+                    # TODO: 전처리 로직 구현 필요
+                    # 1. unzipped_file_path에서 파일 다운로드
+                    # 2. classification_xlsx_path와 device_comment_csv_path 활용
+                    # 3. 파일을 분석하여 JSON 형식으로 변환
+                    # 4. json_content 생성
+                    #
+                    # 예시:
+                    #   - S3에서 파일 다운로드
+                    #   - 파일 내용 파싱
+                    #   - classification_xlsx와 device_comment_csv 데이터 결합
+                    #   - JSON 형식으로 변환
+                    #   - json_content = json.dumps(processed_data, ensure_ascii=False)
 
-                    # 2. JSON 파일 생성
                     json_filename = f"processed_{program_id}_{idx}.json"
                     json_s3_key = f"programs/{program_id}/processed/{json_filename}"
 
-                    # TODO: JSON 파일 내용 생성
-                    # import json
-                    # json_content = json.dumps(
-                    #     processed_data, ensure_ascii=False
-                    # )
+                    # TODO: 전처리 결과를 JSON으로 변환하여 json_content 생성
+                    json_content = ""  # 전처리 로직 구현 후 채워넣기
 
-                    # 임시로 목업 (실제 구현 시 제거)
-                    json_content = '{"mock": "data"}'
-
-                    # 3. S3에 JSON 파일 업로드
+                    # S3에 JSON 파일 업로드
                     json_s3_path = await self._upload_json_to_s3(
                         json_content=json_content, s3_key=json_s3_key
                     )
 
-                    processed_json_files[f"json_file_{idx}"] = {
-                        "s3_path": json_s3_path,
-                        "s3_key": json_s3_key,
-                        "filename": json_filename,
-                        "json_content": json_content,  # Document 저장 후 삭제 가능
-                        "file_size": len(json_content.encode("utf-8")),
-                        "source_file_path": unzipped_file_path,
-                        "source_index": idx,
-                    }
+                    # logic_id 추출 (source_file_path에서)
+                    logic_id = None
+                    if unzipped_file_path:
+                        filename = os.path.basename(unzipped_file_path)
+                        logic_id = filename
 
-                    # 진행상황 로깅 (청크 단위)
-                    if (idx + 1) % chunk_size == 0:
+                    # template_data 찾기
+                    template_data_id = None
+                    if logic_id and logic_id in template_data_map:
+                        template_data_id = template_data_map[logic_id]["template_data_id"]
+
+                    # Document 생성
+                    document_id = gen()
+                    document_crud.create_document(
+                        document_id=document_id,
+                        document_name=f"{program_title}_{json_filename}",
+                        original_filename=json_filename,
+                        file_key=json_s3_key,
+                        file_size=len(json_content.encode("utf-8")),
+                        file_type="application/json",
+                        file_extension="json",
+                        user_id=user_id,
+                        upload_path=json_s3_path,
+                        status="processing",
+                        document_type="common",
+                        program_id=program_id,
+                        metadata_json={
+                            "program_id": program_id,
+                            "program_title": program_title,
+                            "processing_stage": "preprocessed",
+                            "json_filename": json_filename,
+                            "logic_id": logic_id,
+                            "source_file_path": unzipped_file_path,
+                        },
+                    )
+
+                    # template_data.document_id에 연결
+                    if template_data_id:
+                        template_data_crud.update_template_data(
+                            template_data_id=template_data_id,
+                            document_id=document_id,
+                        )
+
+                    created_documents.append({
+                        "document_id": document_id,
+                        "s3_path": json_s3_path,
+                        "filename": json_filename,
+                        "template_data_id": template_data_id,
+                    })
+
+                    # 청크 단위 commit (성능 최적화)
+                    if idx % chunk_commit_size == 0:
+                        db_session.commit()
                         logger.info(
-                            f"전처리 진행상황: {idx + 1}/{len(unzipped_files)} "
-                            f"완료 ({len(processed_json_files)}개 성공, "
-                            f"{len(failed_files)}개 실패)"
+                            f"전처리 진행상황: {idx}/{len(unzipped_files)} "
+                            f"완료 (청크 commit)"
                         )
 
                 except Exception as file_error:
@@ -290,20 +324,40 @@ class ProgramUploader:
                         f"파일 처리 실패: {unzipped_file_path}, "
                         f"error: {str(file_error)}"
                     )
-                    failed_files.append(
-                        {
-                            "file_path": unzipped_file_path,
-                            "index": idx,
+                    db_session.rollback()
+
+                    # ProcessingFailure에 저장
+                    failure_id = gen()
+                    failure_crud.create_failure(
+                        failure_id=failure_id,
+                        source_type=ProcessingFailure.SOURCE_TYPE_PROGRAM,
+                        source_id=program_id,
+                        failure_type=ProcessingFailure.FAILURE_TYPE_PREPROCESSING,
+                        error_message=str(file_error),
+                        file_path=unzipped_file_path,
+                        file_index=idx,
+                        error_details={
                             "error": str(file_error),
-                            "retry_count": 0,
                             "timestamp": datetime.now().isoformat(),
-                        }
+                        },
                     )
+                    db_session.commit()
+
+                    failed_files.append({
+                        "file_path": unzipped_file_path,
+                        "index": idx,
+                        "error": str(file_error),
+                        "failure_id": failure_id,
+                    })
                     continue
+
+            # 남은 파일들 commit
+            if len(unzipped_files) % chunk_commit_size != 0:
+                db_session.commit()
 
             summary = {
                 "total": len(unzipped_files),
-                "success": len(processed_json_files),
+                "success": len(created_documents),
                 "failed": len(failed_files),
             }
 
@@ -319,9 +373,9 @@ class ProgramUploader:
                 )
 
             return {
-                "processed_files": processed_json_files,
-                "failed_files": failed_files,
                 "summary": summary,
+                "created_documents": created_documents,
+                "failed_files": failed_files,
             }
 
         except Exception as e:

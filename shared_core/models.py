@@ -65,6 +65,7 @@ class Document(Base):
     # 벡터화 정보
     milvus_collection_name = Column('MILVUS_COLLECTION_NAME', String(255), nullable=True)
     vector_count = Column('VECTOR_COUNT', Integer, default=0, nullable=True)
+    is_embedded = Column('IS_EMBEDDED', Boolean, nullable=False, server_default=false())
     
     # 문서 메타데이터
     language = Column('LANGUAGE', String(10), nullable=True)
@@ -89,6 +90,7 @@ class Document(Base):
     program_file_type = Column('PROGRAM_FILE_TYPE', String(50), nullable=True, index=True)
     source_document_id = Column('SOURCE_DOCUMENT_ID', String(50), ForeignKey('DOCUMENTS.DOCUMENT_ID'), nullable=True, index=True)
     knowledge_reference_id = Column('KNOWLEDGE_REFERENCE_ID', String(50), ForeignKey('KNOWLEDGE_REFERENCES.REFERENCE_ID'), nullable=True, index=True)
+    file_id = Column('FILE_ID', String(255), nullable=True)
 
     def __repr__(self):
         return f"<Document(document_id='{self.document_id}', name='{self.document_name}', status='{self.status}')>"
@@ -189,6 +191,3 @@ class ProcessingJob(Base):
 
 # 기존 코드와의 호환성을 위한 별칭들
 DocumentMetadata = Document
-
-# 새로 생성된 모델들을 import (plc_models.py에서)
-from .plc_models import Program, ProcessingFailure, PLC, PlantMaster, ProcessMaster, LineMaster, EquipmentGroupMaster, ProgramLLMDataChunk, Template, TemplateData, KnowledgeReference

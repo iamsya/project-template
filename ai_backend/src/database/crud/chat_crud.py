@@ -2,7 +2,7 @@
 """Chat CRUD operations with database."""
 import logging
 from datetime import datetime
-from typing import List, Optional
+from typing import Dict, List, Optional
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import desc
@@ -40,15 +40,19 @@ class ChatCRUD:
             raise HandledException(ResponseCode.DATABASE_QUERY_ERROR, e=e)
     
     def create_message(
-        self, 
-        message_id: str, 
-        chat_id: str, 
-        user_id: str, 
-        message: str, 
+        self,
+        message_id: str,
+        chat_id: str,
+        user_id: str,
+        message: str,
         message_type: str = "text",
         status: str = None,
         is_cancelled: bool = False,
-        plc_id: str = None
+        plc_id: str = None,
+        plc_plant_id_snapshot: Optional[str] = None,
+        plc_process_id_snapshot: Optional[str] = None,
+        plc_line_id_snapshot: Optional[str] = None,
+        plc_equipment_group_id_snapshot: Optional[str] = None,
     ) -> ChatMessage:
         """메시지 생성"""
         try:
@@ -61,20 +65,158 @@ class ChatCRUD:
                 status=status,
                 is_cancelled=is_cancelled,
                 plc_id=plc_id,
-                create_dt=datetime.now(ZoneInfo("Asia/Seoul"))
+                plc_plant_id_snapshot=plc_plant_id_snapshot,
+                plc_process_id_snapshot=plc_process_id_snapshot,
+                plc_line_id_snapshot=plc_line_id_snapshot,
+                plc_equipment_group_id_snapshot=plc_equipment_group_id_snapshot,
+                create_dt=datetime.now(ZoneInfo("Asia/Seoul")),
             )
             self.session.add(chat_message)
             self.session.commit()
             self.session.refresh(chat_message)
-            
+
             # 채팅의 마지막 메시지 시간 업데이트
             self.update_chat_last_message(chat_id)
-            
+
             return chat_message
         except Exception as e:
             logger.error(f"Database error creating message: {str(e)}")
             self.session.rollback()
             raise HandledException(ResponseCode.DATABASE_QUERY_ERROR, e=e)
+
+    def _get_plc_hierarchy_snapshot(self, plc_id: str) -> Optional[Dict]:
+        """
+        PLC의 현재 계층 구조 스냅샷 ID들을 가져옴
+        
+        Returns:
+            Dict: 계층 구조 ID 딕셔너리
+            {
+                "plant_id": "...",
+                "process_id": "...",
+                "line_id": "...",
+                "equipment_group_id": "..."
+            }
+        """
+        if not plc_id:
+            return None
+
+        try:
+            from src.database.models.plc_models import PLC
+
+            plc = self.session.query(PLC).filter(PLC.id == plc_id).first()
+            if not plc:
+                return None
+
+            snapshot = {}
+            if plc.plant_id_snapshot:
+                snapshot["plant_id"] = plc.plant_id_snapshot
+            if plc.process_id_snapshot:
+                snapshot["process_id"] = plc.process_id_snapshot
+            if plc.line_id_snapshot:
+                snapshot["line_id"] = plc.line_id_snapshot
+            if plc.equipment_group_id_snapshot:
+                snapshot["equipment_group_id"] = plc.equipment_group_id_snapshot
+
+            return snapshot if snapshot else None
+
+        except Exception as e:
+            logger.warning(
+                f"PLC 계층 구조 스냅샷 조회 실패: plc_id={plc_id}, "
+                f"error={str(e)}"
+            )
+            return None
+
+    def _get_hierarchy_from_snapshot_ids(
+        self,
+        plant_id: Optional[str],
+        process_id: Optional[str],
+        line_id: Optional[str],
+        equipment_group_id: Optional[str],
+    ) -> Optional[Dict]:
+        """
+        스냅샷 ID들로부터 master 테이블 조인하여 계층 구조 정보 조회
+        
+        Returns:
+            Dict: 계층 구조 정보
+            {
+                "plant": {"id": "...", "code": "...", "name": "..."},
+                "process": {"id": "...", "code": "...", "name": "..."},
+                "line": {"id": "...", "code": "...", "name": "..."},
+                "equipment_group": {"id": "...", "code": "...", "name": "..."}
+            }
+        """
+        try:
+            from src.database.models.master_models import (
+                EquipmentGroupMaster,
+                LineMaster,
+                PlantMaster,
+                ProcessMaster,
+            )
+
+            hierarchy = {}
+
+            if plant_id:
+                plant = (
+                    self.session.query(PlantMaster)
+                    .filter(PlantMaster.plant_id == plant_id)
+                    .first()
+                )
+                if plant:
+                    hierarchy["plant"] = {
+                        "id": plant.plant_id,
+                        "code": plant.plant_code,
+                        "name": plant.plant_name,
+                    }
+
+            if process_id:
+                process = (
+                    self.session.query(ProcessMaster)
+                    .filter(ProcessMaster.process_id == process_id)
+                    .first()
+                )
+                if process:
+                    hierarchy["process"] = {
+                        "id": process.process_id,
+                        "code": process.process_code,
+                        "name": process.process_name,
+                    }
+
+            if line_id:
+                line = (
+                    self.session.query(LineMaster)
+                    .filter(LineMaster.line_id == line_id)
+                    .first()
+                )
+                if line:
+                    hierarchy["line"] = {
+                        "id": line.line_id,
+                        "code": line.line_code,
+                        "name": line.line_name,
+                    }
+
+            if equipment_group_id:
+                equipment = (
+                    self.session.query(EquipmentGroupMaster)
+                    .filter(
+                        EquipmentGroupMaster.equipment_group_id
+                        == equipment_group_id
+                    )
+                    .first()
+                )
+                if equipment:
+                    hierarchy["equipment_group"] = {
+                        "id": equipment.equipment_group_id,
+                        "code": equipment.equipment_group_code,
+                        "name": equipment.equipment_group_name,
+                    }
+
+            return hierarchy if hierarchy else None
+
+        except Exception as e:
+            logger.warning(
+                f"스냅샷 ID로 계층 구조 조회 실패: {str(e)}"
+            )
+            return None
     
     def get_messages(self, chat_id: str, limit: int = 50) -> List[ChatMessage]:
         """특정 채팅의 메시지 조회"""
@@ -132,9 +274,21 @@ class ChatCRUD:
             logger.error(f"Database error in get_chat_or_create: {str(e)}")
             raise HandledException(ResponseCode.DATABASE_QUERY_ERROR, e=e)
     
-    def save_user_message(self, message_id: str, chat_id: str, user_id: str, message: str, plc_id: str = None) -> ChatMessage:
-        """사용자 메시지 저장"""
+    def save_user_message(
+        self,
+        message_id: str,
+        chat_id: str,
+        user_id: str,
+        message: str,
+        plc_id: str = None,
+    ) -> ChatMessage:
+        """사용자 메시지 저장 (PLC 계층 구조 스냅샷 자동 저장)"""
         try:
+            # PLC 계층 구조 스냅샷 가져오기
+            snapshot = None
+            if plc_id:
+                snapshot = self._get_plc_hierarchy_snapshot(plc_id)
+
             return self.create_message(
                 message_id=message_id,
                 chat_id=chat_id,
@@ -142,15 +296,34 @@ class ChatCRUD:
                 message=message,
                 message_type="user",
                 status="completed",
-                plc_id=plc_id
+                plc_id=plc_id,
+                plc_plant_id_snapshot=snapshot.get("plant_id") if snapshot else None,
+                plc_process_id_snapshot=snapshot.get("process_id") if snapshot else None,
+                plc_line_id_snapshot=snapshot.get("line_id") if snapshot else None,
+                plc_equipment_group_id_snapshot=snapshot.get("equipment_group_id") if snapshot else None,
             )
         except Exception as e:
             logger.error(f"Database error saving user message: {str(e)}")
             raise HandledException(ResponseCode.DATABASE_QUERY_ERROR, e=e)
-    
-    def save_ai_message(self, message_id: str, chat_id: str, user_id: str, message: str, status: str = "completed", plc_id: str = None) -> ChatMessage:
-        """AI 메시지 저장"""
+
+    def save_ai_message(
+        self,
+        message_id: str,
+        chat_id: str,
+        user_id: str,
+        message: str,
+        status: str = "completed",
+        plc_id: str = None,
+    ) -> ChatMessage:
+        """AI 메시지 저장 (PLC 계층 구조 스냅샷 자동 저장)"""
         try:
+            # PLC 계층 구조 스냅샷 가져오기
+            # AI 메시지는 사용자 메시지와 동일한 PLC를 참조하므로
+            # 사용자 메시지의 plc_id를 사용하거나, 별도로 전달된 plc_id 사용
+            snapshot = None
+            if plc_id:
+                snapshot = self._get_plc_hierarchy_snapshot(plc_id)
+
             return self.create_message(
                 message_id=message_id,
                 chat_id=chat_id,
@@ -158,7 +331,11 @@ class ChatCRUD:
                 message=message,
                 message_type="assistant",
                 status=status,
-                plc_id=plc_id
+                plc_id=plc_id,
+                plc_plant_id_snapshot=snapshot.get("plant_id") if snapshot else None,
+                plc_process_id_snapshot=snapshot.get("process_id") if snapshot else None,
+                plc_line_id_snapshot=snapshot.get("line_id") if snapshot else None,
+                plc_equipment_group_id_snapshot=snapshot.get("equipment_group_id") if snapshot else None,
             )
         except Exception as e:
             logger.error(f"Database error saving AI message: {str(e)}")
@@ -168,22 +345,49 @@ class ChatCRUD:
         """데이터베이스에서 메시지 조회하여 딕셔너리로 변환"""
         try:
             messages = self.get_messages(chat_id)
-            
+
             # ChatMessage 객체를 딕셔너리로 변환
             history = []
             for msg in messages:
                 role = "user" if msg.message_type == "user" else "assistant"
                 if msg.is_cancelled:
                     role = "system"
-                
-                history.append({
-                    "role": role,
-                    "content": msg.message,
-                    "timestamp": msg.create_dt.isoformat(),
-                    "cancelled": msg.is_cancelled,
-                    "message_id": msg.message_id
-                })
-            
+
+                # PLC 계층 구조: 스냅샷 ID에서 master 테이블 조인으로 조회
+                plc_hierarchy = None
+                if msg.plc_id:
+                    # 스냅샷 ID가 있으면 master 테이블에서 조회
+                    if (msg.plc_plant_id_snapshot or msg.plc_process_id_snapshot or 
+                        msg.plc_line_id_snapshot or msg.plc_equipment_group_id_snapshot):
+                        plc_hierarchy = self._get_hierarchy_from_snapshot_ids(
+                            msg.plc_plant_id_snapshot,
+                            msg.plc_process_id_snapshot,
+                            msg.plc_line_id_snapshot,
+                            msg.plc_equipment_group_id_snapshot,
+                        )
+                    else:
+                        # 스냅샷이 없으면 현재 PLC 정보 조회 (하위 호환성)
+                        snapshot = self._get_plc_hierarchy_snapshot(msg.plc_id)
+                        if snapshot:
+                            plc_hierarchy = self._get_hierarchy_from_snapshot_ids(
+                                snapshot.get("plant_id"),
+                                snapshot.get("process_id"),
+                                snapshot.get("line_id"),
+                                snapshot.get("equipment_group_id"),
+                            )
+
+                history.append(
+                    {
+                        "role": role,
+                        "content": msg.message,
+                        "timestamp": msg.create_dt.isoformat(),
+                        "cancelled": msg.is_cancelled,
+                        "message_id": msg.message_id,
+                        "plc_id": msg.plc_id,
+                        "plc_hierarchy": plc_hierarchy,
+                    }
+                )
+
             # 시간순으로 정렬 (오래된 것부터)
             history.sort(key=lambda x: x["timestamp"])
             return history
@@ -296,9 +500,21 @@ class ChatCRUD:
             logger.error(f"Database error getting active generating chats: {str(e)}")
             raise HandledException(ResponseCode.DATABASE_QUERY_ERROR, e=e)
     
-    def save_user_message_simple(self, message_id: str, chat_id: str, user_id: str, message: str, plc_id: str = None):
-        """사용자 메시지 저장"""
+    def save_user_message_simple(
+        self,
+        message_id: str,
+        chat_id: str,
+        user_id: str,
+        message: str,
+        plc_id: str = None,
+    ):
+        """사용자 메시지 저장 (PLC 계층 구조 스냅샷 자동 저장)"""
         try:
+            # PLC 계층 구조 스냅샷 가져오기
+            snapshot = None
+            if plc_id:
+                snapshot = self._get_plc_hierarchy_snapshot(plc_id)
+
             self.create_message(
                 message_id=message_id,
                 chat_id=chat_id,
@@ -306,15 +522,30 @@ class ChatCRUD:
                 message=message,
                 message_type="user",
                 status="completed",
-                plc_id=plc_id
+                plc_id=plc_id,
+                plc_plant_id_snapshot=snapshot.get("plant_id") if snapshot else None,
+                plc_process_id_snapshot=snapshot.get("process_id") if snapshot else None,
+                plc_line_id_snapshot=snapshot.get("line_id") if snapshot else None,
+                plc_equipment_group_id_snapshot=snapshot.get("equipment_group_id") if snapshot else None,
             )
         except Exception as e:
             logger.error(f"Database error saving user message: {str(e)}")
             raise HandledException(ResponseCode.DATABASE_QUERY_ERROR, e=e)
-    
-    def save_ai_message_generating(self, message_id: str, chat_id: str, user_id: str, plc_id: str = None):
-        """AI 메시지를 generating 상태로 저장"""
+
+    def save_ai_message_generating(
+        self,
+        message_id: str,
+        chat_id: str,
+        user_id: str,
+        plc_id: str = None,
+    ):
+        """AI 메시지를 generating 상태로 저장 (PLC 계층 구조 스냅샷 자동 저장)"""
         try:
+            # PLC 계층 구조 스냅샷 가져오기
+            snapshot = None
+            if plc_id:
+                snapshot = self._get_plc_hierarchy_snapshot(plc_id)
+
             self.create_message(
                 message_id=message_id,
                 chat_id=chat_id,
@@ -322,7 +553,11 @@ class ChatCRUD:
                 message="",  # 빈 메시지로 시작
                 message_type="assistant",
                 status="generating",
-                plc_id=plc_id
+                plc_id=plc_id,
+                plc_plant_id_snapshot=snapshot.get("plant_id") if snapshot else None,
+                plc_process_id_snapshot=snapshot.get("process_id") if snapshot else None,
+                plc_line_id_snapshot=snapshot.get("line_id") if snapshot else None,
+                plc_equipment_group_id_snapshot=snapshot.get("equipment_group_id") if snapshot else None,
             )
         except Exception as e:
             logger.error(f"Database error saving AI message generating: {str(e)}")

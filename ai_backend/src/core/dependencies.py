@@ -9,6 +9,8 @@ from src.api.services.program_service import ProgramService
 from src.api.services.document_service import DocumentService
 from src.api.services.user_service import UserService
 from src.api.services.group_service import GroupService
+from src.api.services.s3_download_service import S3DownloadService
+from src.api.services.knowledge_status_service import KnowledgeStatusService
 from src.database.base import Database
 from src.config import settings
 from src.cache.redis_client import get_redis_client
@@ -119,3 +121,47 @@ def get_group_service(
 def get_program_service(db: Session = Depends(get_db)) -> ProgramService:
     """프로그램 관리 서비스 의존성 주입"""
     return ProgramService(db=db)
+
+
+def get_s3_download_service() -> S3DownloadService:
+    """S3 다운로드 서비스 의존성 주입"""
+    import os
+
+    # S3 버킷 이름 (환경변수에서 가져오기)
+    s3_bucket = os.getenv("S3_BUCKET_NAME", os.getenv("AWS_S3_BUCKET"))
+
+    # S3 클라이언트 초기화
+    s3_client = None
+    if s3_bucket:
+        try:
+            import boto3
+
+            # AWS 자격 증명은 다음 순서로 자동으로 찾습니다:
+            # 1. 환경 변수 (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY)
+            # 2. AWS 자격 증명 파일 (~/.aws/credentials)
+            # 3. IAM 역할 (EC2, ECS, Lambda 등에서 실행 시)
+            s3_client = boto3.client(
+                "s3",
+                region_name=os.getenv("AWS_REGION", "ap-northeast-2"),
+            )
+            logger.info("S3 클라이언트 초기화 완료: bucket=%s", s3_bucket)
+        except Exception as e:
+            logger.warning(
+                "S3 클라이언트 초기화 실패: %s. "
+                "S3 다운로드 기능이 비활성화됩니다.",
+                str(e),
+            )
+    else:
+        logger.warning(
+            "S3_BUCKET_NAME 환경변수가 설정되지 않았습니다. "
+            "S3 다운로드 기능이 비활성화됩니다."
+        )
+
+    return S3DownloadService(s3_client=s3_client, s3_bucket=s3_bucket)
+
+
+def get_knowledge_status_service(
+    db: Session = Depends(get_db),
+) -> KnowledgeStatusService:
+    """Knowledge 상태 확인 서비스 의존성 주입"""
+    return KnowledgeStatusService(db=db)

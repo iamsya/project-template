@@ -117,6 +117,18 @@ class Settings(BaseSettings):
     external_api_max_tokens: int = Field(default=1000, env="EXTERNAL_API_MAX_TOKENS")
     external_api_temperature: float = Field(default=0.7, env="EXTERNAL_API_TEMPERATURE")
     
+    # Knowledge API Configuration
+    knowledge_api_endpoint: str = Field(
+        default="http://0.0.0.0:8000",
+        env="KNOWLEDGE_API_ENDPOINT",
+        description="Knowledge Base API 엔드포인트"
+    )
+    knowledge_api_version: str = Field(
+        default="v1",
+        env="KNOWLEDGE_API_VERSION",
+        description="Knowledge Base API 버전"
+    )
+    
     # External API OpenAI Configuration (for title generation)
     openai_api_key: str = Field(default="", env="OPENAI_API_KEY")
     openai_model: str = Field(default="gpt-3.5-turbo", env="OPENAI_MODEL")

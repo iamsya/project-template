@@ -1,7 +1,7 @@
 # _*_ coding: utf-8 _*_
 """PLC response models."""
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
@@ -51,3 +51,85 @@ class PLCBasicInfo(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class PLCListItem(BaseModel):
+    """PLC 목록 항목 (매핑 화면용)"""
+
+    id: str = Field(..., description="PLC ID (Primary Key)")
+    plc_id: str = Field(..., description="PLC 식별자")
+    plc_name: str = Field(..., description="PLC 이름")
+    plant: Optional[str] = Field(None, description="Plant")
+    process: Optional[str] = Field(None, description="공정")
+    line: Optional[str] = Field(None, description="Line")
+    equipment_group: Optional[str] = Field(None, description="장비 그룹")
+    unit: Optional[str] = Field(None, description="호기")
+    program_id: Optional[str] = Field(
+        None, description="매핑된 PGM ID"
+    )
+    mapping_user: Optional[str] = Field(None, description="매핑 등록자")
+    mapping_dt: Optional[datetime] = Field(None, description="매핑 일시")
+
+    class Config:
+        from_attributes = True
+
+
+class PLCListResponse(BaseModel):
+    """PLC 목록 응답"""
+
+    items: List[PLCListItem] = Field(..., description="PLC 목록")
+    total_count: int = Field(..., description="전체 개수")
+    page: int = Field(..., description="현재 페이지")
+    page_size: int = Field(..., description="페이지당 항목 수")
+    total_pages: int = Field(..., description="전체 페이지 수")
+
+
+class ProgramMappingItem(BaseModel):
+    """PGM 프로그램 매핑용 항목 (간단한 정보)"""
+
+    program_id: str = Field(..., description="프로그램 ID (PGM ID)")
+    program_name: str = Field(..., description="프로그램 제목")
+    ladder_file_count: int = Field(
+        default=0, description="Ladder 파일 개수"
+    )
+    comment_file_count: int = Field(
+        default=0, description="Comment 파일 개수"
+    )
+    create_user: str = Field(..., description="등록자")
+    create_dt: datetime = Field(..., description="등록일시")
+
+    class Config:
+        from_attributes = True
+
+
+class ProgramMappingListResponse(BaseModel):
+    """PGM 프로그램 매핑용 목록 응답"""
+
+    items: List[ProgramMappingItem] = Field(
+        ..., description="프로그램 목록"
+    )
+    total_count: int = Field(..., description="전체 개수")
+    page: int = Field(..., description="현재 페이지")
+    page_size: int = Field(..., description="페이지당 항목 수")
+    total_pages: int = Field(..., description="전체 페이지 수")
+
+
+class PLCMappingRequest(BaseModel):
+    """PLC-PGM 매핑 저장 요청"""
+
+    plc_ids: List[str] = Field(
+        ..., description="매핑할 PLC ID 리스트", min_items=1
+    )
+    program_id: str = Field(..., description="매핑할 PGM ID")
+    mapping_user: str = Field(..., description="매핑 사용자")
+
+
+class PLCMappingResponse(BaseModel):
+    """PLC-PGM 매핑 저장 응답"""
+
+    success: bool = Field(..., description="성공 여부")
+    mapped_count: int = Field(..., description="매핑된 PLC 개수")
+    failed_count: int = Field(..., description="실패한 PLC 개수")
+    errors: List[str] = Field(
+        default_factory=list, description="에러 메시지 리스트"
+    )

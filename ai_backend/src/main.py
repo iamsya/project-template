@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import asyncio
 import glob
 import logging
 import logging.config
@@ -265,11 +266,53 @@ def create_app():
     logger.info("애플리케이션 디버그 모드: {}".format('활성화' if debug_mode else '비활성화'))
     
     app = FastAPI(
-        title="LLM Chat API",
-        description="AI-powered chat service with streaming support",
+        title="PLC Interpreter Application Backend",
+        description="""
+        PLC 프로그램 관리 및 AI 채팅 서비스 API
+        
+        ## 주요 기능
+        
+        ### 1. 사용자 관리
+        - 사용자 생성, 조회, 수정, 삭제
+        - 사용자 검색 및 목록 조회
+        - 사용자 활성화/비활성화
+        
+        ### 2. 프로그램 관리
+        - PLC 프로그램 등록 (ZIP, XLSX, CSV 파일 업로드)
+        - 프로그램 목록 조회 (검색, 필터링, 페이지네이션)
+        - 프로그램 정보 조회 및 삭제
+        - 실패 파일 재시도
+        
+        ### 3. PLC 관리
+        - PLC 기준 정보 조회
+        - PLC-PGM 매핑 저장
+        - 계층 구조 정보 조회
+        
+        ### 4. 문서 관리
+        - 문서 업로드 및 다운로드
+        - 문서 검색 및 목록 조회
+        - 문서 권한 관리
+        
+        ### 5. AI 채팅
+        - LLM 기반 채팅 서비스
+        - 스트리밍 응답 지원
+        
+        ## API 버전
+        - 현재 버전: v1
+        
+        ## 응답 형식
+        - 성공: HTTP 200 + JSON 응답
+        - 실패: HTTP 4xx/5xx + 에러 정보 포함 JSON
+        
+        ## 에러 코드
+        - 각 API의 description에서 예외 상황을 확인하세요.
+        """,
         version="1.0.0",
-        debug=debug_mode,  # FastAPI 디버그 모드 활성화
-        root_path=settings.app_root_path  # 리버스 프록시 환경에서 사용
+        debug=debug_mode,
+        root_path=settings.app_root_path,
+        docs_url="/docs",
+        redoc_url="/redoc",
+        openapi_url="/openapi.json",
     )
     
     logger.info("FastAPI application created successfully")
@@ -280,7 +323,9 @@ def create_app():
   
     # API 버전 경로 설정
     # APP_ROOT_PATH로 관리하므로 라우터에서는 /v1만 사용
-    api_prefix = "/v1"
+    # api_prefix = "/v1"
+    
+    api_prefix = "/api/v1"
     
     # LLM Chat 라우터 추가 (채팅 전용)
     from src.api.routers.chat_router import router as chat_router
@@ -305,6 +350,14 @@ def create_app():
     # Rating 라우터 추가 (메시지 평가)
     from src.api.routers.rating_router import router as rating_router
     app.include_router(rating_router, prefix=api_prefix)
+    
+    # Program 라우터 추가 (프로그램 관리)
+    from src.api.routers.program_router import router as program_router
+    app.include_router(program_router, prefix=api_prefix)
+    
+    # PLC 라우터 추가 (PLC 관리)
+    from src.api.routers.plc_router import router as plc_router
+    app.include_router(plc_router, prefix=api_prefix)
     
     # CORS 설정 - 설정 파일에서 가져오기
     origins = settings.get_cors_origins()
@@ -385,7 +438,79 @@ def create_app():
             logger.info("수동 로그 정리 요청됨 (디버그 엔드포인트)")
             cleanup_old_logs()
             return {"message": "로그 정리 완료 - 콘솔을 확인하세요"}
-    
+
+    # 백그라운드 작업: 진행률 통계 주기적 업데이트
+    @app.on_event("startup")
+    async def startup_background_tasks():
+        """백그라운드 작업 시작"""
+        logger.info("백그라운드 작업 시작: 진행률 통계 업데이트")
+        
+        # 데이터베이스 초기화 (테이블 생성) - 앱 시작 시 실행
+        from src.core.dependencies import get_database
+        try:
+            get_database()
+            logger.info("데이터베이스 초기화 완료 (앱 시작 시)")
+        except Exception as e:
+            logger.warning(
+                "데이터베이스 초기화 실패 (백그라운드 작업은 계속 진행): %s",
+                str(e),
+            )
+
+        async def update_progress_periodically():
+            """
+            적응형 주기로 진행률 통계 업데이트
+            - 진행 중인 Program이 있으면: 30초마다
+            - 진행 중인 Program이 없으면: 5분마다
+            """
+            from src.core.dependencies import get_database
+            from src.api.services.progress_update_service import (
+                ProgressUpdateService,
+            )
+
+            # get_database()를 사용하여 싱글톤 인스턴스 재사용
+            database = get_database()
+
+            # 주기 설정
+            INTERVAL_ACTIVE = 30  # 진행 중인 Program이 있을 때: 30초
+            INTERVAL_IDLE = 300  # 진행 중인 Program이 없을 때: 5분
+
+            while True:
+                try:
+                    # 데이터베이스 세션 사용
+                    with database.session() as db:
+                        progress_service = ProgressUpdateService(db)
+                        result = progress_service.update_all_active_programs()
+
+                        # 진행 중인 Program 수에 따라 대기 시간 결정
+                        if result["total"] > 0:
+                            wait_time = INTERVAL_ACTIVE
+                            logger.debug(
+                                "진행률 통계 업데이트 완료: %s "
+                                "(다음 업데이트: %d초 후)",
+                                result,
+                                wait_time,
+                            )
+                        else:
+                            wait_time = INTERVAL_IDLE
+                            logger.debug(
+                                "진행 중인 Program 없음 "
+                                "(다음 확인: %d초 후)",
+                                wait_time,
+                            )
+
+                except Exception as e:
+                    logger.error(
+                        "진행률 통계 업데이트 중 오류: %s", str(e)
+                    )
+                    # 오류 발생 시에도 기본 대기 시간 적용
+                    wait_time = INTERVAL_ACTIVE
+
+                await asyncio.sleep(wait_time)
+
+        # 백그라운드 태스크 시작
+        asyncio.create_task(update_progress_periodically())
+        logger.info("진행률 통계 업데이트 백그라운드 작업 시작됨")
+
     return app
 
 app = create_app()

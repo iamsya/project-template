@@ -47,6 +47,13 @@ class ChatMessage(Base):
     # PLC 연결 (PLC 테이블의 ID 참조)
     plc_id = Column('PLC_ID', String(50), ForeignKey('PLC.ID'), nullable=True, index=True)
     
+    # PLC 계층 구조 스냅샷 (메시지 생성 시점의 계층 구조 저장)
+    # 각 레벨별 ID만 저장 (code, name은 master 테이블 조인으로 조회)
+    plc_plant_id_snapshot = Column('PLC_PLANT_ID_SNAPSHOT', String(50), nullable=True)
+    plc_process_id_snapshot = Column('PLC_PROCESS_ID_SNAPSHOT', String(50), nullable=True)
+    plc_line_id_snapshot = Column('PLC_LINE_ID_SNAPSHOT', String(50), nullable=True)
+    plc_equipment_group_id_snapshot = Column('PLC_EQUIPMENT_GROUP_ID_SNAPSHOT', String(50), nullable=True)
+    
     # External API 노드 처리 결과 저장용 (JSON)
     external_api_nodes = Column('EXTERNAL_API_NODES', JSON, nullable=True)
 

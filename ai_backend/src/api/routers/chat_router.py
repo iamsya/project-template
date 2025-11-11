@@ -4,7 +4,7 @@ import asyncio
 import json
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, Path
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -12,7 +12,6 @@ from src.api.services.llm_chat_service import LLMChatService
 from src.api.services.program_service import ProgramService
 from src.core.dependencies import get_db, get_llm_chat_service, get_program_service
 from src.types.request.chat_request import (
-    ClearConversationRequest,
     CreateChatRequest,
     UserMessageRequest,
 )
@@ -22,7 +21,6 @@ from src.types.response.chat_response import (
     ConversationClearedResponse,
     ConversationHistoryResponse,
     CreateChatResponse,
-    ErrorResponse,
 )
 from src.types.response.exceptions import HandledException
 
@@ -66,9 +64,6 @@ async def send_message_stream(
     program_service: ProgramService = Depends(get_program_service),
 ):
     """스트리밍 방식으로 메시지를 전송하고 AI 응답을 받습니다 (SSE)."""
-
-    # plc_id가 있으면 program_id 조회
-    program_id = program_service.get_program_id_from_plc_id(request.plc_id)
 
     async def generate_stream():
         # 청크를 전달하기 위한 큐
@@ -194,9 +189,90 @@ async def send_message_stream(
         }
     )
 
-@router.get("/chat/{chat_id}/history", response_model=ConversationHistoryResponse)
+@router.get(
+    "/chat/{chat_id}/history",
+    response_model=ConversationHistoryResponse,
+    summary="대화 히스토리 조회",
+    description="""
+    채팅방의 대화 히스토리(메시지 목록)를 조회합니다.
+    
+    **파라미터:**
+    - `chat_id` (path): 조회할 채팅방의 고유 ID
+    
+    **조회 우선순위:**
+    1. Redis 캐시에서 먼저 조회 (캐시 히트 시 즉시 반환)
+    2. Redis에 없거나 실패한 경우 데이터베이스에서 조회
+    3. 조회된 데이터를 Redis에 캐시 저장 (TTL: 30분)
+    
+    **응답 형식:**
+    ```json
+    {
+      "type": "conversation_history",
+      "history": [
+        {
+          "role": "user",
+          "content": "사용자 메시지 내용",
+          "timestamp": "2025-01-01T12:00:00+09:00",
+          "cancelled": false,
+          "message_id": "msg001",
+          "plc_id": "plc001",
+          "plc_hierarchy": {
+            "plant": {"id": "plant001", "code": "P001", "name": "공장1"},
+            "process": {"id": "process001", "code": "PR001", "name": "공정1"},
+            "line": {"id": "line001", "code": "L001", "name": "라인1"},
+            "equipment_group": {"id": "equipment001", "code": "E001", "name": "장비그룹1"}
+          }
+        },
+        {
+          "role": "assistant",
+          "content": "AI 응답 내용",
+          "timestamp": "2025-01-01T12:00:05+09:00",
+          "cancelled": false,
+          "message_id": "msg002",
+          "plc_id": "plc001",
+          "plc_hierarchy": null
+        },
+        ...
+      ]
+    }
+    ```
+    
+    **메시지 객체 필드 설명:**
+    - `role`: 메시지 역할
+      - `"user"`: 사용자 메시지
+      - `"assistant"`: AI 응답 메시지
+      - `"system"`: 시스템 메시지 (취소된 메시지 등)
+    - `content`: 메시지 내용 (텍스트)
+    - `timestamp`: 메시지 생성 일시 (ISO 8601 형식, Asia/Seoul 타임존)
+    - `cancelled`: 메시지 취소 여부 (boolean)
+    - `message_id`: 메시지 고유 ID
+    - `plc_id`: 관련 PLC ID (선택적, null 가능)
+    - `plc_hierarchy`: PLC 계층 구조 정보 (선택적, null 가능)
+      - `plant`: Plant 정보 (id, code, name)
+      - `process`: Process 정보 (id, code, name)
+      - `line`: Line 정보 (id, code, name)
+      - `equipment_group`: Equipment Group 정보 (id, code, name)
+      - 메시지 생성 시점의 PLC 계층 구조 스냅샷 정보
+
+    **정렬:**
+    - 메시지는 생성 일시(`timestamp`) 기준 오름차순으로 정렬됩니다.
+    - 가장 오래된 메시지가 첫 번째, 가장 최근 메시지가 마지막에 위치합니다.
+
+    **캐싱:**
+    - Redis 캐시 사용 시 성능 향상
+    - 캐시 TTL: 30분
+    - 캐시 미스 시 자동으로 DB에서 조회 후 캐시 갱신
+
+    **예외 상황:**
+    - `CHAT_SESSION_NOT_FOUND`: 유효하지 않은 chat_id
+    - `CHAT_HISTORY_LOAD_ERROR`: 히스토리 조회 중 오류 발생
+
+    **사용 예시:**
+    - `GET /api/v1/chat/chat001/history`
+    """,
+)
 def get_conversation_history(
-    chat_id: str,
+    chat_id: str = Path(..., description="채팅방 고유 ID", example="chat001"),
     llm_chat_service: LLMChatService = Depends(get_llm_chat_service)
 ):
     """대화 기록을 조회합니다."""
