@@ -123,13 +123,13 @@ log_debug("Query executed", e)           # 디버그 로깅
 # LOG_INCLUDE_EXC_INFO=true (개발환경)
 2025-09-18 10:30:15.123 ERROR [exceptions] HandledException [-1001]: 사용자 생성에 실패했습니다.
 Request: ==================================================
-Request {method: POST} {url: http://localhost:8000/api/v1/users}
+Request {method: POST} {url: http://localhost:8000/v1/users}
 [상세한 스택 트레이스...]
 
 # LOG_INCLUDE_EXC_INFO=false (운영환경)
 2025-09-18 10:30:15.123 ERROR [exceptions] HandledException [-1001]: 사용자 생성에 실패했습니다.
 Request: ==================================================
-Request {method: POST} {url: http://localhost:8000/api/v1/users}
+Request {method: POST} {url: http://localhost:8000/v1/users}
 ```
 
 ## 실제 사용 예시

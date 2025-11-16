@@ -5,7 +5,7 @@
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                         Client Request                                  │
-│  POST /api/v1/programs/register                                        │
+│  POST /v1/programs/register                                        │
 │  - program_name: str                                                    │
 │  - description: str (optional)                                         │
 │  - create_user: str                                                    │
@@ -178,9 +178,9 @@
 │                          API Layer                                       │
 ├─────────────────────────────────────────────────────────────────────────┤
 │  ProgramRouter                                                           │
-│    - register_program()        [POST /api/v1/programs/register]         │
-│    - get_programs()            [GET /api/v1/programs/programs]          │
-│    - get_program()             [GET /api/v1/programs/programs/{id}]     │
+│    - register_program()        [POST /v1/programs/register]         │
+│    - get_programs()            [GET /v1/programs/programs]          │
+│    - get_program()             [GET /v1/programs/programs/{id}]     │
 └─────────────────────────────────────────────────────────────────────────┘
                             │
                             │ uses
@@ -252,7 +252,7 @@
 ### Phase 1: 동기 처리 (즉시 응답)
 
 ```
-1. [Client] POST /api/v1/programs/register
+1. [Client] POST /v1/programs/register
    │
 2. [ProgramRouter] register_program() 호출
    │
@@ -519,6 +519,6 @@ Time  │
       │ [Server] ProcessingJob 업데이트 (status: "completed")
       │ [Server] Program status 업데이트: "completed"
       │
-      │ [Client] GET /api/v1/programs/{id} → status 확인 가능
+      │ [Client] GET /v1/programs/{id} → status 확인 가능
 ```
 

@@ -44,15 +44,37 @@ class ChatMessage(Base):
     is_deleted = Column('IS_DELETED', Boolean, nullable=False, server_default=false())
     is_cancelled = Column('IS_CANCELLED', Boolean, nullable=False, server_default=false())  # 취소된 메시지 표시
     
-    # PLC 연결 (PLC 테이블의 ID 참조)
-    plc_id = Column('PLC_ID', String(50), ForeignKey('PLC.ID'), nullable=True, index=True)
+    # PLC 연결 (PLC 테이블의 PLC_UUID 참조)
+    plc_uuid = Column(
+        'PLC_UUID',
+        String(50),
+        ForeignKey('PLC.PLC_UUID'),
+        nullable=True,
+        index=True,
+        comment="PLC UUID (PLC 테이블 참조)"
+    )
     
-    # PLC 계층 구조 스냅샷 (메시지 생성 시점의 계층 구조 저장)
-    # 각 레벨별 ID만 저장 (code, name은 master 테이블 조인으로 조회)
-    plc_plant_id_snapshot = Column('PLC_PLANT_ID_SNAPSHOT', String(50), nullable=True)
-    plc_process_id_snapshot = Column('PLC_PROCESS_ID_SNAPSHOT', String(50), nullable=True)
-    plc_line_id_snapshot = Column('PLC_LINE_ID_SNAPSHOT', String(50), nullable=True)
-    plc_equipment_group_id_snapshot = Column('PLC_EQUIPMENT_GROUP_ID_SNAPSHOT', String(50), nullable=True)
+    # Hierarchy 스냅샷 (채팅 메시지 저장 시점의 hierarchy 정보)
+    # plant, 공정, line은 업데이트될 수 있지만, 채팅 메시지에는 그때 사용했던 정보를 저장
+    plc_hierarchy_snapshot = Column(
+        'PLC_HIERARCHY_SNAPSHOT',
+        JSON,
+        nullable=True,
+        comment=(
+            "PLC Hierarchy 스냅샷 (채팅 메시지 저장 시점의 정보): "
+            "{"
+            "'plant_id': '...', "
+            "'plant_name': '...', "
+            "'process_id': '...', "
+            "'process_name': '...', "
+            "'line_id': '...', "
+            "'line_name': '...', "
+            "'plc_name': '...', "
+            "'unit': '...', "
+            "'plc_id': '...'"
+            "}"
+        )
+    )
     
     # External API 노드 처리 결과 저장용 (JSON)
     external_api_nodes = Column('EXTERNAL_API_NODES', JSON, nullable=True)

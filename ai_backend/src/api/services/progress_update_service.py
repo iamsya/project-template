@@ -29,7 +29,7 @@ class ProgressUpdateService:
                 "total_processed": int,  # 전처리 후 전체 파일 수
                 "uploaded": int,  # 업로드 완료 파일 수 (3개 타입 존재 여부)
                 "processed": int,  # 전처리 완료 파일 수
-                "embedded": int,  # is_embedded=True인 파일 수
+                "embedded": int,  # status='embedded'인 파일 수
             }
         """
         from shared_core.models import Document
@@ -37,15 +37,15 @@ class ProgressUpdateService:
         # 업로드 단계 전체 파일 수: 항상 3개 고정 (ladder_logic, comment, template)
         total_upload = 3
 
-        # 업로드 완료: ladder_logic, comment, template 3개 타입이 모두 존재하는지 확인
-        required_types = ["ladder_logic", "comment", "template"]
+        # 업로드 완료: ladder_logic_zip, comment, template 3개 타입이 모두 존재하는지 확인
+        required_types = ["ladder_logic_zip", "comment", "template"]
         uploaded_count = 0
         for file_type in required_types:
             exists = (
                 self.db.query(Document)
                 .filter(Document.program_id == program_id)
                 .filter(Document.is_deleted.is_(False))
-                .filter(Document.program_file_type == file_type)
+                .filter(Document.document_type == file_type)
                 .first()
             )
             if exists:
@@ -99,22 +99,35 @@ class ProgressUpdateService:
                     total_processed,
                 )
 
-        # 전처리 완료 파일 수: program_file_type이 있고 status='completed'인 파일 수
+        # 전처리 완료 파일 수: ladder_logic_json 파일 중
+        # status='preprocessed' 또는 'embedding' 또는 'embedded'인 파일 수
+        # (전처리 완료 = 임베딩 대기 또는 임베딩 중 또는 임베딩 완료)
         processed_docs = (
             self.db.query(Document)
             .filter(Document.program_id == program_id)
             .filter(Document.is_deleted.is_(False))
-            .filter(Document.program_file_type.isnot(None))
-            .filter(Document.status == "completed")
+            .filter(Document.document_type == "ladder_logic_json")
+            .filter(
+                Document.status.in_([
+                    "preprocessed",
+                    "embedding",
+                    "embedded"
+                ])
+            )
             .count()
         )
 
-        # 임베딩 완료: is_embedded=True인 파일 수
+        # 임베딩 완료: status='embedded'인 파일 수
+        # (JSON 파일 및 Knowledge Reference 파일 모두 포함)
         embedded_docs = (
             self.db.query(Document)
             .filter(Document.program_id == program_id)
             .filter(Document.is_deleted.is_(False))
-            .filter(Document.is_embedded.is_(True))
+            .filter(
+                (Document.document_type == "ladder_logic_json")
+                | (Document.knowledge_reference_id.isnot(None))
+            )
+            .filter(Document.status == 'embedded')
             .count()
         )
 
@@ -425,21 +438,54 @@ class ProgressUpdateService:
                             )
 
                             # Document 테이블 업데이트
-                            if (
-                                document.is_embedded != is_embedded_api
-                                or document.vector_count != vector_count_api
-                            ):
-                                document.is_embedded = is_embedded_api
+                            # status로 전처리 및 임베딩 상태 모두 관리
+                            # JSON 파일: preprocessed, embedding, embedded, failed
+                            # Knowledge Reference 파일: embedding, embedded, failed
+                            status_changed = False
+                            if document.vector_count != vector_count_api:
                                 document.vector_count = vector_count_api
+                                status_changed = True
+
+                            # 임베딩 대상 파일인지 확인
+                            is_embedding_target = (
+                                document.document_type == "ladder_logic_json"
+                                or document.knowledge_reference_id is not None
+                            )
+
+                            if is_embedding_target:
+                                # 임베딩 완료 시 status를 'embedded'로 업데이트
+                                if (
+                                    is_embedded_api
+                                    and document.status != "embedded"
+                                ):
+                                    document.status = "embedded"
+                                    status_changed = True
+                                # 임베딩 실패 시 status를 'failed'로 업데이트
+                                elif (
+                                    not is_embedded_api
+                                    and document.status in ["embedding", "preprocessed"]
+                                ):
+                                    # 임베딩 중이었거나 임베딩 대기 중이었는데 실패한 경우
+                                    document.status = "failed"
+                                    status_changed = True
+
+                            if status_changed:
                                 updated += 1
 
                         elif response.status_code == 404:
-                            # 문서가 없으면 embedded 상태를 False로 설정
+                            # 문서가 없으면 상태 업데이트
+                            # 임베딩 대상 파일의 경우: 임베딩 중이었는데 문서가 없으면 실패
+                            is_embedding_target = (
+                                document.document_type == "ladder_logic_json"
+                                or document.knowledge_reference_id is not None
+                            )
                             if (
-                                document.is_embedded
-                                or document.vector_count > 0
+                                is_embedding_target
+                                and document.status == "embedding"
                             ):
-                                document.is_embedded = False
+                                document.status = "failed"
+                                updated += 1
+                            elif document.vector_count > 0:
                                 document.vector_count = 0
                                 updated += 1
                         else:

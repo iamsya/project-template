@@ -19,4 +19,4 @@ class ProgramUploadRequest(BaseModel):
     # 파일들은 FormData로 전달되므로 별도로 정의하지 않음
     # - ladder_zip: UploadFile (PLC Ladder Logic ZIP 파일)
     # - classification_xlsx: UploadFile (템플릿 분류체계 데이터 XLSX)
-    # - device_comment_csv: UploadFile (Device 설명 CSV)
+    # - comment_csv: UploadFile (PLC Ladder Comment CSV)

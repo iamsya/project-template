@@ -64,7 +64,8 @@ class ProgramService:
         user_id: str,
         ladder_zip: UploadFile,
         classification_xlsx: UploadFile,
-        device_comment_csv: UploadFile,
+        comment_csv: UploadFile,
+        process_id: Optional[str] = None,
     ) -> Dict:
         """
         프로그램 등록 (유효성 검사 + 비동기 처리)
@@ -80,7 +81,7 @@ class ProgramService:
                 program_id=program_id,
                 ladder_zip=ladder_zip,
                 classification_xlsx=classification_xlsx,
-                device_comment_csv=device_comment_csv,
+                comment_csv=comment_csv,
             )
 
             # 2. 유효성 검사 직후 응답 반환
@@ -102,9 +103,10 @@ class ProgramService:
                     program_title=program_title,
                     program_description=program_description,
                     user_id=user_id,
+                    process_id=process_id,
                     ladder_zip=ladder_zip,
                     classification_xlsx=classification_xlsx,
-                    device_comment_csv=device_comment_csv,
+                    comment_csv=comment_csv,
                 )
             )
 
@@ -121,14 +123,14 @@ class ProgramService:
         program_id: str,
         ladder_zip: UploadFile,
         classification_xlsx: UploadFile,
-        device_comment_csv: UploadFile,
+        comment_csv: UploadFile,
     ) -> Dict:
         """프로그램 파일 유효성 검사"""
         logger.info(f"프로그램 유효성 검사 시작: program_id={program_id}")
         is_valid, errors, warnings, checked_files = self.validator.validate_files(
             ladder_zip=ladder_zip,
             classification_xlsx=classification_xlsx,
-            device_comment_csv=device_comment_csv,
+            comment_csv=comment_csv,
         )
 
         if not is_valid:
@@ -202,6 +204,7 @@ class ProgramService:
         program_title: str,
         program_description: Optional[str],
         user_id: str,
+        process_id: Optional[str] = None,
     ):
         """프로그램 메타데이터 저장"""
         logger.info(f"프로그램 메타데이터 저장 시작: program_id={program_id}")
@@ -212,6 +215,7 @@ class ProgramService:
             program_name=program_title,
             create_user=user_id,
             description=program_description,
+            process_id=process_id,
             status=Program.STATUS_PROCESSING,
             metadata_json=None,
         )
@@ -254,10 +258,9 @@ class ProgramService:
             file_extension="xlsx",
             user_id=user_id,
             upload_path=None,
-            status="processing",
-            document_type="common",
+            status=None,  # JSON 파일이 아니므로 status 사용 안 함
+            document_type="template",
             program_id=program_id,
-            program_file_type="template",
             metadata_json={
                 "program_id": program_id,
                 "program_title": program_title,
@@ -355,7 +358,7 @@ class ProgramService:
         program_title: str,
         user_id: str,
         ladder_zip: UploadFile,
-        device_comment_csv: UploadFile,
+        comment_csv: UploadFile,
         template_document_id: str,
     ) -> Dict[str, str]:
         """프로그램 관련 Document 생성"""
@@ -379,36 +382,34 @@ class ProgramService:
             file_extension="zip",
             user_id=user_id,
             upload_path=None,
-            status="processing",
-            document_type="common",
+            status=None,  # JSON 파일이 아니므로 status 사용 안 함
+            document_type="ladder_logic_zip",
             program_id=program_id,
-            program_file_type="ladder_logic",
             metadata_json={
                 "program_id": program_id,
                 "program_title": program_title,
             },
         )
 
-        # device_comment_csv Document 생성
+        # comment_csv Document 생성
         comment_document_id = gen()
-        device_comment_csv.file.seek(0)
-        comment_csv_size = len(device_comment_csv.file.read())
-        device_comment_csv.file.seek(0)
+        comment_csv.file.seek(0)
+        comment_csv_size = len(comment_csv.file.read())
+        comment_csv.file.seek(0)
 
         document_crud.create_document(
             document_id=comment_document_id,
-            document_name=f"{program_title}_device_comment",
-            original_filename=device_comment_csv.filename or "device_comment.csv",
+            document_name=f"{program_title}_comment",
+            original_filename=comment_csv.filename or "comment.csv",
             file_key=None,
             file_size=comment_csv_size,
             file_type="text/csv",
             file_extension="csv",
             user_id=user_id,
             upload_path=None,
-            status="processing",
-            document_type="common",
+            status=None,  # JSON 파일이 아니므로 status 사용 안 함
+            document_type="comment",
             program_id=program_id,
-            program_file_type="comment",
             metadata_json={
                 "program_id": program_id,
                 "program_title": program_title,
@@ -457,7 +458,8 @@ class ProgramService:
         user_id: str,
         ladder_zip: UploadFile,
         classification_xlsx: UploadFile,
-        device_comment_csv: UploadFile,
+        comment_csv: UploadFile,
+        process_id: Optional[str] = None,
     ):
         """프로그램 등록 완료 처리 (비동기)
         
@@ -473,6 +475,7 @@ class ProgramService:
                 program_title=program_title,
                 program_description=program_description,
                 user_id=user_id,
+                process_id=process_id,
             )
 
             # 2. 템플릿 및 템플릿데이터 생성
@@ -492,7 +495,7 @@ class ProgramService:
                 program_title=program_title,
                 user_id=user_id,
                 ladder_zip=ladder_zip,
-                device_comment_csv=device_comment_csv,
+                comment_csv=comment_csv,
                 template_document_id=template_document_id,
             )
 
@@ -503,12 +506,12 @@ class ProgramService:
 
             # 5. S3 업로드 및 전처리 시작
             await self._process_program_async(
-                program_id=program_id,
-                program_title=program_title,
-                user_id=user_id,
-                ladder_zip=ladder_zip,
-                classification_xlsx=classification_xlsx,
-                device_comment_csv=device_comment_csv,
+                    program_id=program_id,
+                    program_title=program_title,
+                    user_id=user_id,
+                    ladder_zip=ladder_zip,
+                    classification_xlsx=classification_xlsx,
+                    comment_csv=comment_csv,
                 ladder_document_id=document_ids["ladder_document_id"],
                 comment_document_id=document_ids["comment_document_id"],
                 template_document_id=document_ids["template_document_id"],
@@ -544,7 +547,7 @@ class ProgramService:
             "errors": [],
             "warnings": warnings,
             "checked_files": checked_files,
-            "message": "파일 등록 요청하였습니다.",
+            "message": "파일 유효성 검사 성공",
         }
 
     async def _process_program_async(
@@ -554,7 +557,7 @@ class ProgramService:
         user_id: str,
         ladder_zip: UploadFile,
         classification_xlsx: UploadFile,
-        device_comment_csv: UploadFile,
+        comment_csv: UploadFile,
         ladder_document_id: str,
         comment_document_id: str,
         template_document_id: str,
@@ -571,7 +574,7 @@ class ProgramService:
             s3_paths = await self.uploader.upload_and_unzip(
                 ladder_zip=ladder_zip,
                 classification_xlsx=classification_xlsx,
-                device_comment_csv=device_comment_csv,
+                comment_csv=comment_csv,
                 program_id=program_id,
                 user_id=user_id,
             )
@@ -591,11 +594,11 @@ class ProgramService:
                 )
 
             # comment_document 업데이트
-            if comment_document_id and s3_paths.get("device_comment_csv_path"):
+            if comment_document_id and s3_paths.get("comment_csv_path"):
                 document_crud.update_document(
                     document_id=comment_document_id,
-                    file_key=f"programs/{program_id}/device_comment.csv",
-                    upload_path=s3_paths.get("device_comment_csv_path"),
+                    file_key=f"programs/{program_id}/comment.csv",
+                    upload_path=s3_paths.get("comment_csv_path"),
                 )
 
             # template_document 업데이트
@@ -606,7 +609,7 @@ class ProgramService:
                     upload_path=s3_paths.get("classification_xlsx_path"),
                 )
 
-            self.db.commit()
+                self.db.commit()
             logger.info(f"Document S3 경로 업데이트 완료: program_id={program_id}")
 
             # 3. 전처리: ZIP 압축 해제 파일들로 JSON 생성, S3 업로드 및 Document 저장
@@ -634,7 +637,8 @@ class ProgramService:
                 user_id=user_id,
                 unzipped_files=unzipped_files,
                 classification_xlsx_path=s3_paths.get("classification_xlsx_path"),
-                device_comment_csv_path=s3_paths.get("device_comment_csv_path"),
+                comment_csv_path=s3_paths.get("comment_csv_path"),
+                ladder_document_id=ladder_document_id,
                 db_session=self.db,
                 document_crud=document_crud,
                 template_data_crud=template_data_crud,
@@ -781,32 +785,92 @@ class ProgramService:
             self.db.commit()
 
     async def get_program(self, program_id: str, user_id: str) -> Dict:
-        """프로그램 정보 조회"""
+        """프로그램 정보 조회 (팝업 상세 조회용)
+
+        팝업에서 파일 다운로드를 위해 관련 Document 정보 포함
+        """
         try:
+            from src.database.models.master_models import ProcessMaster
+            
             program = self.program_crud.get_program(program_id)
             if not program:
                 raise HandledException(ResponseCode.PROGRAM_NOT_FOUND)
 
-            # 사용자 권한 확인
-            if program.user_id != user_id:
-                raise HandledException(
-                    ResponseCode.CHAT_ACCESS_DENIED,
-                    msg="프로그램에 접근할 권한이 없습니다.",
+            # 권한 확인: 사용자가 접근 가능한 공정인지 확인
+            if program.process_id:
+                accessible_process_ids = (
+                    self.program_crud.get_accessible_process_ids(user_id)
                 )
+                if accessible_process_ids is not None:  # None이면 모든 공정 접근 가능
+                    if program.process_id not in accessible_process_ids:
+                        raise HandledException(
+                            ResponseCode.CHAT_ACCESS_DENIED,
+                            msg="프로그램에 접근할 권한이 없습니다.",
+                        )
+
+            # 공정명 조회
+            process_name = None
+            if program.process_id:
+                process = (
+                    self.db.query(ProcessMaster)
+                    .filter(ProcessMaster.process_id == program.process_id)
+                    .filter(ProcessMaster.is_active.is_(True))
+                    .first()
+                )
+                if process:
+                    process_name = process.process_name
+
+            # 관련 파일 정보 조회 (팝업에서 다운로드 링크 생성용)
+            # 원본 파일만 조회 (ZIP, comment, template)
+            from shared_core.models import Document
+
+            files = []
+            file_types = ["ladder_logic_zip", "comment", "template"]
+            documents = (
+                self.db.query(Document)
+                .filter(Document.program_id == program_id)
+                .filter(Document.is_deleted.is_(False))
+                .filter(Document.document_type.in_(file_types))
+                .all()
+            )
+
+            # file_type을 download_file_type으로 매핑
+            download_file_type_map = {
+                "template": "program_classification",
+                "ladder_logic_zip": "program_logic",
+                "comment": "program_comment",
+            }
+
+            for doc in documents:
+                file_info = {
+                    "file_type": doc.document_type,
+                    "original_filename": doc.original_filename or "unknown",
+                    "file_size": doc.file_size or 0,
+                    "file_extension": doc.file_extension or "",
+                    "download_file_type": download_file_type_map.get(
+                        doc.document_type, doc.document_type
+                    ),
+                }
+                files.append(file_info)
+
+            # metadata_json에서 추가 정보 추출
+            metadata = program.metadata_json or {}
 
             return {
                 "program_id": program.program_id,
-                "program_title": program.program_title,
-                "program_description": program.program_description,
-                "user_id": program.user_id,
+                "program_title": program.program_name,  # program_name 사용
+                "program_description": program.description,
+                "process_id": program.process_id,
+                "process_name": process_name,
+                "user_id": program.create_user,  # create_user 사용
                 "status": program.status,
-                "s3_paths": program.s3_paths,
-                "vector_indexed": program.vector_indexed,
-                "vector_collection_name": program.vector_collection_name,
                 "error_message": program.error_message,
-                "created_at": program.created_at,
-                "updated_at": program.updated_at,
-                "processed_at": program.processed_at,
+                "create_dt": program.create_dt,
+                "update_dt": program.update_dt,
+                "completed_at": program.completed_at,
+                "files": files,  # 팝업에서 다운로드 링크 생성용
+                "ladder_file_count": metadata.get("ladder_file_count", 0),
+                "comment_file_count": metadata.get("comment_file_count", 0),
             }
         except HandledException:
             raise

@@ -138,7 +138,7 @@ failure_crud.mark_as_resolved(
 
 ### 1. 실패 정보 조회
 ```
-GET /api/v1/programs/{program_id}/failures?failure_type={type}&user_id={user_id}
+GET /v1/programs/{program_id}/failures?failure_type={type}&user_id={user_id}
 ```
 
 **응답 예시:**
@@ -163,7 +163,7 @@ GET /api/v1/programs/{program_id}/failures?failure_type={type}&user_id={user_id}
 
 ### 2. 재시도 실행
 ```
-POST /api/v1/programs/{program_id}/retry?retry_type={type}&user_id={user_id}
+POST /v1/programs/{program_id}/retry?retry_type={type}&user_id={user_id}
 ```
 
 ## 데이터 흐름

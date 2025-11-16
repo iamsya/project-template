@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     # - "/api": API Gateway 뒤에서 실행 시
     # - "/v1": 버전별 API 경로가 있는 경우
     # - "/ai-backend": Kubernetes Ingress path가 있는 경우
-    # 개발: "" (직접 접근, 라우터에서 /api/v1 사용)
+    # 개발: "" (직접 접근, 라우터에서 /v1 사용)
     # 프로덕션: "" 또는 "/api" (인프라에 따라)
     app_root_path: str = Field(default="", env="APP_ROOT_PATH")
     
@@ -163,6 +163,27 @@ class Settings(BaseSettings):
     # - azure: Azure Blob Storage (프로덕션 환경)
     storage_type: str = Field(default="local", env="STORAGE_TYPE")
     
+    # S3 Configuration
+    # ==========================================
+    # S3 버킷 이름
+    # - 환경변수: S3_BUCKET_NAME 또는 AWS_S3_BUCKET
+    # - 개발: 로컬 개발 시 비워둘 수 있음 (S3 기능 비활성화)
+    # - 프로덕션: 실제 S3 버킷 이름
+    s3_bucket_name: str = Field(default="", env="S3_BUCKET_NAME")
+    aws_s3_bucket: str = Field(default="", env="AWS_S3_BUCKET")  # AWS_S3_BUCKET도 지원
+    
+    # AWS 리전
+    # - 기본값: ap-northeast-2 (서울)
+    # - 환경변수: AWS_REGION
+    aws_region: str = Field(default="ap-northeast-2", env="AWS_REGION")
+    
+    # AWS 자격 증명 (선택사항)
+    # - 환경변수에서 자동으로 찾음 (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY)
+    # - 또는 ~/.aws/credentials 파일 사용
+    # - 또는 IAM 역할 사용 (EC2, ECS, Lambda 등)
+    aws_access_key_id: str = Field(default="", env="AWS_ACCESS_KEY_ID")
+    aws_secret_access_key: str = Field(default="", env="AWS_SECRET_ACCESS_KEY")
+    
     # 파일 업로드 최대 크기 (바이트)
     # - 기본값: 50MB (52428800 bytes)
     # - 개발: 50MB (테스트 편의)
@@ -229,6 +250,10 @@ class Settings(BaseSettings):
     def get_upload_max_size_mb(self) -> float:
         """업로드 최대 크기를 MB 단위로 반환"""
         return self.upload_max_size / (1024 * 1024)
+    
+    def get_s3_bucket_name(self) -> str:
+        """S3 버킷 이름 반환 (S3_BUCKET_NAME 또는 AWS_S3_BUCKET)"""
+        return self.s3_bucket_name or self.aws_s3_bucket
     
     # Database config dict
     def get_database_config(self) -> dict:

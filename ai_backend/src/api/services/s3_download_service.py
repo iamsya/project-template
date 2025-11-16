@@ -107,9 +107,9 @@ class S3DownloadService:
         Args:
             file_type: 파일 타입
                 - "template": 정적 템플릿 (program_template)
-                - "logic_file": 로직 파일 (program_id 필수)
-                - "logic_classification": Logic 분류체계 (program_id 필수)
-                - "plc_ladder_comment": PLC Ladder Comment (program_id 필수)
+                - "program_logic": Program Logic 파일 (program_id 필수)
+                - "program_classification": Program 분류체계 (program_id 필수)
+                - "program_comment": Program Comment 파일 (program_id 필수)
             program_id: Program ID (동적 파일인 경우 필수)
             db_session: 데이터베이스 세션 (동적 파일인 경우 필수)
 
@@ -135,24 +135,24 @@ class S3DownloadService:
 
             from shared_core.models import Document
 
-            # file_type을 program_file_type으로 매핑
-            program_file_type_map = {
-                "logic_file": "ladder_logic",
-                "logic_classification": "template",
-                "plc_ladder_comment": "comment",
+            # file_type을 document_type으로 매핑
+            document_type_map = {
+                "program_logic": "ladder_logic_zip",
+                "program_classification": "template",
+                "program_comment": "comment",
             }
 
-            program_file_type = program_file_type_map.get(file_type)
-            if not program_file_type:
+            document_type = document_type_map.get(file_type)
+            if not document_type:
                 raise ValueError(
                     f"지원하지 않는 file_type입니다: {file_type}"
                 )
 
-            # Program ID와 program_file_type으로 Document 조회
+            # Program ID와 document_type으로 Document 조회
             document = (
                 db_session.query(Document)
                 .filter(Document.program_id == program_id)
-                .filter(Document.program_file_type == program_file_type)
+                .filter(Document.document_type == document_type)
                 .filter(Document.is_deleted.is_(False))
                 .first()
             )
@@ -160,7 +160,7 @@ class S3DownloadService:
             if not document:
                 raise FileNotFoundError(
                     f"문서를 찾을 수 없습니다: program_id={program_id}, "
-                    f"program_file_type={program_file_type}"
+                    f"document_type={document_type}"
                 )
 
             # S3 키 사용 (file_key 또는 upload_path에서 추출)
@@ -189,6 +189,66 @@ class S3DownloadService:
                 "파일 다운로드 실패: file_type=%s, program_id=%s, error=%s",
                 file_type,
                 program_id,
+                str(e),
+            )
+            raise
+
+    def download_file_by_document_id(
+        self,
+        document_id: str,
+        db_session,
+    ) -> Tuple[bytes, str, str]:
+        """
+        Document ID로 파일 다운로드 (더 간단하고 직접적인 방법)
+
+        Args:
+            document_id: Document ID
+            db_session: 데이터베이스 세션
+
+        Returns:
+            Tuple[bytes, str, str]: (파일 내용, 파일명, Content-Type)
+        """
+        try:
+            from shared_core.models import Document
+
+            # Document ID로 직접 조회
+            document = (
+                db_session.query(Document)
+                .filter(Document.document_id == document_id)
+                .filter(Document.is_deleted.is_(False))
+                .first()
+            )
+
+            if not document:
+                raise FileNotFoundError(
+                    f"문서를 찾을 수 없습니다: document_id={document_id}"
+                )
+
+            # S3 키 사용 (file_key 또는 upload_path에서 추출)
+            s3_key = document.file_key
+            if not s3_key:
+                # upload_path가 S3 경로인 경우
+                if document.upload_path and document.upload_path.startswith("s3://"):
+                    s3_key = document.upload_path.replace(
+                        f"s3://{self.s3_bucket}/", ""
+                    )
+                else:
+                    raise ValueError(
+                        f"S3 경로를 찾을 수 없습니다: document_id={document_id}"
+                    )
+
+            filename = document.original_filename
+            content_type = document.file_type
+
+            # S3에서 파일 다운로드
+            file_content, _, _ = self.download_file(s3_key, filename)
+
+            return file_content, filename, content_type
+
+        except Exception as e:
+            logger.error(
+                "파일 다운로드 실패: document_id=%s, error=%s",
+                document_id,
                 str(e),
             )
             raise

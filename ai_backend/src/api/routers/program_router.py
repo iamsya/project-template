@@ -33,6 +33,8 @@ from src.types.response.program_response import (
     RegisterProgramResponse,
     ProgramListItem,
     ProgramListResponse,
+    ProcessDropdownItem,
+    ProcessDropdownResponse,
 )
 from src.types.response.plc_response import (
     ProgramMappingItem,
@@ -43,37 +45,94 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/programs", tags=["program-management"])
 
 
-@router.get("/files/download")
+@router.get(
+    "/files/download",
+    summary="프로그램 파일 다운로드",
+    description="""
+    S3에 저장된 프로그램 관련 파일을 다운로드합니다.
+    
+    **화면 용도:** PGM 상세 팝업에서 파일 클릭 시 다운로드
+    
+    **파일 타입:**
+    - `program_classification`: Program 분류 체계 엑셀 파일 (XLSX)
+    - `program_logic`: Program Logic 파일 (ZIP - Program CSV 파일 압축)
+    - `program_comment`: Program Comment 파일 (CSV)
+    
+    **사용 방법:**
+    1. 상세 조회 API (`GET /programs/{program_id}`)에서 `files` 배열 확인
+    2. 각 파일의 `file_type` 사용
+    3. 다운로드 링크 생성: `/programs/files/download?file_type={file_type}&program_id={program_id}&user_id={user_id}`
+    
+    **예시:**
+    ```
+           GET /v1/programs/files/download?file_type=program_classification&program_id=PGM_000001&user_id=user001
+           GET /v1/programs/files/download?file_type=program_logic&program_id=PGM_000001&user_id=user001
+           GET /v1/programs/files/download?file_type=program_comment&program_id=PGM_000001&user_id=user001
+    ```
+    
+    **보안:**
+    - program_id로 먼저 권한 검증 수행
+    - 사용자가 접근 가능한 공정의 파일만 다운로드 가능
+    
+    **응답:**
+    - 파일 다운로드 스트림 (Content-Disposition 헤더 포함)
+    - 원본 파일명으로 다운로드됨
+    """,
+)
 def download_file(
     file_type: str = Query(
         ...,
         description=(
             "파일 타입: "
-            "template (정적), logic_file, logic_classification, "
-            "plc_ladder_comment (동적 - program_id 필수)"
+            "program_classification (Program 분류 체계 엑셀), "
+            "program_logic (Program Logic ZIP 파일), "
+            "program_comment (Program Comment CSV)"
         ),
+        example="program_classification",
     ),
-    program_id: Optional[str] = Query(
-        None, description="Program ID (동적 파일인 경우 필수)"
+    program_id: str = Query(
+        ..., description="Program ID", example="PGM_000001"
     ),
+    user_id: str = Query(..., description="사용자 ID (권한 검증용)", example="user001"),
     db: Session = Depends(get_db),
     s3_download_service: S3DownloadService = Depends(get_s3_download_service),
 ):
     """
-    범용 파일 다운로드 API
+    S3 파일 다운로드 API (file_type + program_id 방식)
 
     Args:
-        file_type: 파일 타입
-            - "template": PGM 등록용 템플릿 (XLSX) - 정적 파일
-            - "logic_file": 로직 파일 (program_id 필수)
-            - "logic_classification": Logic 분류체계 (XLSX) - program_id 필수
-            - "plc_ladder_comment": PLC Ladder Comment 파일 (CSV) - program_id 필수
-        program_id: Program ID (동적 파일인 경우 필수)
+        file_type: 파일 타입 (program_classification, program_logic, program_comment)
+        program_id: Program ID
+        user_id: 사용자 ID (권한 검증용)
 
     Returns:
         StreamingResponse: 파일 다운로드 응답
     """
     try:
+        # 권한 검증 및 파일 다운로드
+        program_crud = ProgramCRUD(db)
+        
+        # 1. Program 존재 확인 및 권한 검증
+        program = program_crud.get_program(program_id)
+        if not program:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"프로그램을 찾을 수 없습니다: {program_id}",
+            )
+        
+        # 2. 사용자 권한 확인 (process_id 기반)
+        if program.process_id:
+            accessible_process_ids = (
+                program_crud.get_accessible_process_ids(user_id)
+            )
+            if accessible_process_ids is not None:  # None이면 모든 공정 접근 가능
+                if program.process_id not in accessible_process_ids:
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="프로그램 파일에 접근할 권한이 없습니다.",
+                    )
+        
+        # 3. 파일 다운로드 (file_type + program_id로 조회)
         file_content, filename, content_type = (
             s3_download_service.download_program_file(
                 file_type=file_type,
@@ -131,13 +190,19 @@ def download_file(
        - 데이터 전처리 및 Document 생성
        - Vector DB 인덱싱 요청
     
+    **요청 파라미터:**
+    - `program_title`: PGM Name (프로그램 제목, 필수)
+    - `process_id`: 공정 ID (드롭다운 선택, 선택사항)
+    - `program_description`: 프로그램 설명 (선택사항)
+    - `user_id`: 사용자 ID (기본값: "user")
+    
     **필수 파일:**
-    - `ladder_zip`: PLC ladder logic 파일들이 포함된 ZIP 압축 파일
+    - `ladder_zip`: Logic 파일 (Program CSV 파일을 zip으로 압축)
       - 압축 해제 후 각 로직 파일이 분리됨
-    - `classification_xlsx`: 템플릿 분류체계 데이터 (XLSX)
+    - `classification_xlsx`: Logic 분류 체계 엑셀 파일 (XLSX)
       - 컬럼: FOLDER_ID, FOLDER_NAME, SUB_FOLDER_NAME, LOGIC_ID, LOGIC_NAME
       - 로직 파일명과 매칭되어 템플릿 데이터 생성
-    - `device_comment_csv`: Device 설명 파일 (CSV)
+    - `comment_csv`: PLC Ladder Comment 파일 (CSV)
       - Ladder 로직의 device에 대한 코멘트 정보
     
     **유효성 검사 항목:**
@@ -147,8 +212,10 @@ def download_file(
     - 로직 파일명과 분류체계 데이터 교차 검증
     
     **응답:**
-    - 성공 시: `status="success"`, `message="파일 등록 요청하였습니다."`
-    - 실패 시: `status="validation_failed"`, 에러 목록 포함
+    - 성공 시: `status="success"`, `message="파일 유효성 검사 성공"`
+    - 실패 시: `status="validation_failed"`, `error_sections`에 섹션별로 그룹화된 에러 목록 포함
+      - "분류체계 데이터 유효성 검사" 섹션
+      - "PLC Ladder 파일 유효성 검사" 섹션
     
     **예외 상황:**
     - `PROGRAM_REGISTRATION_ERROR`: 등록 처리 중 오류
@@ -160,8 +227,9 @@ async def register_program(
     classification_xlsx: UploadFile = File(
         ..., description="템플릿 분류체계 데이터 XLSX 파일", example="classification.xlsx"
     ),
-    device_comment_csv: UploadFile = File(..., description="Device 설명 CSV 파일", example="device_comment.csv"),
-    program_title: str = Form(..., description="프로그램 제목", example="공정1 PLC 프로그램"),
+    comment_csv: UploadFile = File(..., description="PLC Ladder Comment CSV 파일", example="comment.csv"),
+    program_title: str = Form(..., description="PGM Name (프로그램 제목)", example="공정1 PLC 프로그램"),
+    process_id: Optional[str] = Form(None, description="공정 ID (드롭다운 선택, 선택사항)", example="process_001"),
     program_description: Optional[str] = Form(None, description="프로그램 설명", example="공정1 라인용 PLC 프로그램"),
     user_id: str = Form(default="user", description="사용자 ID", example="user001"),
     program_service: ProgramService = Depends(get_program_service),
@@ -171,7 +239,7 @@ async def register_program(
 
     - ladder_zip: PLC ladder logic 파일들이 포함된 압축 파일
     - classification_xlsx: 템플릿 분류체계 데이터 (로직 파일명 포함)
-    - device_comment_csv: ladder 로직에 있는 device 설명
+    - comment_csv: ladder 로직에 있는 device 설명
 
     유효성 검사를 통과하면:
     1. S3에 파일 업로드 및 ZIP 압축 해제 (비동기)
@@ -183,11 +251,12 @@ async def register_program(
 
     result = await program_service.register_program(
         program_title=program_title,
+        process_id=process_id,
         program_description=program_description,
         user_id=user_id,
         ladder_zip=ladder_zip,
         classification_xlsx=classification_xlsx,
-        device_comment_csv=device_comment_csv,
+        comment_csv=comment_csv,
     )
 
     # 유효성 검사 결과 구성
@@ -196,6 +265,7 @@ async def register_program(
         validation_result = ProgramValidationResult(
             is_valid=True,
             errors=result.get("errors", []),
+            error_sections=None,
             warnings=result.get("warnings", []),
             checked_files=result.get("checked_files", []),
         )
@@ -203,6 +273,7 @@ async def register_program(
         validation_result = ProgramValidationResult(
             is_valid=False,
             errors=result.get("errors", []),
+            error_sections=result.get("error_sections"),  # 섹션별 그룹화된 에러
             warnings=result.get("warnings", []),
             checked_files=result.get("checked_files", []),
         )
@@ -224,13 +295,16 @@ async def register_program(
     description="""
     프로그램 목록을 검색, 필터링, 페이지네이션, 정렬 기능으로 조회합니다.
     
-    **화면 용도:** PLC 등록 관리 화면의 테이블 데이터
+    **화면 용도:**
+    - PLC-PGM 매핑 화면의 PGM 프로그램 테이블
+    - PGM 등록 화면의 프로그램 목록 테이블
     
     **검색 기능:**
     - `program_id`: PGM ID로 정확한 검색
     - `program_name`: 제목으로 부분 일치 검색
     
     **필터링 기능:**
+    - `process_id`: 공정 ID로 필터링 (드롭다운 선택)
     - `status`: 등록 상태로 필터링
       - `preparing`: 준비 중
       - `uploading`: 업로드 중
@@ -240,6 +314,12 @@ async def register_program(
       - `failed`: 실패
       - `indexing_failed`: 인덱싱 실패
     - `create_user`: 작성자로 필터링
+    
+    **권한 기반 필터링:**
+    - `user_id`: 사용자 ID (필수)
+    - 첫 호출 시 사용자의 권한 그룹에 따라 접근 가능한 공정의 PGM만 조회
+    - super 권한 그룹: 모든 공정의 PGM 조회 가능
+    - plc 권한 그룹: 지정된 공정의 PGM만 조회 가능
     
     **페이지네이션:**
     - `page`: 페이지 번호 (기본값: 1, 최소: 1)
@@ -260,18 +340,26 @@ async def register_program(
     - 전체 개수 및 페이지 정보
     
     **사용 예시:**
-    - 전체 목록: `GET /programs?page=1&page_size=10`
-    - 검색: `GET /programs?program_name=공정1&page=1`
-    - 필터링: `GET /programs?status=completed&page=1`
+    - 전체 목록: `GET /v1/programs?user_id=user001&page=1&page_size=10`
+    - 공정별 필터링: `GET /v1/programs?user_id=user001&process_id=process001`
+    - PGM ID 검색: `GET /v1/programs?user_id=user001&program_id=PGM_000001`
+    - PGM Name 검색: `GET /v1/programs?user_id=user001&program_name=라벨부착`
+    - 상태별 필터링: `GET /v1/programs?user_id=user001&status=completed`
+    - 복합 검색 및 정렬: `GET /v1/programs?user_id=user001&process_id=process001&program_name=라벨부착&status=completed&sort_by=create_dt&sort_order=desc&page=1&page_size=20`
+    
+    **주의사항:**
+    - `user_id`는 필수 파라미터입니다. 권한 기반 필터링에 사용됩니다.
     """,
 )
 def get_program_list(
     program_id: Optional[str] = Query(None, description="PGM ID로 검색", example="pgm001"),
     program_name: Optional[str] = Query(None, description="제목으로 검색", example="공정1"),
+    process_id: Optional[str] = Query(None, description="공정 ID로 필터링 (드롭다운 선택)", example="process_001"),
     status_filter: Optional[str] = Query(
         None, description="등록 상태로 필터링 (preparing, uploading, processing, embedding, completed, failed, indexing_failed)", alias="status", example="completed"
     ),
     create_user: Optional[str] = Query(None, description="작성자로 필터링", example="user001"),
+    user_id: str = Query(..., description="사용자 ID (권한 기반 필터링용)", example="user001"),
     page: int = Query(1, ge=1, description="페이지 번호", example=1),
     page_size: int = Query(10, ge=1, le=100, description="페이지당 항목 수", example=10),
     sort_by: str = Query(
@@ -285,9 +373,10 @@ def get_program_list(
     """
     프로그램 목록 조회 (검색, 필터링, 페이지네이션, 정렬)
 
-    화면: PLC 등록 관리 화면의 테이블 데이터
+    화면: PLC-PGM 매핑 화면, PGM 등록 화면의 프로그램 목록 테이블
     - PGM ID, 제목으로 검색
-    - 등록 상태, 작성자로 필터링
+    - 공정, 등록 상태, 작성자로 필터링
+    - 사용자 권한 기반 필터링 (user_id 필수)
     - 페이지네이션 및 정렬 지원
     """
     try:
@@ -295,37 +384,31 @@ def get_program_list(
         programs, total_count = program_crud.get_programs(
             program_id=program_id,
             program_name=program_name,
+            process_id=process_id,
             status=status_filter,
             create_user=create_user,
+            user_id=user_id,
             page=page,
             page_size=page_size,
             sort_by=sort_by,
             sort_order=sort_order,
         )
 
-        # Program ID 리스트로 PLC와 ProcessMaster 조인하여 공정 정보 조회
-        program_ids = [p.program_id for p in programs]
+        # Program의 process_id로 ProcessMaster 조인하여 공정 정보 조회
+        from src.database.models.master_models import ProcessMaster
+        
+        process_ids = {p.process_id for p in programs if p.process_id}
         process_name_map = {}
-        if program_ids:
-            from src.database.models.plc_models import PLC
-            from src.database.models.master_models import ProcessMaster
-
-            plcs = (
-                db.query(PLC, ProcessMaster)
-                .outerjoin(
-                    ProcessMaster,
-                    PLC.process_id_snapshot == ProcessMaster.process_id,
-                )
-                .filter(PLC.program_id.in_(program_ids))
-                .filter(PLC.is_active.is_(True))
+        if process_ids:
+            processes = (
+                db.query(ProcessMaster)
+                .filter(ProcessMaster.process_id.in_(process_ids))
+                .filter(ProcessMaster.is_active.is_(True))
                 .all()
             )
-
-            for plc, process_master in plcs:
-                if process_master:
-                    process_name_map[plc.program_id] = (
-                        process_master.process_name
-                    )
+            
+            for process in processes:
+                process_name_map[process.process_id] = process.process_name
 
         # Document 통계는 metadata_json에 저장된 것을 사용
         # (백그라운드 작업에서 주기적으로 업데이트됨)
@@ -413,8 +496,8 @@ def get_program_list(
                     else:
                         status_display = "임베딩 중(61%)"
 
-            # 공정명 조회
-            process_name = process_name_map.get(program.program_id)
+            # 공정명 조회 (Program.process_id 사용)
+            process_name = process_name_map.get(program.process_id) if program.process_id else None
 
             items.append(
                 ProgramListItem(
@@ -445,6 +528,90 @@ def get_program_list(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"프로그램 목록 조회 중 오류가 발생했습니다: {str(e)}",
+        ) from e
+
+
+@router.get(
+    "/processes",
+    response_model=ProcessDropdownResponse,
+    summary="접근 가능한 공정 목록 조회 (드롭다운용)",
+    description="""
+    사용자 권한에 따라 접근 가능한 공정 목록을 조회합니다.
+    
+    **화면 용도:** PGM 등록 화면의 공정 드롭다운 필터
+    
+    **권한 기반 필터링:**
+    - `user_id`: 사용자 ID (필수)
+    - super 권한 그룹: 모든 활성 공정 반환
+    - plc 권한 그룹: 지정된 공정만 반환
+    - 권한이 없으면 빈 배열 반환
+    
+    **응답:**
+    - `processes`: 접근 가능한 공정 목록
+      - 각 항목: `process_id`, `process_name`, `process_code`
+      - `process_code` 순으로 정렬 (기본값)
+    
+    **사용 예시:**
+    ```
+           GET /v1/programs/processes?user_id=user001
+    ```
+    
+    **응답 예시:**
+    ```json
+    {
+      "processes": [
+        {
+          "process_id": "process_001",
+          "process_name": "모듈",
+          "process_code": "MODULE"
+        },
+        {
+          "process_id": "process_002",
+          "process_name": "전극",
+          "process_code": "ELECTRODE"
+        }
+      ]
+    }
+    ```
+    
+    **권한이 없는 경우:**
+    ```json
+    {
+      "processes": []
+    }
+    ```
+    """,
+)
+def get_accessible_processes(
+    user_id: str = Query(..., description="사용자 ID (권한 기반 필터링용)", example="user001"),
+    db: Session = Depends(get_db),
+):
+    """
+    접근 가능한 공정 목록 조회 (드롭다운용)
+    
+    사용자 권한에 따라 접근 가능한 공정만 반환합니다.
+    권한이 없으면 빈 배열을 반환합니다.
+    """
+    try:
+        program_crud = ProgramCRUD(db)
+        processes = program_crud.get_accessible_processes(user_id)
+        
+        # ProcessDropdownItem으로 변환
+        items = [
+            ProcessDropdownItem(
+                process_id=p.process_id,
+                process_name=p.process_name,
+                process_code=p.process_code,
+            )
+            for p in processes
+        ]
+        
+        return ProcessDropdownResponse(processes=items)
+    except Exception as e:
+        logger.error("접근 가능한 공정 목록 조회 실패: %s", str(e))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"공정 목록 조회 중 오류가 발생했습니다: {str(e)}",
         ) from e
 
 
@@ -523,13 +690,43 @@ async def get_user_programs(
     return [ProgramInfo(**p) for p in programs]
 
 
-@router.get("/{program_id}", response_model=ProgramInfo)
+@router.get(
+    "/{program_id}",
+    response_model=ProgramInfo,
+    summary="프로그램 상세 정보 조회",
+    description="""
+    프로그램의 상세 정보를 조회합니다 (팝업 상세 조회용).
+    
+    **화면 용도:** PGM 등록 목록에서 항목 선택 시 팝업으로 표시되는 상세 정보
+    
+    **응답 데이터:**
+    - 기본 정보: PGM ID, PGM Name, 공정, 상태 등
+    - 파일 정보: Logic 분류 체계 파일, Logic 파일, Comment 파일
+      - 각 파일의 원본 파일명, 파일 크기, 확장자
+      - 다운로드 링크 생성용 `download_file_type` 포함
+    
+    **파일 다운로드:**
+    - 응답의 `files` 배열에서 각 파일 정보 확인
+    - 각 파일의 `download_file_type`과 `program_id`를 사용하여 다운로드 링크 생성
+    - 다운로드 API: `GET /programs/files/download?file_type={download_file_type}&program_id={program_id}&user_id={user_id}`
+    - 예시:
+      ```
+      GET /v1/programs/files/download?file_type=program_classification&program_id=PGM_000001&user_id=user001
+      GET /v1/programs/files/download?file_type=program_logic&program_id=PGM_000001&user_id=user001
+      GET /v1/programs/files/download?file_type=program_comment&program_id=PGM_000001&user_id=user001
+      ```
+    
+    **예외 상황:**
+    - `PROGRAM_NOT_FOUND`: 프로그램을 찾을 수 없음
+    - `CHAT_ACCESS_DENIED`: 접근 권한 없음
+    """,
+)
 async def get_program(
     program_id: str,
     user_id: str = Query(default="user", description="사용자 ID"),
     program_service: ProgramService = Depends(get_program_service),
 ):
-    """프로그램 정보 조회"""
+    """프로그램 상세 정보 조회 (팝업용)"""
     program = await program_service.get_program(program_id, user_id)
     return ProgramInfo(**program)
 

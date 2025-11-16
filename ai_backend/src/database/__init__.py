@@ -31,7 +31,6 @@ __all__ = [
     "PlantMaster",
     "ProcessMaster",
     "LineMaster",
-    "EquipmentGroupMaster",
     "ProgramLLMDataChunk",
     "Template",
     "TemplateData",

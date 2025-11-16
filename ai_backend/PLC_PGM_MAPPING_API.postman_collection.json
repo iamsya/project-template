@@ -1,0 +1,454 @@
+{
+  "info": {
+    "name": "PLC-PGM 매핑 API",
+    "description": "PLC-PGM 매핑 화면에서 사용하는 API Collection",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8000",
+      "type": "string"
+    },
+    {
+      "key": "user_id",
+      "value": "user001",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "드롭다운 데이터 조회",
+      "item": [
+        {
+          "name": "매핑 화면용 드롭다운 조회",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/plcs/mapping/dropdown?user_id={{user_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "plcs", "mapping", "dropdown"],
+              "query": [
+                {
+                  "key": "user_id",
+                  "value": "{{user_id}}",
+                  "description": "사용자 ID (필수, 권한 기반 필터링용)"
+                }
+              ]
+            },
+            "description": "PLC-PGM 매핑 화면에서 사용할 Plant, 공정, Line 드롭다운 데이터를 조회합니다.\n\n**권한 기반 필터링:**\n- 공정은 사용자 권한에 따라 필터링됩니다\n- super 권한 그룹: 모든 활성 공정 반환\n- plc 권한 그룹: 지정된 공정만 반환\n- 권한이 없으면 공정 목록이 비어있음\n\n**응답 구조:**\n- plants: Plant 목록 (첫 번째 드롭다운)\n- processesByPlant: Plant ID를 키로 하는 Process 목록 맵 (두 번째 드롭다운)\n- linesByProcess: Process ID를 키로 하는 Line 목록 맵 (세 번째 드롭다운)\n\n**프론트엔드 사용 흐름:**\n1. API 호출하여 드롭다운 데이터 조회\n2. Plant 드롭다운: response.plants 사용\n3. Plant 선택 시: response.processesByPlant[selectedPlantId] 사용\n4. Process 선택 시: response.linesByProcess[selectedProcessId] 사용\n5. Line 선택 후: GET /v1/plcs?plant_id=xxx&process_id=xxx&line_id=xxx 호출하여 PLC 목록 조회"
+          }
+        }
+      ]
+    },
+    {
+      "name": "PLC 기준 정보 조회",
+      "item": [
+        {
+          "name": "전체 목록 조회",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/plcs?page=1&page_size=10",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "plcs"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "페이지 번호"
+                },
+                {
+                  "key": "page_size",
+                  "value": "10",
+                  "description": "페이지당 항목 수"
+                }
+              ]
+            },
+            "description": "PLC 기준 정보 전체 목록을 조회합니다."
+          }
+        },
+        {
+          "name": "계층별 필터링",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/plcs?plant_id=KY1&process_id=process001&line_id=line001&page=1&page_size=10",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "plcs"],
+              "query": [
+                {
+                  "key": "plant_id",
+                  "value": "KY1",
+                  "description": "Plant ID"
+                },
+                {
+                  "key": "process_id",
+                  "value": "process001",
+                  "description": "공정 ID"
+                },
+                {
+                  "key": "line_id",
+                  "value": "line001",
+                  "description": "Line ID"
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "page_size",
+                  "value": "10"
+                }
+              ]
+            },
+            "description": "Plant, 공정, Line으로 필터링하여 PLC 목록을 조회합니다."
+          }
+        },
+        {
+          "name": "PLC ID 검색",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/plcs?plc_id=M1CFB01000&page=1&page_size=10",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "plcs"],
+              "query": [
+                {
+                  "key": "plc_id",
+                  "value": "M1CFB01000",
+                  "description": "PLC ID (부분 일치)"
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "page_size",
+                  "value": "10"
+                }
+              ]
+            },
+            "description": "PLC ID로 검색합니다 (부분 일치)."
+          }
+        },
+        {
+          "name": "PLC 명 검색",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/plcs?plc_name=CELL_FABRICATOR&page=1&page_size=10",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "plcs"],
+              "query": [
+                {
+                  "key": "plc_name",
+                  "value": "CELL_FABRICATOR",
+                  "description": "PLC 명 (부분 일치)"
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "page_size",
+                  "value": "10"
+                }
+              ]
+            },
+            "description": "PLC 명으로 검색합니다 (부분 일치)."
+          }
+        },
+        {
+          "name": "PGM명으로 필터링",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/plcs?program_name=라벨부착&page=1&page_size=10",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "plcs"],
+              "query": [
+                {
+                  "key": "program_name",
+                  "value": "라벨부착",
+                  "description": "PGM명 (부분 일치)"
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "page_size",
+                  "value": "10"
+                }
+              ]
+            },
+            "description": "매핑된 PGM명으로 PLC를 필터링합니다."
+          }
+        },
+        {
+          "name": "복합 검색 및 정렬",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/plcs?plant_id=KY1&process_id=process001&program_name=라벨부착&sort_by=plc_id&sort_order=desc&page=1&page_size=20",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "plcs"],
+              "query": [
+                {
+                  "key": "plant_id",
+                  "value": "KY1"
+                },
+                {
+                  "key": "process_id",
+                  "value": "process001"
+                },
+                {
+                  "key": "program_name",
+                  "value": "라벨부착"
+                },
+                {
+                  "key": "sort_by",
+                  "value": "plc_id",
+                  "description": "정렬 기준 (plc_id, plc_name, create_dt)"
+                },
+                {
+                  "key": "sort_order",
+                  "value": "desc",
+                  "description": "정렬 순서 (asc, desc)"
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "page_size",
+                  "value": "20"
+                }
+              ]
+            },
+            "description": "여러 필터를 조합하고 정렬하여 PLC 목록을 조회합니다."
+          }
+        }
+      ]
+    },
+    {
+      "name": "PGM 프로그램 조회",
+      "item": [
+        {
+          "name": "전체 목록 조회",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/programs?user_id={{user_id}}&page=1&page_size=10",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "programs"],
+              "query": [
+                {
+                  "key": "user_id",
+                  "value": "{{user_id}}",
+                  "description": "사용자 ID (필수, 권한 기반 필터링용)"
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "page_size",
+                  "value": "10"
+                }
+              ]
+            },
+            "description": "사용자 권한에 따라 접근 가능한 PGM 전체 목록을 조회합니다."
+          }
+        },
+        {
+          "name": "공정별 필터링",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/programs?user_id={{user_id}}&process_id=process001&page=1&page_size=10",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "programs"],
+              "query": [
+                {
+                  "key": "user_id",
+                  "value": "{{user_id}}"
+                },
+                {
+                  "key": "process_id",
+                  "value": "process001",
+                  "description": "공정 ID"
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "page_size",
+                  "value": "10"
+                }
+              ]
+            },
+            "description": "특정 공정의 PGM 목록을 조회합니다."
+          }
+        },
+        {
+          "name": "PGM ID 검색",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/programs?user_id={{user_id}}&program_id=PGM_000001&page=1&page_size=10",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "programs"],
+              "query": [
+                {
+                  "key": "user_id",
+                  "value": "{{user_id}}"
+                },
+                {
+                  "key": "program_id",
+                  "value": "PGM_000001",
+                  "description": "PGM ID (정확한 일치)"
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "page_size",
+                  "value": "10"
+                }
+              ]
+            },
+            "description": "PGM ID로 정확히 검색합니다."
+          }
+        },
+        {
+          "name": "PGM Name 검색",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/programs?user_id={{user_id}}&program_name=라벨부착&page=1&page_size=10",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "programs"],
+              "query": [
+                {
+                  "key": "user_id",
+                  "value": "{{user_id}}"
+                },
+                {
+                  "key": "program_name",
+                  "value": "라벨부착",
+                  "description": "PGM Name (부분 일치)"
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "page_size",
+                  "value": "10"
+                }
+              ]
+            },
+            "description": "PGM Name으로 검색합니다 (부분 일치)."
+          }
+        },
+        {
+          "name": "상태별 필터링",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/programs?user_id={{user_id}}&status=completed&page=1&page_size=10",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "programs"],
+              "query": [
+                {
+                  "key": "user_id",
+                  "value": "{{user_id}}"
+                },
+                {
+                  "key": "status",
+                  "value": "completed",
+                  "description": "등록 상태 (preparing, uploading, processing, embedding, completed, failed, indexing_failed)"
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "page_size",
+                  "value": "10"
+                }
+              ]
+            },
+            "description": "등록 상태로 필터링하여 PGM 목록을 조회합니다."
+          }
+        },
+        {
+          "name": "복합 검색 및 정렬",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/programs?user_id={{user_id}}&process_id=process001&program_name=라벨부착&status=completed&sort_by=create_dt&sort_order=desc&page=1&page_size=20",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "programs"],
+              "query": [
+                {
+                  "key": "user_id",
+                  "value": "{{user_id}}"
+                },
+                {
+                  "key": "process_id",
+                  "value": "process001"
+                },
+                {
+                  "key": "program_name",
+                  "value": "라벨부착"
+                },
+                {
+                  "key": "status",
+                  "value": "completed"
+                },
+                {
+                  "key": "sort_by",
+                  "value": "create_dt",
+                  "description": "정렬 기준 (create_dt, program_id, program_name, status)"
+                },
+                {
+                  "key": "sort_order",
+                  "value": "desc",
+                  "description": "정렬 순서 (asc, desc)"
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "page_size",
+                  "value": "20"
+                }
+              ]
+            },
+            "description": "여러 필터를 조합하고 정렬하여 PGM 목록을 조회합니다."
+          }
+        }
+      ]
+    }
+  ]
+}
+

@@ -323,9 +323,7 @@ def create_app():
   
     # API 버전 경로 설정
     # APP_ROOT_PATH로 관리하므로 라우터에서는 /v1만 사용
-    # api_prefix = "/v1"
-    
-    api_prefix = "/api/v1"
+    api_prefix = "/v1"
     
     # LLM Chat 라우터 추가 (채팅 전용)
     from src.api.routers.chat_router import router as chat_router
@@ -358,6 +356,10 @@ def create_app():
     # PLC 라우터 추가 (PLC 관리)
     from src.api.routers.plc_router import router as plc_router
     app.include_router(plc_router, prefix=api_prefix)
+    
+    # Knowledge 라우터 추가 (기준정보 관리 - 미쯔비시, 용어집)
+    from src.api.routers.knowledge_router import router as knowledge_router
+    app.include_router(knowledge_router, prefix=api_prefix)
     
     # CORS 설정 - 설정 파일에서 가져오기
     origins = settings.get_cors_origins()

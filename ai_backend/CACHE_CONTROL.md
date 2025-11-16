@@ -363,22 +363,22 @@ CACHE_TYPE=none
 
 #### 캐시 상태 확인
 ```bash
-curl http://localhost:8000/api/v1/cache/status
+curl http://localhost:8000/v1/cache/status
 ```
 
 #### 모든 캐시 삭제
 ```bash
-curl -X POST http://localhost:8000/api/v1/cache/clear
+curl -X POST http://localhost:8000/v1/cache/clear
 ```
 
 #### 캐시 테스트
 ```bash
-curl http://localhost:8000/api/v1/cache/test
+curl http://localhost:8000/v1/cache/test
 ```
 
 #### 캐시 설정 확인
 ```bash
-curl http://localhost:8000/api/v1/cache/config
+curl http://localhost:8000/v1/cache/config
 ```
 
 ### 3. Docker로 Redis 관리
@@ -447,13 +447,13 @@ docker logs redis-chat
 
 #### 캐시가 작동하지 않음
 1. 환경 변수 확인: `CACHE_ENABLED=true`
-2. Redis 연결 확인: `curl http://localhost:8000/api/v1/cache/status`
+2. Redis 연결 확인: `curl http://localhost:8000/v1/cache/status`
 3. 로그 확인: `[CACHE HIT]` 또는 `[CACHE MISS]` 메시지
 
 #### 메모리 사용량 증가
 ```bash
 # 캐시 삭제
-curl -X POST http://localhost:8000/api/v1/cache/clear
+curl -X POST http://localhost:8000/v1/cache/clear
 
 # Redis 메모리 사용량 확인
 docker exec redis-chat redis-cli info memory

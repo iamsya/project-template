@@ -45,7 +45,7 @@ def send_message(
         chat_id, 
         request.message, 
         request.user_id,
-        request.plc_id
+        request.plc_uuid
     )
     
     return AIResponse(
@@ -110,7 +110,7 @@ async def send_message_stream(
             try:
                 # 사용자 메시지 저장
                 user_message_id = llm_chat_service.save_user_message(
-                    chat_id, request.message, request.user_id, request.plc_id
+                    chat_id, request.message, request.user_id, request.plc_uuid
                 )
 
                 # 사용자 메시지 전송
@@ -124,7 +124,7 @@ async def send_message_stream(
                 await chunk_queue.put(user_message_data)
 
                 # AI 응답 생성 (스트리밍)
-                async for chunk in llm_chat_service.generate_ai_response_stream(chat_id, request.user_id):
+                async for chunk in llm_chat_service.generate_ai_response_stream(chat_id, request.user_id, request.plc_uuid):
                     await chunk_queue.put(chunk)
                 
                 # 완료 신호
@@ -215,12 +215,27 @@ async def send_message_stream(
           "timestamp": "2025-01-01T12:00:00+09:00",
           "cancelled": false,
           "message_id": "msg001",
-          "plc_id": "plc001",
+          "plc_uuid": "plc-uuid-001",
           "plc_hierarchy": {
             "plant": {"id": "plant001", "code": "P001", "name": "공장1"},
             "process": {"id": "process001", "code": "PR001", "name": "공정1"},
-            "line": {"id": "line001", "code": "L001", "name": "라인1"},
-            "equipment_group": {"id": "equipment001", "code": "E001", "name": "장비그룹1"}
+            "line": {"id": "line001", "code": "L001", "name": "라인1"}
+          },
+          "plc_snapshot": {
+            "plc_uuid": "plc-uuid-001",
+            "plc_id": "M1CFB01000",
+            "plc_name": "01_01_CELL_FABRICATOR",
+            "plant_id": "plant001",
+            "plant_name": "공장1",
+            "plant_code": "P001",
+            "process_id": "process001",
+            "process_name": "공정1",
+            "process_code": "PR001",
+            "line_id": "line001",
+            "line_name": "라인1",
+            "line_code": "L001",
+            "unit": "1",
+            "create_dt": "2025-10-31 18:39:00"
           }
         },
         {
@@ -229,8 +244,9 @@ async def send_message_stream(
           "timestamp": "2025-01-01T12:00:05+09:00",
           "cancelled": false,
           "message_id": "msg002",
-          "plc_id": "plc001",
-          "plc_hierarchy": null
+          "plc_uuid": "plc-uuid-001",
+          "plc_hierarchy": null,
+          "plc_snapshot": null
         },
         ...
       ]
@@ -246,13 +262,21 @@ async def send_message_stream(
     - `timestamp`: 메시지 생성 일시 (ISO 8601 형식, Asia/Seoul 타임존)
     - `cancelled`: 메시지 취소 여부 (boolean)
     - `message_id`: 메시지 고유 ID
-    - `plc_id`: 관련 PLC ID (선택적, null 가능)
+    - `plc_uuid`: 관련 PLC UUID (선택적, null 가능)
     - `plc_hierarchy`: PLC 계층 구조 정보 (선택적, null 가능)
       - `plant`: Plant 정보 (id, code, name)
       - `process`: Process 정보 (id, code, name)
       - `line`: Line 정보 (id, code, name)
-      - `equipment_group`: Equipment Group 정보 (id, code, name)
       - 메시지 생성 시점의 PLC 계층 구조 스냅샷 정보
+    - `plc_snapshot`: PLC 전체 스냅샷 정보 (선택적, null 가능)
+      - 메시지 생성 시점의 PLC 전체 정보 (plant, process, line, 호기, plc명, 등록일시 등)
+      - 스냅샷이 있으면 스냅샷 사용, 없으면 null (공란)
+    
+    **PLC 정보 반환 규칙:**
+    - PLC가 활성화된 경우 (`is_active=true`): 스냅샷 정보를 그대로 반환
+    - PLC가 비활성화된 경우 (`is_active=false`): `plc_hierarchy`와 `plc_snapshot`을 `null`로 반환
+      - `plc_uuid`는 그대로 반환 (메시지와의 연결 정보 유지)
+      - 프론트엔드에서 `plc_hierarchy`와 `plc_snapshot`이 `null`이면 PLC 정보 폼을 비워야 함
 
     **정렬:**
     - 메시지는 생성 일시(`timestamp`) 기준 오름차순으로 정렬됩니다.
@@ -268,7 +292,7 @@ async def send_message_stream(
     - `CHAT_HISTORY_LOAD_ERROR`: 히스토리 조회 중 오류 발생
 
     **사용 예시:**
-    - `GET /api/v1/chat/chat001/history`
+    - `GET /v1/chat/chat001/history`
     """,
 )
 def get_conversation_history(

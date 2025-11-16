@@ -16,12 +16,13 @@ class PLCHierarchyHistory(Base):
 
     # 기본 정보
     history_id = Column("HISTORY_ID", String(50), primary_key=True)
-    plc_id = Column(
-        "PLC_ID",
+    plc_uuid = Column(
+        "PLC_UUID",
         String(50),
-        ForeignKey("PLC.ID"),
+        ForeignKey("PLC.PLC_UUID"),
         nullable=False,
         index=True,
+        comment="PLC UUID (PLC 테이블 참조)"
     )
 
     # 변경 전 계층 구조 스냅샷 (JSON, ID만 저장)
@@ -59,7 +60,7 @@ class PLCHierarchyHistory(Base):
     def __repr__(self):
         return (
             f"<PLCHierarchyHistory(history_id='{self.history_id}', "
-            f"plc_id='{self.plc_id}', "
+            f"plc_uuid='{self.plc_uuid}', "
             f"changed_at='{self.changed_at}')>"
         )
 

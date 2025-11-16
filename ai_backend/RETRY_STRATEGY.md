@@ -10,7 +10,7 @@
 
 **구현 방식:**
 - 사용자가 API를 호출하여 재시도
-- `POST /api/v1/programs/{program_id}/retry`
+- `POST /v1/programs/{program_id}/retry`
 
 **장점:**
 - ✅ 즉시 실행 가능

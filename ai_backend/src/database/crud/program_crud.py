@@ -165,12 +165,135 @@ class ProgramCRUD:
             logger.error(f"프로그램 상태 업데이트 실패: {str(e)}")
             raise HandledException(ResponseCode.DATABASE_QUERY_ERROR, e=e)
 
+    def get_accessible_process_ids(self, user_id: Optional[str]) -> Optional[List[str]]:
+        """
+        사용자가 접근 가능한 공정 ID 목록 조회
+        
+        Args:
+            user_id: 사용자 ID (None이면 모든 공정 접근 가능)
+            
+        Returns:
+            Optional[List[str]]: 접근 가능한 process_id 목록
+                - None: 모든 공정 접근 가능 (super 권한)
+                - List[str]: 접근 가능한 process_id 목록
+        """
+        if not user_id:
+            return None  # user_id가 없으면 모든 공정 접근 가능
+            
+        try:
+            from src.database.models.permission_group_models import (
+                GroupProcessPermission,
+                PermissionGroup,
+                UserGroupMapping,
+            )
+            from src.database.models.master_models import ProcessMaster
+            
+            # 1. 모든 공정에 접근 가능한 권한 그룹에 속한 경우 확인
+            # (GROUP_PROCESS_PERMISSIONS에 데이터가 없는 그룹은 모든 공정 접근 가능)
+            has_all_access = (
+                self.db.query(UserGroupMapping)
+                .join(PermissionGroup, UserGroupMapping.group_id == PermissionGroup.group_id)
+                .outerjoin(
+                    GroupProcessPermission,
+                    PermissionGroup.group_id == GroupProcessPermission.group_id
+                )
+                .filter(UserGroupMapping.user_id == user_id)
+                .filter(UserGroupMapping.is_active.is_(True))
+                .filter(PermissionGroup.is_active.is_(True))
+                .filter(PermissionGroup.is_deleted.is_(False))
+                .filter(GroupProcessPermission.permission_id.is_(None))
+                .first()
+            )
+            
+            if has_all_access:
+                return None  # 모든 공정 접근 가능
+            
+            # 2. 지정된 공정만 접근 가능한 경우
+            accessible_processes = (
+                self.db.query(ProcessMaster.process_id)
+                .join(
+                    GroupProcessPermission,
+                    ProcessMaster.process_id == GroupProcessPermission.process_id
+                )
+                .join(
+                    UserGroupMapping,
+                    GroupProcessPermission.group_id == UserGroupMapping.group_id
+                )
+                .filter(UserGroupMapping.user_id == user_id)
+                .filter(UserGroupMapping.is_active.is_(True))
+                .filter(GroupProcessPermission.is_active.is_(True))
+                .filter(ProcessMaster.is_active.is_(True))
+                .distinct()
+                .all()
+            )
+            
+            process_ids = [p[0] for p in accessible_processes]
+            return process_ids if process_ids else []  # 빈 리스트면 접근 불가
+            
+        except Exception as e:
+            logger.error(f"접근 가능한 공정 조회 실패: {str(e)}")
+            # 에러 발생 시 안전하게 모든 공정 접근 가능으로 처리
+            return None
+
+    def get_accessible_processes(self, user_id: Optional[str]) -> List:
+        """
+        사용자가 접근 가능한 공정 목록 조회 (드롭다운용)
+        
+        Args:
+            user_id: 사용자 ID
+            
+        Returns:
+            List[ProcessMaster]: 접근 가능한 공정 목록
+                - 권한이 없으면 빈 리스트 반환
+                - 모든 공정 접근 가능하면 모든 활성 공정 반환
+                - 특정 공정만 접근 가능하면 해당 공정만 반환
+        """
+        try:
+            from src.database.models.master_models import ProcessMaster
+            
+            # 접근 가능한 process_id 목록 조회
+            accessible_process_ids = self.get_accessible_process_ids(user_id)
+            
+            if accessible_process_ids is None:
+                # 모든 공정 접근 가능 (super 권한)
+                processes = (
+                    self.db.query(ProcessMaster)
+                    .filter(ProcessMaster.is_active.is_(True))
+                    .order_by(
+                        ProcessMaster.process_code,
+                    )
+                    .all()
+                )
+                return processes
+            elif not accessible_process_ids:
+                # 접근 가능한 공정이 없음
+                return []
+            else:
+                # 특정 공정만 접근 가능
+                processes = (
+                    self.db.query(ProcessMaster)
+                    .filter(ProcessMaster.process_id.in_(accessible_process_ids))
+                    .filter(ProcessMaster.is_active.is_(True))
+                    .order_by(
+                        ProcessMaster.process_code,
+                    )
+                    .all()
+                )
+                return processes
+                
+        except Exception as e:
+            logger.error(f"접근 가능한 공정 목록 조회 실패: {str(e)}")
+            # 에러 발생 시 빈 리스트 반환 (안전하게 처리)
+            return []
+
     def get_programs(
         self,
         program_id: Optional[str] = None,
         program_name: Optional[str] = None,
         status: Optional[str] = None,
         create_user: Optional[str] = None,
+        process_id: Optional[str] = None,
+        user_id: Optional[str] = None,
         page: int = 1,
         page_size: int = 10,
         sort_by: str = "create_dt",
@@ -184,6 +307,8 @@ class ProgramCRUD:
             program_name: 제목으로 검색 (부분 일치)
             status: 상태로 필터링
             create_user: 작성자로 필터링
+            process_id: 공정 ID로 필터링 (화면 드롭다운)
+            user_id: 사용자 ID (권한 기반 필터링용)
             page: 페이지 번호 (1부터 시작)
             page_size: 페이지당 항목 수
             sort_by: 정렬 기준 (create_dt, program_id, program_name, status)
@@ -194,6 +319,16 @@ class ProgramCRUD:
         """
         try:
             query = self.db.query(Program).filter(Program.is_used.is_(True))
+            query = query.filter(Program.is_deleted.is_(False))
+
+            # 권한 기반 필터링 (user_id가 제공된 경우)
+            if user_id:
+                accessible_process_ids = self.get_accessible_process_ids(user_id)
+                if accessible_process_ids is not None:  # None이면 모든 공정 접근 가능
+                    if not accessible_process_ids:
+                        # 접근 가능한 공정이 없으면 빈 결과 반환
+                        return [], 0
+                    query = query.filter(Program.process_id.in_(accessible_process_ids))
 
             # 검색 조건
             if program_id:
@@ -208,6 +343,8 @@ class ProgramCRUD:
                 query = query.filter(Program.status == status)
             if create_user:
                 query = query.filter(Program.create_user == create_user)
+            if process_id:
+                query = query.filter(Program.process_id == process_id)
 
             # 전체 개수 조회
             total_count = query.count()

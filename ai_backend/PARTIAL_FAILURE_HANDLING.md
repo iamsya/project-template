@@ -81,7 +81,7 @@
 
 #### 엔드포인트
 ```
-POST /api/v1/programs/{program_id}/retry?retry_type={type}&user_id={user_id}
+POST /v1/programs/{program_id}/retry?retry_type={type}&user_id={user_id}
 ```
 
 #### 파라미터
@@ -132,7 +132,7 @@ POST /api/v1/programs/{program_id}/retry?retry_type={type}&user_id={user_id}
 ### 1. 프로그램 처리 상태 확인
 
 ```python
-# GET /api/v1/programs/{program_id}
+# GET /v1/programs/{program_id}
 program = await program_service.get_program(program_id, user_id)
 
 # metadata_json에서 실패 정보 확인
@@ -145,7 +145,7 @@ if metadata.get("has_partial_failure"):
 ### 2. 실패한 파일 재시도
 
 ```python
-# POST /api/v1/programs/{program_id}/retry?retry_type=document
+# POST /v1/programs/{program_id}/retry?retry_type=document
 result = await program_service.retry_failed_files(
     program_id=program_id,
     user_id=user_id,

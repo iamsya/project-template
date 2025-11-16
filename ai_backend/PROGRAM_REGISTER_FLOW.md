@@ -2,7 +2,7 @@
 
 ## API 엔드포인트
 ```
-POST /api/v1/programs/register
+POST /v1/programs/register
 ```
 
 ## 요청 파라미터
@@ -17,7 +17,7 @@ POST /api/v1/programs/register
 
 ```mermaid
 flowchart TD
-    Start([클라이언트 요청<br/>POST /api/v1/programs/register]) --> Router[program_router.py<br/>register_program]
+    Start([클라이언트 요청<br/>POST /v1/programs/register]) --> Router[program_router.py<br/>register_program]
     
     Router --> Service[program_service.py<br/>ProgramService.register_program]
     

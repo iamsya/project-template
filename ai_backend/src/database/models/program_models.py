@@ -17,7 +17,7 @@ from sqlalchemy import (
     Text,
     func,
 )
-from sqlalchemy.sql.expression import true
+from sqlalchemy.sql.expression import false, true
 
 from src.database.base import Base
 
@@ -31,6 +31,16 @@ class Program(Base):
     program_id = Column("PROGRAM_ID", String(50), primary_key=True)
     program_name = Column("PROGRAM_NAME", String(255), nullable=False)
     description = Column("DESCRIPTION", Text, nullable=True)
+    
+    # 공정 정보 (화면에서 드롭다운으로 선택)
+    process_id = Column(
+        "PROCESS_ID",
+        String(50),
+        ForeignKey("PROCESS_MASTER.PROCESS_ID"),
+        nullable=True,
+        index=True,
+        comment="공정 ID (화면에서 드롭다운 선택, 선택사항)"
+    )
 
     # 상태 정보
     status = Column(
@@ -53,6 +63,28 @@ class Program(Base):
 
     # 사용 여부
     is_used = Column("IS_USED", Boolean, nullable=False, server_default=true())
+
+    # 삭제 관리
+    is_deleted = Column(
+        "IS_DELETED",
+        Boolean,
+        nullable=False,
+        server_default=false(),
+        index=True,
+        comment="삭제 여부 (소프트 삭제)"
+    )
+    deleted_at = Column(
+        "DELETED_AT",
+        DateTime,
+        nullable=True,
+        comment="삭제 일시"
+    )
+    deleted_by = Column(
+        "DELETED_BY",
+        String(50),
+        nullable=True,
+        comment="삭제자"
+    )
 
     # 상태 상수
     STATUS_PREPARING = "preparing"

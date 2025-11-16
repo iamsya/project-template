@@ -734,7 +734,7 @@
         </div>
         <div class="user-input-section">
             <input type="text" id="userNameInput" placeholder="사용자명을 입력하세요..." value="user">
-            <input type="text" id="plcIdInput" placeholder="PLC ID를 입력하세요 (선택사항)" style="margin-top: 8px;">
+            <input type="text" id="plcUuidInput" placeholder="PLC UUID를 입력하세요 (선택사항)" style="margin-top: 8px;">
         </div>
         
         <!-- 문서 업로드 섹션 -->
@@ -843,7 +843,7 @@
                 const userName = document.getElementById('userNameInput').value || 'user';
                 console.log('Loading chats for user:', userName);
                 
-                const response = await fetch(`/api/v1/chat/chats?user_id=${encodeURIComponent(userName)}`);
+                const response = await fetch(`/v1/chat/chats?user_id=${encodeURIComponent(userName)}`);
                 
                 if (!response.ok) {
                     throw new Error(`HTTP error! status: ${response.status}`);
@@ -930,7 +930,7 @@
             }
             
             try {
-                const response = await fetch(`/api/v1/chat/chats/${chatId}`, {
+                const response = await fetch(`/v1/chat/chats/${chatId}`, {
                     method: 'DELETE',
                     headers: {
                         'Content-Type': 'application/json',
@@ -970,7 +970,7 @@
                 const userName = document.getElementById('userNameInput').value || 'user';
                 console.log('User name:', userName);
                 
-                const response = await fetch('/api/v1/chat/chats', {
+                const response = await fetch('/v1/chat/chats', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -1017,7 +1017,7 @@
                 const chatTitle = await generateChatTitle(message);
                 
                 const userName = document.getElementById('userNameInput').value || 'user';
-                const response = await fetch('/api/v1/chat/chats', {
+                const response = await fetch('/v1/chat/chats', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -1058,7 +1058,7 @@
         async function createNewChatWithName(chatTitle) {
             try {
                 const userName = document.getElementById('userNameInput').value || 'user';
-                const response = await fetch('/api/v1/chat/chats', {
+                const response = await fetch('/v1/chat/chats', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -1096,7 +1096,7 @@
         async function generateChatTitle(message) {
             try {
                 // LLM API를 사용하여 제목 생성
-                const response = await fetch('/api/v1/chat/generate-title', {
+                const response = await fetch('/v1/chat/generate-title', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -1131,7 +1131,7 @@
             if (!currentChatId) return;
             
             try {
-                const response = await fetch(`/api/v1/chat/${currentChatId}/history`);
+                const response = await fetch(`/v1/chat/${currentChatId}/history`);
                 
                 if (!response.ok) {
                     throw new Error(`HTTP error! status: ${response.status}`);
@@ -1216,7 +1216,7 @@
             // 채팅의 평가 정보 로드
             let ratings = {};
             try {
-                const ratingsResponse = await fetch(`/api/v1/chats/${currentChatId}/ratings`);
+                const ratingsResponse = await fetch(`/v1/chats/${currentChatId}/ratings`);
                 if (ratingsResponse.ok) {
                     const ratingsData = await ratingsResponse.json();
                     ratings = ratingsData.ratings || {};
@@ -1292,8 +1292,8 @@
             try {
                 // 스트리밍 요청
                 abortController = new AbortController();
-                const plcId = document.getElementById('plcIdInput').value.trim() || null;
-                const response = await fetch(`/api/v1/chat/${currentChatId}/stream`, {
+                const plcUuid = document.getElementById('plcUuidInput').value.trim() || null;
+                const response = await fetch(`/v1/chat/${currentChatId}/stream`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -1302,7 +1302,7 @@
                         type: 'user_message',
                         message: message,
                         user_id: document.getElementById('userNameInput').value || 'user',
-                        plc_id: plcId || null
+                        plc_uuid: plcUuid || null
                     }),
                     signal: abortController.signal
                 });
@@ -1402,7 +1402,7 @@
                 
                 // 백엔드에도 취소 요청 전송 (메시지 저장을 위해)
                 try {
-                    const response = await fetch(`/api/v1/chat/${currentChatId}/cancel`, {
+                    const response = await fetch(`/v1/chat/${currentChatId}/cancel`, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
@@ -1533,7 +1533,7 @@
                     
                     try {
                         // 1. 업로드 요청 (즉시 응답)
-                        const response = await fetch('/api/v1/upload', {
+                        const response = await fetch('/v1/upload', {
                             method: 'POST',
                             body: formData
                         });
@@ -1603,7 +1603,7 @@
                 formData.append('folder_path', folderPath);
                 formData.append('user_id', userName);
                 
-                const response = await fetch('/api/v1/upload-folder', {
+                const response = await fetch('/v1/upload-folder', {
                     method: 'POST',
                     body: formData
                 });
@@ -1634,7 +1634,7 @@
             
             const poll = async () => {
                 try {
-                    const response = await fetch(`/api/v1/upload/${uploadId}/status`);
+                    const response = await fetch(`/v1/upload/${uploadId}/status`);
                     const data = await response.json();
                     
                     if (data.status === 'success') {
@@ -1668,7 +1668,7 @@
         async function loadDocuments() {
             try {
                 const userName = document.getElementById('userNameInput').value || 'user';
-                const response = await fetch(`/api/v1/documents?user_id=${encodeURIComponent(userName)}`);
+                const response = await fetch(`/v1/documents?user_id=${encodeURIComponent(userName)}`);
                 
                 if (!response.ok) {
                     throw new Error(`HTTP error! status: ${response.status}`);
@@ -1734,7 +1734,7 @@
         async function downloadDocument(documentId) {
             try {
                 const userName = document.getElementById('userNameInput').value || 'user';
-                const response = await fetch(`/api/v1/documents/${documentId}/download?user_id=${encodeURIComponent(userName)}`);
+                const response = await fetch(`/v1/documents/${documentId}/download?user_id=${encodeURIComponent(userName)}`);
                 
                 if (!response.ok) {
                     throw new Error(`HTTP error! status: ${response.status}`);
@@ -1776,7 +1776,7 @@
             
             try {
                 const userName = document.getElementById('userNameInput').value || 'user';
-                const response = await fetch(`/api/v1/documents/${documentId}?user_id=${encodeURIComponent(userName)}`, {
+                const response = await fetch(`/v1/documents/${documentId}?user_id=${encodeURIComponent(userName)}`, {
                     method: 'DELETE'
                 });
                 
@@ -1891,7 +1891,7 @@
                 const userName = document.getElementById('userNameInput').value || 'user';
                 const comment = document.getElementById(`comment-${messageId}`).value.trim();
                 
-                const response = await fetch('/api/v1/ratings', {
+                const response = await fetch('/v1/ratings', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -2005,7 +2005,7 @@
                 const userName = document.getElementById('userNameInput').value || 'user';
                 const comment = document.getElementById(`comment-${messageId}`).value.trim();
                 
-                const response = await fetch(`/api/v1/ratings/${messageId}`, {
+                const response = await fetch(`/v1/ratings/${messageId}`, {
                     method: 'PUT',
                     headers: {
                         'Content-Type': 'application/json',
@@ -2095,7 +2095,7 @@
             
             // 브라우저 내장 PDF 뷰어 사용
             const userName = document.getElementById('userNameInput').value || 'user';
-            currentPdfUrl = `/api/v1/documents/${documentId}/view?user_id=${encodeURIComponent(userName)}`;
+            currentPdfUrl = `/v1/documents/${documentId}/view?user_id=${encodeURIComponent(userName)}`;
             
             // timestamp 추가로 강제 리로드 (브라우저 캐시 우회)
             let pdfUrl = currentPdfUrl + `&t=${Date.now()}`;
@@ -2220,7 +2220,7 @@
                 const newTitle = input.value.trim();
                 if (newTitle && newTitle !== currentTitle) {
                     try {
-                        const response = await fetch(`/api/v1/chat/chats/${chatId}/title?new_title=${encodeURIComponent(newTitle)}&user_id=user`, {
+                        const response = await fetch(`/v1/chat/chats/${chatId}/title?new_title=${encodeURIComponent(newTitle)}&user_id=user`, {
                             method: 'PUT'
                         });
                         

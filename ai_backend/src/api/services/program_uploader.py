@@ -31,7 +31,7 @@ class ProgramUploader:
         self,
         ladder_zip: UploadFile,
         classification_xlsx: UploadFile,
-        device_comment_csv: UploadFile,
+        comment_csv: UploadFile,
         program_id: str,
         user_id: str,
     ) -> Dict[str, str]:
@@ -44,7 +44,7 @@ class ProgramUploader:
                     'ladder_zip_path': 's3://...',
                     'unzipped_base_path': 's3://...',
                     'classification_xlsx_path': 's3://...',
-                    'device_comment_csv_path': 's3://...'
+                    'comment_csv_path': 's3://...'
                 }
         """
         try:
@@ -77,10 +77,10 @@ class ProgramUploader:
                 )
 
                 # 4. CSV 파일 S3 업로드
-                device_comment_csv.file.seek(0)
-                device_comment_csv_path = await self._upload_to_s3(
-                    file=device_comment_csv,
-                    s3_key=f"programs/{program_id}/device_comment.csv",
+                comment_csv.file.seek(0)
+                comment_csv_path = await self._upload_to_s3(
+                    file=comment_csv,
+                    s3_key=f"programs/{program_id}/comment.csv",
                     content_type="text/csv",
                 )
 
@@ -89,7 +89,7 @@ class ProgramUploader:
                     "unzipped_base_path": f"programs/{program_id}/unzipped/",
                     "unzipped_files": unzipped_files,
                     "classification_xlsx_path": classification_xlsx_path,
-                    "device_comment_csv_path": device_comment_csv_path,
+                    "comment_csv_path": comment_csv_path,
                 }
 
         except Exception as e:
@@ -178,7 +178,8 @@ class ProgramUploader:
         user_id: str,
         unzipped_files: list,
         classification_xlsx_path: str,
-        device_comment_csv_path: str,
+        comment_csv_path: str,
+        ladder_document_id: str,
         db_session,
         document_crud,
         template_data_crud,
@@ -201,7 +202,8 @@ class ProgramUploader:
             user_id: 사용자 ID
             unzipped_files: 압축 해제된 파일 목록 (S3 경로)
             classification_xlsx_path: 분류 XLSX 파일 S3 경로
-            device_comment_csv_path: 디바이스 코멘트 CSV 파일 S3 경로
+            comment_csv_path: PLC Ladder Comment CSV 파일 S3 경로
+            ladder_document_id: 원본 ZIP 파일의 Document ID (source_document_id로 사용)
             db_session: 데이터베이스 세션
             document_crud: DocumentCRUD 인스턴스
             template_data_crud: TemplateDataCRUD 인스턴스
@@ -238,16 +240,19 @@ class ProgramUploader:
                 try:
                     # TODO: 전처리 로직 구현 필요
                     # 1. unzipped_file_path에서 파일 다운로드
-                    # 2. classification_xlsx_path와 device_comment_csv_path 활용
+                    # 2. classification_xlsx_path와 comment_csv_path 활용
                     # 3. 파일을 분석하여 JSON 형식으로 변환
                     # 4. json_content 생성
                     #
                     # 예시:
                     #   - S3에서 파일 다운로드
                     #   - 파일 내용 파싱
-                    #   - classification_xlsx와 device_comment_csv 데이터 결합
+                    #   - classification_xlsx와 comment_csv 데이터 결합
                     #   - JSON 형식으로 변환
                     #   - json_content = json.dumps(processed_data, ensure_ascii=False)
+                    #
+                    # 전처리 시작 시 status 업데이트:
+                    #   document_crud.update_document(document_id, status="preprocessing")
 
                     json_filename = f"processed_{program_id}_{idx}.json"
                     json_s3_key = f"programs/{program_id}/processed/{json_filename}"
@@ -271,7 +276,9 @@ class ProgramUploader:
                     if logic_id and logic_id in template_data_map:
                         template_data_id = template_data_map[logic_id]["template_data_id"]
 
-                    # Document 생성
+                    # Document 생성 (전처리 및 임베딩 대상 파일)
+                    # JSON 파일은 이미 전처리 완료 상태이므로 preprocessed로 시작
+                    # status 흐름: preprocessed -> embedding -> embedded
                     document_id = gen()
                     document_crud.create_document(
                         document_id=document_id,
@@ -283,9 +290,10 @@ class ProgramUploader:
                         file_extension="json",
                         user_id=user_id,
                         upload_path=json_s3_path,
-                        status="processing",
-                        document_type="common",
+                        status="preprocessed",  # 전처리 완료 (임베딩 대기)
+                        document_type="ladder_logic_json",
                         program_id=program_id,
+                        source_document_id=ladder_document_id,
                         metadata_json={
                             "program_id": program_id,
                             "program_title": program_title,
@@ -302,6 +310,12 @@ class ProgramUploader:
                             template_data_id=template_data_id,
                             document_id=document_id,
                         )
+
+                    # TODO: 전처리 실패 시 status 업데이트
+                    # 전처리 실패 시:
+                    #   document_crud.update_document(document_id, status="failed", error_message="...")
+                    #   failed_files.append({...})
+                    # 전처리 성공 시는 이미 status="preprocessed"로 설정되어 있음
 
                     created_documents.append({
                         "document_id": document_id,

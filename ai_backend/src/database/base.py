@@ -112,6 +112,7 @@ class Database:
                 from src.database.models import chat_models  # noqa: F401
                 from src.database.models import document_models  # noqa: F401
                 from src.database.models import group_models  # noqa: F401
+                from src.database.models import permission_group_models  # noqa: F401
                 logger.debug("ai_backend 모델들 import 완료")
             except ImportError as e:
                 logger.warning(

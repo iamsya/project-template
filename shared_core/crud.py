@@ -52,7 +52,6 @@ class DocumentCRUD:
         document_type: str = 'common',
         # Program 관련 필드
         program_id: str = None,
-        program_file_type: str = None,
         source_document_id: str = None,
         # Knowledge Reference 관련 필드
         knowledge_reference_id: str = None,
@@ -88,7 +87,6 @@ class DocumentCRUD:
                 document_type=document_type,
                 # Program 관련 필드
                 program_id=program_id,
-                program_file_type=program_file_type,
                 source_document_id=source_document_id,
                 # Knowledge Reference 관련 필드
                 knowledge_reference_id=knowledge_reference_id,

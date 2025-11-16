@@ -29,7 +29,7 @@ class ProgramValidator:
     def validate_files(
         ladder_zip: UploadFile,
         classification_xlsx: UploadFile,
-        device_comment_csv: UploadFile,
+        comment_csv: UploadFile,
     ) -> Tuple[bool, List[str], List[str], List[str]]:
         """
         파일 유효성 검사
@@ -61,7 +61,7 @@ class ProgramValidator:
 
             # 3. CSV 파일 검증 및 컬럼 확인
             csv_errors, csv_warnings, csv_files = ProgramValidator._validate_csv_file(
-                device_comment_csv
+                comment_csv
             )
             errors.extend(csv_errors)
             warnings.extend(csv_warnings)

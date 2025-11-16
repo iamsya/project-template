@@ -31,10 +31,34 @@ class Document(Base):
     __tablename__ = "DOCUMENTS"
     
     # 문서 타입 상수
+    # Program 파일 타입
+    TYPE_LADDER_LOGIC_ZIP = 'ladder_logic_zip'
+    TYPE_LADDER_LOGIC_JSON = 'ladder_logic_json'
+    TYPE_COMMENT = 'comment'
+    TYPE_TEMPLATE = 'template'
+    # Knowledge Reference 파일 타입
+    TYPE_MANUAL = 'manual'
+    TYPE_GLOSSARY = 'glossary'
+    TYPE_PLC = 'plc'
+    # 일반 문서 타입
     TYPE_COMMON = 'common'
     TYPE_TYPE1 = 'type1'
     TYPE_TYPE2 = 'type2'
-    VALID_DOCUMENT_TYPES = [TYPE_COMMON, TYPE_TYPE1, TYPE_TYPE2]
+    VALID_DOCUMENT_TYPES = [
+        # Program 파일
+        TYPE_LADDER_LOGIC_ZIP,
+        TYPE_LADDER_LOGIC_JSON,
+        TYPE_COMMENT,
+        TYPE_TEMPLATE,
+        # Knowledge Reference 파일
+        TYPE_MANUAL,
+        TYPE_GLOSSARY,
+        TYPE_PLC,
+        # 일반 문서
+        TYPE_COMMON,
+        TYPE_TYPE1,
+        TYPE_TYPE2,
+    ]
     
     # 기본 정보
     document_id = Column('DOCUMENT_ID', String(50), primary_key=True)
@@ -53,11 +77,43 @@ class Document(Base):
     user_id = Column('USER_ID', String(50), nullable=False)
     is_public = Column('IS_PUBLIC', Boolean, nullable=False, server_default=false())
     
-    # 문서 타입
-    document_type = Column('DOCUMENT_TYPE', String(20), nullable=True, default='common')
+    # 문서 타입 (통합 관리)
+    # Program 파일: ladder_logic_zip, ladder_logic_json, comment, template
+    # Knowledge Reference 파일: manual, glossary, plc
+    # 일반 문서: common, type1, type2
+    document_type = Column(
+        'DOCUMENT_TYPE',
+        String(50),
+        nullable=True,
+        index=True,
+        comment=(
+            "문서 타입 (통합): "
+            "ladder_logic_zip, ladder_logic_json, comment, template "
+            "(Program 파일), "
+            "manual, glossary, plc "
+            "(Knowledge Reference 파일), "
+            "common, type1, type2 "
+            "(일반 문서)"
+        )
+    )
     
     # 처리 상태
-    status = Column('STATUS', String(20), nullable=False, server_default='processing')
+    # 주의: status는 전처리 및 벡터 임베딩 대상 파일만 사용
+    #       - JSON 파일 (document_type='ladder_logic_json'):
+    #         preprocessed, embedding, embedded, failed
+    #       - Knowledge Reference 파일 (document_type='manual', 'glossary', 'plc'):
+    #         embedding, embedded, failed (전처리 없이 바로 임베딩)
+    #       - 다른 파일(ladder_logic_zip, comment, template): None
+    status = Column(
+        'STATUS',
+        String(20),
+        nullable=True,
+        comment=(
+            "전처리 및 벡터 임베딩 상태: "
+            "preprocessed (JSON만), embedding, embedded, failed "
+            "(JSON 파일 및 Knowledge Reference 파일만 사용)"
+        )
+    )
     total_pages = Column('TOTAL_PAGES', Integer, default=0, nullable=True)
     processed_pages = Column('PROCESSED_PAGES', Integer, default=0, nullable=True)
     error_message = Column('ERROR_MESSAGE', Text, nullable=True)
@@ -65,7 +121,6 @@ class Document(Base):
     # 벡터화 정보
     milvus_collection_name = Column('MILVUS_COLLECTION_NAME', String(255), nullable=True)
     vector_count = Column('VECTOR_COUNT', Integer, default=0, nullable=True)
-    is_embedded = Column('IS_EMBEDDED', Boolean, nullable=False, server_default=false())
     
     # 문서 메타데이터
     language = Column('LANGUAGE', String(10), nullable=True)
@@ -87,8 +142,8 @@ class Document(Base):
 
     # Program 관련 필드
     program_id = Column('PROGRAM_ID', String(50), ForeignKey('PROGRAMS.PROGRAM_ID'), nullable=True, index=True)
-    program_file_type = Column('PROGRAM_FILE_TYPE', String(50), nullable=True, index=True)
     source_document_id = Column('SOURCE_DOCUMENT_ID', String(50), ForeignKey('DOCUMENTS.DOCUMENT_ID'), nullable=True, index=True)
+    # Knowledge Reference 관련 필드
     knowledge_reference_id = Column('KNOWLEDGE_REFERENCE_ID', String(50), ForeignKey('KNOWLEDGE_REFERENCES.REFERENCE_ID'), nullable=True, index=True)
     file_id = Column('FILE_ID', String(255), nullable=True)
 

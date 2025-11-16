@@ -1,7 +1,12 @@
 # _*_ coding: utf-8 _*_
 """
 PLC 모델 정의
-PLC 기준 정보 및 Program 매핑 테이블 (기준정보 스냅샷 포함)
+PLC 기준 정보 및 Program 매핑 테이블
+
+Hierarchy 구조: Plant → 공정(Process) → Line → PLC명 → 호기(Unit)
+- Plant, Process, Line: 운영자가 입력하는 마스터 데이터 (드롭다운 선택)
+- PLC명, 호기, PLC ID: 사용자가 화면에서 직접 입력
+- 한번 입력된 PLC의 hierarchy는 수정되지 않음
 """
 
 from sqlalchemy import Boolean, Column, DateTime, ForeignKey, JSON, String, func
@@ -11,15 +16,68 @@ from src.database.base import Base
 
 
 class PLC(Base):
-    """PLC 기준 정보 및 Program 매핑 테이블 (기준정보 스냅샷 포함)"""
+    """
+    PLC 기준 정보 및 Program 매핑 테이블
+    
+    Hierarchy 구조: Plant → 공정(Process) → Line → PLC명 → 호기(Unit)
+    - Plant, Process, Line: 운영자가 입력하는 마스터 데이터
+    - PLC명, 호기, PLC ID: 사용자가 화면에서 직접 입력
+    - 한번 입력된 hierarchy는 수정되지 않음
+    """
 
     __tablename__ = "PLC"
 
-    # 기본 정보
-    id = Column("ID", String(50), primary_key=True)
-    plc_id = Column("PLC_ID", String(50), nullable=False, index=True)  # PLC 식별자 (중복 가능)
-    plc_name = Column("PLC_NAME", String(255), nullable=False)
-    unit = Column("UNIT", String(100), nullable=True)
+    # Primary Key (기존 id를 plc_uuid로 변경)
+    plc_uuid = Column("PLC_UUID", String(50), primary_key=True)
+
+    # Hierarchy: Plant → 공정(Process) → Line (운영자 입력, 드롭다운 선택)
+    plant_id = Column(
+        "PLANT_ID",
+        String(50),
+        ForeignKey("PLANT_MASTER.PLANT_ID"),
+        nullable=False,
+        index=True,
+        comment="Plant ID (hierarchy 1단계, 필수)"
+    )
+    process_id = Column(
+        "PROCESS_ID",
+        String(50),
+        ForeignKey("PROCESS_MASTER.PROCESS_ID"),
+        nullable=False,
+        index=True,
+        comment="공정(Process) ID (hierarchy 2단계, 필수)"
+    )
+    line_id = Column(
+        "LINE_ID",
+        String(50),
+        ForeignKey("LINE_MASTER.LINE_ID"),
+        nullable=False,
+        index=True,
+        comment="Line ID (hierarchy 3단계, 필수)"
+    )
+
+    # Hierarchy: PLC명 → 호기 (사용자 직접 입력)
+    plc_name = Column(
+        "PLC_NAME",
+        String(255),
+        nullable=False,
+        comment="PLC명 (hierarchy 4단계, 사용자 입력)"
+    )
+    unit = Column(
+        "UNIT",
+        String(100),
+        nullable=True,
+        comment="호기 (hierarchy 5단계, 사용자 입력, 예: 1, 2)"
+    )
+
+    # PLC ID (사용자 직접 입력)
+    plc_id = Column(
+        "PLC_ID",
+        String(50),
+        nullable=False,
+        index=True,
+        comment="PLC 식별자 (사용자 수기 입력)"
+    )
 
     # Program 매핑
     program_id = Column(
@@ -29,7 +87,8 @@ class PLC(Base):
         nullable=True,
         unique=True,
         index=True,
-    )  # PLC 1개 → Program 1개 (unique)
+        comment="PLC 1개 → Program 1개 (unique)"
+    )
     mapping_dt = Column("MAPPING_DT", DateTime, nullable=True)
     mapping_user = Column("MAPPING_USER", String(50), nullable=True)
 
@@ -39,26 +98,25 @@ class PLC(Base):
     # 메타데이터
     metadata_json = Column("METADATA_JSON", JSON, nullable=True)
 
-    # 시간 정보
+    # 등록 정보 (PLC 입력한 사람과 등록일시)
     create_dt = Column(
-        "CREATE_DT", DateTime, nullable=False, server_default=func.now()
+        "CREATE_DT",
+        DateTime,
+        nullable=False,
+        server_default=func.now(),
+        comment="PLC 등록일시"
     )
-    create_user = Column("CREATE_USER", String(50), nullable=False)
+    create_user = Column(
+        "CREATE_USER",
+        String(50),
+        nullable=False,
+        comment="PLC 입력한 사람"
+    )
     update_dt = Column("UPDATE_DT", DateTime, nullable=True, onupdate=func.now())
     update_user = Column("UPDATE_USER", String(50), nullable=True)
 
-    # 기준정보 스냅샷 (PLC 생성/수정 시점의 기준정보 저장, 불변)
-    # 각 레벨별 ID만 저장 (code, name은 master 테이블 조인으로 조회)
-    plant_id_snapshot = Column("PLANT_ID_SNAPSHOT", String(50), nullable=True, index=True)
-    process_id_snapshot = Column("PROCESS_ID_SNAPSHOT", String(50), nullable=True, index=True)
-    line_id_snapshot = Column("LINE_ID_SNAPSHOT", String(50), nullable=True, index=True)
-    equipment_group_id_snapshot = Column("EQUIPMENT_GROUP_ID_SNAPSHOT", String(50), nullable=True, index=True)
-
-    # 현재 기준정보 참조 (nullable, 선택 시 사용)
-    plant_id_current = Column("PLANT_ID_CURRENT", String(50), ForeignKey("PLANT_MASTER.PLANT_ID"), nullable=True, index=True)
-    process_id_current = Column("PROCESS_ID_CURRENT", String(50), ForeignKey("PROCESS_MASTER.PROCESS_ID"), nullable=True, index=True)
-    line_id_current = Column("LINE_ID_CURRENT", String(50), ForeignKey("LINE_MASTER.LINE_ID"), nullable=True, index=True)
-    equipment_group_id_current = Column("EQUIPMENT_GROUP_ID_CURRENT", String(50), ForeignKey("EQUIPMENT_GROUP_MASTER.EQUIPMENT_GROUP_ID"), nullable=True, index=True)
-
     def __repr__(self):
-        return f"<PLC(id='{self.id}', plc_id='{self.plc_id}', plc_name='{self.plc_name}', program_id='{self.program_id}')>"
+        return (
+            f"<PLC(plc_uuid='{self.plc_uuid}', plc_id='{self.plc_id}', "
+            f"plc_name='{self.plc_name}', program_id='{self.program_id}')>"
+        )
