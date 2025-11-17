@@ -184,6 +184,11 @@ class Settings(BaseSettings):
     aws_access_key_id: str = Field(default="", env="AWS_ACCESS_KEY_ID")
     aws_secret_access_key: str = Field(default="", env="AWS_SECRET_ACCESS_KEY")
     
+    # S3 프로그램 파일 경로 prefix
+    # - 기본값: programs/
+    # - 환경변수: S3_PROGRAM_PREFIX
+    s3_program_prefix: str = Field(default="programs/", env="S3_PROGRAM_PREFIX")
+    
     # 파일 업로드 최대 크기 (바이트)
     # - 기본값: 50MB (52428800 bytes)
     # - 개발: 50MB (테스트 편의)

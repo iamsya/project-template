@@ -52,11 +52,20 @@ class ProgramUploader:
             with tempfile.TemporaryDirectory() as temp_dir:
                 temp_path = Path(temp_dir)
 
-                # 1. ZIP 파일 S3 업로드
+                # 원본 파일명 가져오기
+                ladder_zip_filename = ladder_zip.filename or "ladder_logic.zip"
+                classification_xlsx_filename = classification_xlsx.filename or "classification.xlsx"
+                comment_csv_filename = comment_csv.filename or "comment.csv"
+                
+                # S3 프로그램 경로 prefix 가져오기
+                from src.config import settings
+                program_prefix = settings.s3_program_prefix.rstrip("/")
+                
+                # 1. ZIP 파일 S3 업로드 (원본 파일명 사용)
                 ladder_zip.file.seek(0)
                 ladder_zip_path = await self._upload_to_s3(
                     file=ladder_zip,
-                    s3_key=f"programs/{program_id}/ladder_logic.zip",
+                    s3_key=f"{program_prefix}/{program_id}/{ladder_zip_filename}",
                     content_type="application/zip",
                 )
 
@@ -64,32 +73,35 @@ class ProgramUploader:
                 ladder_zip.file.seek(0)
                 unzipped_files = await self._unzip_to_s3(
                     zip_file=ladder_zip,
-                    s3_prefix=f"programs/{program_id}/unzipped/",
+                    s3_prefix=f"{program_prefix}/{program_id}/unzipped/",
                     temp_dir=temp_path,
                 )
 
-                # 3. XLSX 파일 S3 업로드
+                # 3. XLSX 파일 S3 업로드 (원본 파일명 사용)
                 classification_xlsx.file.seek(0)
                 classification_xlsx_path = await self._upload_to_s3(
                     file=classification_xlsx,
-                    s3_key=f"programs/{program_id}/classification.xlsx",
+                    s3_key=f"{program_prefix}/{program_id}/{classification_xlsx_filename}",
                     content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 )
 
-                # 4. CSV 파일 S3 업로드
+                # 4. CSV 파일 S3 업로드 (원본 파일명 사용)
                 comment_csv.file.seek(0)
                 comment_csv_path = await self._upload_to_s3(
                     file=comment_csv,
-                    s3_key=f"programs/{program_id}/comment.csv",
+                    s3_key=f"{program_prefix}/{program_id}/{comment_csv_filename}",
                     content_type="text/csv",
                 )
 
                 return {
                     "ladder_zip_path": ladder_zip_path,
-                    "unzipped_base_path": f"programs/{program_id}/unzipped/",
+                    "ladder_zip_filename": ladder_zip_filename,
+                    "unzipped_base_path": f"{program_prefix}/{program_id}/unzipped/",
                     "unzipped_files": unzipped_files,
                     "classification_xlsx_path": classification_xlsx_path,
+                    "classification_xlsx_filename": classification_xlsx_filename,
                     "comment_csv_path": comment_csv_path,
+                    "comment_csv_filename": comment_csv_filename,
                 }
 
         except Exception as e:

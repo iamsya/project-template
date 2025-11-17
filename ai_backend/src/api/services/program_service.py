@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from shared_core.models import Document
 from src.api.services.program_uploader import ProgramUploader
 from src.api.services.program_validator import ProgramValidator
+from src.config import settings
 from src.types.response.exceptions import HandledException
 from src.types.response.response_code import ResponseCode
 from src.utils.uuid_gen import gen
@@ -248,10 +249,12 @@ class ProgramService:
 
         # 템플릿 Document 생성
         template_document_id = gen()
+        # 원본 파일명 사용
+        classification_filename = classification_xlsx.filename or "classification.xlsx"
         document_crud.create_document(
             document_id=template_document_id,
             document_name=f"{program_title}_template",
-            original_filename="classification.xlsx",
+            original_filename=classification_filename,
             file_key=None,
             file_size=len(xlsx_content),
             file_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -585,27 +588,33 @@ class ProgramService:
             from src.database.crud.document_crud import DocumentCRUD
             document_crud = DocumentCRUD(self.db)
 
-            # ladder_document 업데이트
+            # S3 프로그램 경로 prefix 가져오기
+            program_prefix = settings.s3_program_prefix.rstrip("/")
+            
+            # ladder_document 업데이트 (원본 파일명 사용)
             if ladder_document_id and s3_paths.get("ladder_zip_path"):
+                ladder_filename = s3_paths.get("ladder_zip_filename", "ladder_logic.zip")
                 document_crud.update_document(
                     document_id=ladder_document_id,
-                    file_key=f"programs/{program_id}/ladder_logic.zip",
+                    file_key=f"{program_prefix}/{program_id}/{ladder_filename}",
                     upload_path=s3_paths.get("ladder_zip_path"),
                 )
 
-            # comment_document 업데이트
+            # comment_document 업데이트 (원본 파일명 사용)
             if comment_document_id and s3_paths.get("comment_csv_path"):
+                comment_filename = s3_paths.get("comment_csv_filename", "comment.csv")
                 document_crud.update_document(
                     document_id=comment_document_id,
-                    file_key=f"programs/{program_id}/comment.csv",
+                    file_key=f"{program_prefix}/{program_id}/{comment_filename}",
                     upload_path=s3_paths.get("comment_csv_path"),
                 )
 
-            # template_document 업데이트
+            # template_document 업데이트 (원본 파일명 사용)
             if template_document_id and s3_paths.get("classification_xlsx_path"):
+                classification_filename = s3_paths.get("classification_xlsx_filename", "classification.xlsx")
                 document_crud.update_document(
                     document_id=template_document_id,
-                    file_key=f"programs/{program_id}/classification.xlsx",
+                    file_key=f"{program_prefix}/{program_id}/{classification_filename}",
                     upload_path=s3_paths.get("classification_xlsx_path"),
                 )
 

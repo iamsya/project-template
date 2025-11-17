@@ -36,6 +36,11 @@
 - `LINE_ID` → `LINE_MASTER.LINE_ID`
 - `PROGRAM_ID` → `PROGRAMS.PROGRAM_ID`
 
+### 메타데이터 (METADATA_JSON)
+
+`METADATA_JSON` 필드에 저장되는 주요 정보:
+- `previous_program_id`: 이전에 매핑되었던 Program ID (Program 매핑 변경 시 저장)
+
 ### 제거된 컬럼
 - `ID` (→ `PLC_UUID`로 변경)
 - `PLANT_ID_SNAPSHOT` (스냅샷 개념 제거)
@@ -67,6 +72,7 @@
 | IS_DELETED | Boolean | NOT NULL, DEFAULT false | 삭제 여부 |
 | IS_CANCELLED | Boolean | NOT NULL, DEFAULT false | 취소 여부 |
 | PLC_UUID | String(50) | FK, NULL, INDEX | PLC UUID (PLC 테이블 참조) |
+| PLC_HIERARCHY_SNAPSHOT | JSON | NULL | PLC Hierarchy 스냅샷 (채팅 메시지 저장 시점의 정보) |
 | EXTERNAL_API_NODES | JSON | NULL | External API 노드 처리 결과 저장용 |
 
 ### Foreign Key 관계
@@ -94,7 +100,6 @@
 | PLANT_CODE | String(50) | UNIQUE, NOT NULL, INDEX | Plant 코드 |
 | PLANT_NAME | String(255) | NOT NULL | Plant 이름 |
 | DESCRIPTION | Text | NULL | 설명 |
-| DISPLAY_ORDER | Integer | NULL, DEFAULT 0 | 표시 순서 |
 | IS_ACTIVE | Boolean | NOT NULL, DEFAULT true | 활성화 여부 |
 | METADATA_JSON | JSON | NULL | 메타데이터 |
 | CREATE_DT | DateTime | NOT NULL, DEFAULT now() | 생성 일시 |
@@ -117,7 +122,6 @@
 | PROCESS_NAME | String(255) | NOT NULL | Process 이름 |
 | PLANT_ID | String(50) | FK, NOT NULL, INDEX | Plant ID |
 | DESCRIPTION | Text | NULL | 설명 |
-| DISPLAY_ORDER | Integer | NULL, DEFAULT 0 | 표시 순서 |
 | IS_ACTIVE | Boolean | NOT NULL, DEFAULT true | 활성화 여부 |
 | METADATA_JSON | JSON | NULL | 메타데이터 |
 | CREATE_DT | DateTime | NOT NULL, DEFAULT now() | 생성 일시 |
@@ -143,7 +147,6 @@
 | LINE_NAME | String(255) | NOT NULL | Line 이름 |
 | PROCESS_ID | String(50) | FK, NOT NULL, INDEX | Process ID |
 | DESCRIPTION | Text | NULL | 설명 |
-| DISPLAY_ORDER | Integer | NULL, DEFAULT 0 | 표시 순서 |
 | IS_ACTIVE | Boolean | NOT NULL, DEFAULT true | 활성화 여부 |
 | METADATA_JSON | JSON | NULL | 메타데이터 |
 | CREATE_DT | DateTime | NOT NULL, DEFAULT now() | 생성 일시 |

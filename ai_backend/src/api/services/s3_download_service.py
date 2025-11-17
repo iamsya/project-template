@@ -4,6 +4,8 @@ import logging
 import re
 from typing import Optional, Tuple
 
+from src.config import settings
+
 logger = logging.getLogger(__name__)
 
 
@@ -14,13 +16,36 @@ class S3DownloadService:
         """
         Args:
             s3_client: S3 클라이언트 (boto3 등)
-            s3_bucket: S3 버킷 이름
+            s3_bucket: S3 버킷 이름 (없으면 settings에서 가져옴, fallback용)
         """
         self.s3_client = s3_client
-        self.s3_bucket = s3_bucket
+        self.s3_bucket = s3_bucket or settings.get_s3_bucket_name()
+
+    @staticmethod
+    def _parse_s3_path(s3_path: str) -> Tuple[str, str]:
+        """
+        S3 경로에서 버킷과 키 추출
+        
+        Args:
+            s3_path: S3 경로 (예: "s3://bucket-name/path/to/file")
+            
+        Returns:
+            Tuple[str, str]: (bucket, key)
+        """
+        if not s3_path.startswith("s3://"):
+            raise ValueError(f"유효하지 않은 S3 경로입니다: {s3_path}")
+        
+        # s3:// 제거
+        path_without_protocol = s3_path[5:]
+        # 첫 번째 / 기준으로 버킷과 키 분리
+        parts = path_without_protocol.split("/", 1)
+        bucket = parts[0]
+        key = parts[1] if len(parts) > 1 else ""
+        
+        return bucket, key
 
     def download_file(
-        self, s3_key: str, filename: Optional[str] = None
+        self, s3_key: str, filename: Optional[str] = None, bucket: Optional[str] = None
     ) -> Tuple[bytes, str, str]:
         """
         S3에서 파일 다운로드
@@ -28,17 +53,23 @@ class S3DownloadService:
         Args:
             s3_key: S3 객체 키 (경로)
             filename: 다운로드할 파일명 (없으면 s3_key에서 추출)
+            bucket: S3 버킷 이름 (없으면 self.s3_bucket 사용)
 
         Returns:
             Tuple[bytes, str, str]: (파일 내용, 파일명, Content-Type)
         """
         try:
-            if not self.s3_client or not self.s3_bucket:
+            if not self.s3_client:
                 raise ValueError("S3 클라이언트가 초기화되지 않았습니다.")
+            
+            # 버킷 결정 (파라미터 우선, 없으면 인스턴스 변수 사용)
+            target_bucket = bucket or self.s3_bucket
+            if not target_bucket:
+                raise ValueError("S3 버킷이 지정되지 않았습니다.")
 
             # S3에서 파일 다운로드
             response = self.s3_client.get_object(
-                Bucket=self.s3_bucket, Key=s3_key
+                Bucket=target_bucket, Key=s3_key
             )
 
             # 파일 내용 읽기
@@ -102,28 +133,21 @@ class S3DownloadService:
         db_session=None,
     ) -> Tuple[bytes, str, str]:
         """
-        범용 파일 다운로드 (정적 템플릿 또는 Program 파일)
+        프로그램 파일 다운로드 (program_id 기반)
 
         Args:
             file_type: 파일 타입
-                - "template": 정적 템플릿 (program_template)
                 - "program_logic": Program Logic 파일 (program_id 필수)
                 - "program_classification": Program 분류체계 (program_id 필수)
                 - "program_comment": Program Comment 파일 (program_id 필수)
-            program_id: Program ID (동적 파일인 경우 필수)
-            db_session: 데이터베이스 세션 (동적 파일인 경우 필수)
+            program_id: Program ID (필수)
+            db_session: 데이터베이스 세션 (필수)
 
         Returns:
             Tuple[bytes, str, str]: (파일 내용, 파일명, Content-Type)
         """
         try:
-            # 정적 템플릿인 경우
-            if file_type == "template":
-                s3_key = "templates/program_template.xlsx"
-                filename = "program_template.xlsx"
-                return self.download_file(s3_key, filename)
-
-            # 동적 파일인 경우 program_id와 db_session 필수
+            # 모든 파일 타입은 program_id와 db_session 필수
             if not program_id:
                 raise ValueError(
                     f"{file_type}은 program_id가 필요합니다."
@@ -163,24 +187,38 @@ class S3DownloadService:
                     f"document_type={document_type}"
                 )
 
-            # S3 키 사용 (file_key 또는 upload_path에서 추출)
-            s3_key = document.file_key
-            if not s3_key:
-                # upload_path가 S3 경로인 경우
-                if document.upload_path.startswith("s3://"):
-                    s3_key = document.upload_path.replace(
-                        f"s3://{self.s3_bucket}/", ""
-                    )
-                else:
-                    raise ValueError(
-                        f"S3 경로를 찾을 수 없습니다: program_id={program_id}"
-                    )
+            # S3 경로 추출 (upload_path 우선 사용)
+            s3_key = None
+            s3_bucket = None
+            
+            # 1순위: upload_path 사용 (전체 경로가 명확함)
+            if document.upload_path and document.upload_path.startswith("s3://"):
+                s3_bucket, s3_key = self._parse_s3_path(document.upload_path)
+                logger.debug(
+                    "upload_path에서 S3 경로 추출: bucket=%s, key=%s",
+                    s3_bucket,
+                    s3_key,
+                )
+            # 2순위: file_key 사용 (fallback, 하위 호환성)
+            elif document.file_key:
+                s3_key = document.file_key
+                s3_bucket = self.s3_bucket  # 서비스 레벨 버킷 사용
+                logger.debug(
+                    "file_key 사용: bucket=%s, key=%s",
+                    s3_bucket,
+                    s3_key,
+                )
+            else:
+                raise ValueError(
+                    f"S3 경로를 찾을 수 없습니다: program_id={program_id}, "
+                    f"upload_path={document.upload_path}, file_key={document.file_key}"
+                )
 
             filename = document.original_filename
             content_type = document.file_type
 
             # S3에서 파일 다운로드
-            file_content, _, _ = self.download_file(s3_key, filename)
+            file_content, _, _ = self.download_file(s3_key, filename, bucket=s3_bucket)
 
             return file_content, filename, content_type
 
@@ -224,24 +262,38 @@ class S3DownloadService:
                     f"문서를 찾을 수 없습니다: document_id={document_id}"
                 )
 
-            # S3 키 사용 (file_key 또는 upload_path에서 추출)
-            s3_key = document.file_key
-            if not s3_key:
-                # upload_path가 S3 경로인 경우
-                if document.upload_path and document.upload_path.startswith("s3://"):
-                    s3_key = document.upload_path.replace(
-                        f"s3://{self.s3_bucket}/", ""
-                    )
-                else:
-                    raise ValueError(
-                        f"S3 경로를 찾을 수 없습니다: document_id={document_id}"
-                    )
+            # S3 경로 추출 (upload_path 우선 사용)
+            s3_key = None
+            s3_bucket = None
+            
+            # 1순위: upload_path 사용 (전체 경로가 명확함)
+            if document.upload_path and document.upload_path.startswith("s3://"):
+                s3_bucket, s3_key = self._parse_s3_path(document.upload_path)
+                logger.debug(
+                    "upload_path에서 S3 경로 추출: bucket=%s, key=%s",
+                    s3_bucket,
+                    s3_key,
+                )
+            # 2순위: file_key 사용 (fallback, 하위 호환성)
+            elif document.file_key:
+                s3_key = document.file_key
+                s3_bucket = self.s3_bucket  # 서비스 레벨 버킷 사용
+                logger.debug(
+                    "file_key 사용: bucket=%s, key=%s",
+                    s3_bucket,
+                    s3_key,
+                )
+            else:
+                raise ValueError(
+                    f"S3 경로를 찾을 수 없습니다: document_id={document_id}, "
+                    f"upload_path={document.upload_path}, file_key={document.file_key}"
+                )
 
             filename = document.original_filename
             content_type = document.file_type
 
             # S3에서 파일 다운로드
-            file_content, _, _ = self.download_file(s3_key, filename)
+            file_content, _, _ = self.download_file(s3_key, filename, bucket=s3_bucket)
 
             return file_content, filename, content_type
 

@@ -185,9 +185,11 @@ PUT /v1/plcs/mapping
 
 ### 처리 로직
 
-1. 각 PLC의 현재 `program_id`를 `previous_program_id`에 저장
+1. 각 PLC의 현재 `program_id`를 `metadata_json.previous_program_id`에 저장
 2. 새로운 `program_id`로 업데이트
 3. `mapping_user`, `mapping_dt` 업데이트
+
+**참고:** `previous_program_id`는 `METADATA_JSON` 필드 내에 저장되며, Program ID 변경 이력을 추적하기 위해 사용됩니다.
 
 ### 사용 예시
 
