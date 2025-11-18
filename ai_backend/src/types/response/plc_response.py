@@ -214,9 +214,28 @@ class MasterDropdownItem(BaseModel):
     name: str = Field(..., description="이름")
 
 
+class SimpleMasterDropdownResponse(BaseModel):
+    """
+    단순 드롭다운용 마스터 데이터 응답 (계층 구조 없음)
+    
+    마스터 테이블에서 활성화된 Plant, Process, Line을 단순 리스트로 반환합니다.
+    계층 구조가 필요 없는 경우 사용합니다.
+    """
+
+    plants: List[MasterDropdownItem] = Field(
+        ..., description="Plant 목록"
+    )
+    processes: List[MasterDropdownItem] = Field(
+        ..., description="Process 목록"
+    )
+    lines: List[MasterDropdownItem] = Field(
+        ..., description="Line 목록"
+    )
+
+
 class MasterDropdownResponse(BaseModel):
     """
-    드롭다운용 마스터 데이터 응답 (프론트엔드 최적화)
+    드롭다운용 마스터 데이터 응답 (프론트엔드 최적화, 계층 구조 포함)
     
     연쇄 드롭다운 구현에 최적화된 구조:
     - plants: Plant 목록 (첫 번째 드롭다운)

@@ -22,71 +22,15 @@ from src.types.response.plc_response import (
     PLCBatchItem,
     PLCBatchSaveRequest,
     PLCBatchSaveResponse,
+    SimpleMasterDropdownResponse,
 )
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/plcs", tags=["plc-management"])
 
 
-@router.get("/{plc_uuid}", response_model=Optional[PLCBasicInfo])
-def get_plc_by_id(
-    plc_uuid: str,
-    db: Session = Depends(get_db),
-):
-    """
-    PLC 정보 조회 (PLC_UUID로)
-
-    - plc_uuid: PLC의 UUID (Primary Key)
-    - is_deleted가 false인 경우에만 조회합니다 (사용 중으로 인식).
-    - 기본 정보만 반환합니다 (plc_uuid, plc_id, plc_name, 계층 구조, program_id).
-    - 검색 결과가 없으면 200 OK와 함께 null을 반환합니다 (REST API 규칙).
-    """
-    try:
-        plc_crud = PLCCRUD(db)
-        plc = plc_crud.get_plc(plc_uuid)
-
-        # 검색 결과가 비어 있어도 200 OK 반환 (REST API 규칙)
-        if not plc:
-            return None
-
-        # is_deleted 체크 (is_active는 deprecated)
-        if plc.is_deleted:
-            return None
-
-        # program_id 변경 여부 체크
-        program_id_changed = (
-            plc.previous_program_id is not None
-            and plc.previous_program_id != plc.program_id
-        )
-
-        # 계층 구조 정보 조회
-        hierarchy_ids = {
-            "plant_id": plc.plant_id,
-            "process_id": plc.process_id,
-            "line_id": plc.line_id,
-        }
-        hierarchy = plc_crud._get_hierarchy_with_names(hierarchy_ids)
-
-        return PLCBasicInfo(
-            id=plc.plc_uuid,
-            plc_id=plc.plc_id,
-            plc_name=plc.plc_name,
-            plant=hierarchy.get("plant", {}).get("name") if hierarchy else None,
-            process=hierarchy.get("process", {}).get("name") if hierarchy else None,
-            line=hierarchy.get("line", {}).get("name") if hierarchy else None,
-            unit=plc.unit,
-            program_id=plc.program_id,
-            program_id_changed=program_id_changed,
-            previous_program_id=plc.previous_program_id,
-        )
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error("PLC 조회 실패: %s", str(e))
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"PLC 조회 중 오류가 발생했습니다: {str(e)}",
-        ) from e
+# 구체적인 경로는 동적 경로보다 먼저 정의해야 함 (FastAPI 경로 매칭 순서)
+# 동적 경로(/{plc_uuid})는 모든 구체적인 경로 다음에 정의
 
 
 @router.get(
@@ -381,60 +325,43 @@ def get_plc_tree(
 
 @router.get(
     "/masters/dropdown",
-    response_model=MasterDropdownResponse,
+    response_model=SimpleMasterDropdownResponse,
     summary="드롭다운용 마스터 데이터 전체 조회",
     description="""
     PLC 추가 화면에서 사용할 드롭다운 데이터를 전체 조회합니다.
     
     **화면 용도:** PLC 추가 화면의 Plant, 공정, Line 드롭다운
     
-    **응답 구조 (프론트엔드 최적화):**
+    **응답 구조:**
     ```json
     {
       "plants": [
-        {"id": "plant_001", "code": "PLT1", "name": "Plant 1"},
-        {"id": "plant_002", "code": "PLT2", "name": "Plant 2"}
+        {"id": "plant_001", "name": "Plant 1"},
+        {"id": "plant_002", "name": "Plant 2"}
       ],
-      "processesByPlant": {
-        "plant_001": [
-          {"id": "process_001", "code": "PRC1", "name": "Process 1"},
-          {"id": "process_002", "code": "PRC2", "name": "Process 2"}
-        ],
-        "plant_002": [
-          {"id": "process_003", "code": "PRC3", "name": "Process 3"}
-        ]
-      },
-      "linesByProcess": {
-        "process_001": [
-          {"id": "line_001", "code": "LN1", "name": "Line 1"},
-          {"id": "line_002", "code": "LN2", "name": "Line 2"}
-        ],
-        "process_002": [
-          {"id": "line_003", "code": "LN3", "name": "Line 3"}
-        ]
-      }
+      "processes": [
+        {"id": "process_001", "name": "Process 1"},
+        {"id": "process_002", "name": "Process 2"}
+      ],
+      "lines": [
+        {"id": "line_001", "name": "Line 1"},
+        {"id": "line_002", "name": "Line 2"}
+      ]
     }
     ```
     
     **프론트엔드 사용 예시:**
     ```javascript
-    // 1. Plant 드롭다운
+    // 단순 리스트로 반환 (계층 구조 없음)
     const plants = response.plants;
-    
-    // 2. Plant 선택 시 Process 드롭다운 필터링
-    const selectedPlantId = "plant_001";
-    const processes = response.processesByPlant[selectedPlantId] || [];
-    
-    // 3. Process 선택 시 Line 드롭다운 필터링
-    const selectedProcessId = "process_001";
-    const lines = response.linesByProcess[selectedProcessId] || [];
+    const processes = response.processes;
+    const lines = response.lines;
     ```
     
     **특징:**
-    - 활성화된 데이터만 조회 (is_active=true)
-    - 연쇄 드롭다운 구현에 최적화된 구조
-    - Plant ID, Process ID로 O(1) 시간에 접근 가능
-    - 정렬 순서: code 순서 (기본값)
+    - 마스터 테이블에서 활성화된 데이터만 조회 (is_active=true)
+    - 계층 구조 없이 단순 리스트로 반환
+    - 정렬 순서: 이름 순서
     """,
 )
 def get_masters_for_dropdown(
@@ -443,17 +370,17 @@ def get_masters_for_dropdown(
     """
     드롭다운용 마스터 데이터 전체 조회
     
-    Plant, 공정, Line 전체를 한 번에 조회하여
-    프론트엔드에서 클라이언트 사이드 필터링 가능하도록 제공
+    마스터 테이블에서 활성화된 Plant, 공정, Line을 단순 리스트로 반환합니다.
+    계층 구조가 필요 없는 경우 사용합니다.
     """
     try:
         master_crud = MasterHierarchyCRUD(db)
         masters = master_crud.get_all_masters_for_dropdown()
 
-        return MasterDropdownResponse(
+        return SimpleMasterDropdownResponse(
             plants=masters["plants"],
-            processesByPlant=masters["processesByPlant"],
-            linesByProcess=masters["linesByProcess"],
+            processes=masters["processes"],
+            lines=masters["lines"],
         )
     except Exception as e:
         logger.error("드롭다운용 마스터 데이터 조회 실패: %s", str(e))
@@ -474,34 +401,36 @@ def get_masters_for_dropdown(
     
     **권한 기반 필터링:**
     - `user_id`: 사용자 ID (필수)
-    - 공정은 사용자 권한에 따라 필터링됩니다
-      - super 권한 그룹: 모든 활성 공정 반환
-      - plc 권한 그룹: 지정된 공정만 반환
-      - 권한이 없으면 공정 목록이 비어있음
+    - 사용자가 접근 가능한 Plant, Process, Line만 반환
+    - Process는 사용자 권한에 따라 필터링됩니다
+      - super 권한 그룹: 모든 활성 Process 반환
+      - plc 권한 그룹: 지정된 Process만 반환
+      - 권한이 없으면 Process 목록이 비어있음
+    - 계층 구조 포함 (processesByPlant, linesByProcess)
     
     **응답 구조:**
     ```json
     {
       "plants": [
-        {"id": "plant_001", "code": "PLT1", "name": "Plant 1"},
-        {"id": "plant_002", "code": "PLT2", "name": "Plant 2"}
+        {"id": "plant_001", "name": "Plant 1"},
+        {"id": "plant_002", "name": "Plant 2"}
       ],
       "processesByPlant": {
         "plant_001": [
-          {"id": "process_001", "code": "PRC1", "name": "모듈"},
-          {"id": "process_002", "code": "PRC2", "name": "전극"}
+          {"id": "process_001", "name": "모듈"},
+          {"id": "process_002", "name": "전극"}
         ],
         "plant_002": [
-          {"id": "process_003", "code": "PRC3", "name": "조립"}
+          {"id": "process_003", "name": "조립"}
         ]
       },
       "linesByProcess": {
         "process_001": [
-          {"id": "line_001", "code": "LN1", "name": "1라인"},
-          {"id": "line_002", "code": "LN2", "name": "2라인"}
+          {"id": "line_001", "name": "1라인"},
+          {"id": "line_002", "name": "2라인"}
         ],
         "process_002": [
-          {"id": "line_003", "code": "LN3", "name": "1라인"}
+          {"id": "line_003", "name": "1라인"}
         ]
       }
     }
@@ -825,4 +754,72 @@ def batch_save_plcs(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"PLC 일괄 저장 중 오류가 발생했습니다: {str(e)}",
+        ) from e
+
+
+# ==========================================
+# 동적 경로 (모든 구체적인 경로 다음에 정의)
+# FastAPI는 위에서 아래로 경로를 매칭하므로,
+# 구체적인 경로(/tree, /masters/dropdown 등)를 먼저 정의하고
+# 동적 경로(/{plc_uuid})는 마지막에 정의해야 함
+# ==========================================
+
+@router.get("/{plc_uuid}", response_model=Optional[PLCBasicInfo])
+def get_plc_by_id(
+    plc_uuid: str,
+    db: Session = Depends(get_db),
+):
+    """
+    PLC 정보 조회 (PLC_UUID로)
+
+    - plc_uuid: PLC의 UUID (Primary Key)
+    - is_deleted가 false인 경우에만 조회합니다 (사용 중으로 인식).
+    - 기본 정보만 반환합니다 (plc_uuid, plc_id, plc_name, 계층 구조, program_id).
+    - 검색 결과가 없으면 200 OK와 함께 null을 반환합니다 (REST API 규칙).
+    """
+    try:
+        plc_crud = PLCCRUD(db)
+        plc = plc_crud.get_plc(plc_uuid)
+
+        # 검색 결과가 비어 있어도 200 OK 반환 (REST API 규칙)
+        if not plc:
+            return None
+
+        # is_deleted 체크 (is_active는 deprecated)
+        if plc.is_deleted:
+            return None
+
+        # program_id 변경 여부 체크
+        program_id_changed = (
+            plc.previous_program_id is not None
+            and plc.previous_program_id != plc.program_id
+        )
+
+        # 계층 구조 정보 조회
+        hierarchy_ids = {
+            "plant_id": plc.plant_id,
+            "process_id": plc.process_id,
+            "line_id": plc.line_id,
+        }
+        hierarchy = plc_crud._get_hierarchy_with_names(hierarchy_ids)
+
+        return PLCBasicInfo(
+            id=plc.plc_uuid,
+            plc_id=plc.plc_id,
+            plc_name=plc.plc_name,
+            plant=hierarchy.get("plant", {}).get("name") if hierarchy else None,
+            process=hierarchy.get("process", {}).get("name") if hierarchy else None,
+            line=hierarchy.get("line", {}).get("name") if hierarchy else None,
+            unit=plc.unit,
+            program_id=plc.program_id,
+            program_id_changed=program_id_changed,
+            previous_program_id=plc.previous_program_id,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("PLC 조회 실패: %s", str(e))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"PLC 조회 중 오류가 발생했습니다: {str(e)}",
         ) from e

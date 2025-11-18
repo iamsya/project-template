@@ -561,37 +561,25 @@ class MasterHierarchyCRUD:
         """
         드롭다운용 전체 마스터 데이터 조회 (Plant, Process, Line)
         
-        프론트엔드 연쇄 드롭다운 구현에 최적화된 구조로 반환:
-        - plants: Plant 목록 (첫 번째 드롭다운)
-        - processesByPlant: Plant ID → Process 목록 맵 (두 번째 드롭다운)
-        - linesByProcess: Process ID → Line 목록 맵 (세 번째 드롭다운)
-        
-        프론트엔드에서 사용하기 쉬운 구조:
-        - Plant 선택: response.plants 사용
-        - Process 필터링: response.processesByPlant[plantId] 사용
-        - Line 필터링: response.linesByProcess[processId] 사용
+        **마스터 테이블 기준 조회:**
+        - 활성화된 마스터 데이터만 조회 (is_active=true)
+        - 계층 구조 없이 단순 리스트로 반환
         
         Returns:
             Dict: {
                 "plants": [
-                    {"id": "...", "code": "...", "name": "..."}, ...
+                    {"id": "...", "name": "..."}, ...
                 ],
-                "processesByPlant": {
-                    "plant_001": [
-                        {"id": "...", "code": "...", "name": "..."}, ...
-                    ],
-                    ...
-                },
-                "linesByProcess": {
-                    "process_001": [
-                        {"id": "...", "code": "...", "name": "..."}, ...
-                    ],
-                    ...
-                }
+                "processes": [
+                    {"id": "...", "name": "..."}, ...
+                ],
+                "lines": [
+                    {"id": "...", "name": "..."}, ...
+                ]
             }
         """
         try:
-            # 1. 모든 Plant 조회
+            # 1. 활성화된 Plant 조회
             plants = (
                 self.db.query(PlantMaster)
                 .filter(PlantMaster.is_active.is_(True))
@@ -599,14 +587,7 @@ class MasterHierarchyCRUD:
                 .all()
             )
             
-            if not plants:
-                return {
-                    "plants": [],
-                    "processesByPlant": {},
-                    "linesByProcess": {},
-                }
-            
-            # 2. 모든 Process 조회 (Plant와 무관하게 전체 조회)
+            # 2. 활성화된 Process 조회
             processes = (
                 self.db.query(ProcessMaster)
                 .filter(ProcessMaster.is_active.is_(True))
@@ -614,38 +595,15 @@ class MasterHierarchyCRUD:
                 .all()
             )
             
-            # Process는 모든 Plant에서 공통으로 사용되므로 모든 Plant에 동일하게 표시
-            processes_by_plant = {}
-            for plant in plants:
-                processes_by_plant[plant.plant_id] = [
-                    {
-                        "id": process.process_id,
-                        "name": process.process_name,
-                    }
-                    for process in processes
-                ]
-            
-            # 3. 모든 Line 조회 (Process와 무관하게 전체 조회)
-            all_lines = (
+            # 3. 활성화된 Line 조회
+            lines = (
                 self.db.query(LineMaster)
                 .filter(LineMaster.is_active.is_(True))
                 .order_by(LineMaster.line_name)
                 .all()
             )
             
-            # Line을 모든 Process에 공통으로 사용 (linesByProcess는 빈 딕셔너리로 반환)
-            # 프론트엔드에서 모든 Line을 모든 Process에 표시할 수 있도록
-            lines_by_process = {}
-            for process in processes:
-                lines_by_process[process.process_id] = [
-                    {
-                        "id": line.line_id,
-                        "name": line.line_name,
-                    }
-                    for line in all_lines
-                ]
-            
-            # 평면 구조로 변환
+            # 단순 리스트로 반환 (계층 구조 없음)
             return {
                 "plants": [
                     {
@@ -654,8 +612,20 @@ class MasterHierarchyCRUD:
                     }
                     for p in plants
                 ],
-                "processesByPlant": processes_by_plant,
-                "linesByProcess": lines_by_process,
+                "processes": [
+                    {
+                        "id": p.process_id,
+                        "name": p.process_name,
+                    }
+                    for p in processes
+                ],
+                "lines": [
+                    {
+                        "id": line.line_id,
+                        "name": line.line_name,
+                    }
+                    for line in lines
+                ],
             }
         except Exception as e:
             logger.error(f"드롭다운용 마스터 데이터 조회 실패: {str(e)}")
