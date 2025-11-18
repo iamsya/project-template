@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/plcs", tags=["plc-management"])
 
 
-@router.get("/{plc_uuid}", response_model=PLCBasicInfo)
+@router.get("/{plc_uuid}", response_model=Optional[PLCBasicInfo])
 def get_plc_by_id(
     plc_uuid: str,
     db: Session = Depends(get_db),
@@ -37,24 +37,21 @@ def get_plc_by_id(
     PLC 정보 조회 (PLC_UUID로)
 
     - plc_uuid: PLC의 UUID (Primary Key)
-    - is_active가 true인 경우에만 조회합니다.
+    - is_deleted가 false인 경우에만 조회합니다 (사용 중으로 인식).
     - 기본 정보만 반환합니다 (plc_uuid, plc_id, plc_name, 계층 구조, program_id).
+    - 검색 결과가 없으면 200 OK와 함께 null을 반환합니다 (REST API 규칙).
     """
     try:
         plc_crud = PLCCRUD(db)
         plc = plc_crud.get_plc(plc_uuid)
 
+        # 검색 결과가 비어 있어도 200 OK 반환 (REST API 규칙)
         if not plc:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"PLC를 찾을 수 없습니다. UUID: {plc_uuid}",
-            )
+            return None
 
-        if not plc.is_active:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"비활성화된 PLC입니다. UUID: {plc_uuid}",
-            )
+        # is_deleted 체크 (is_active는 deprecated)
+        if plc.is_deleted:
+            return None
 
         # program_id 변경 여부 체크
         program_id_changed = (
@@ -148,7 +145,7 @@ def get_plc_list(
     plc_name: Optional[str] = Query(None, description="PLC 명으로 검색", example="PLC001"),
     program_name: Optional[str] = Query(None, description="PGM명으로 필터링", example="라벨부착"),
     page: int = Query(1, ge=1, description="페이지 번호", example=1),
-    page_size: int = Query(10, ge=1, le=100, description="페이지당 항목 수", example=10),
+    page_size: int = Query(10, ge=1, le=10000, description="페이지당 항목 수 (페이지네이션 없이 모든 데이터를 가져오려면 큰 값 사용, 예: 10000)", example=10),
     sort_by: str = Query(
         "plc_id",
         description="정렬 기준 (plc_id, plc_name, create_dt)",
@@ -358,6 +355,7 @@ def update_plc_program_mapping(
     
     **특징:**
     - 활성화된 PLC만 조회 (is_active=true)
+    - program_id가 있는 PLC만 조회 (프로그램이 매핑된 PLC만)
     - 활성화된 Plant, Process, Line만 조회
     - 정렬 순서: Plant → Process → Line → PLC명 → 호기
     """,
@@ -759,12 +757,7 @@ def batch_save_plcs(
                     failed_count += 1
                     continue
 
-                if process.plant_id != item.plant_id:
-                    errors.append(
-                        f"PLC ID {item.plc_id}: 공정이 Plant에 속하지 않습니다"
-                    )
-                    failed_count += 1
-                    continue
+                # Process는 이제 Plant와 무관하므로 plant_id 검증 제거
 
                 line = line_crud.get_line(item.line_id)
                 if not line:

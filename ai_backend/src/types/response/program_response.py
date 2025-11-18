@@ -29,7 +29,6 @@ class ProcessDropdownItem(BaseModel):
     """공정 드롭다운 항목"""
     process_id: str = Field(..., description="공정 ID")
     process_name: str = Field(..., description="공정명")
-    process_code: Optional[str] = Field(None, description="공정 코드")
 
     class Config:
         from_attributes = True

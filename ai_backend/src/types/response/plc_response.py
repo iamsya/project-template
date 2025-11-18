@@ -143,13 +143,10 @@ class PLCDropdownItem(BaseModel):
     plc_name: str = Field(..., description="PLC 이름")
     unit: Optional[str] = Field(None, description="호기")
     plant_id: Optional[str] = Field(None, description="Plant ID")
-    plant_code: Optional[str] = Field(None, description="Plant 코드")
     plant_name: Optional[str] = Field(None, description="Plant 이름")
     process_id: Optional[str] = Field(None, description="Process ID")
-    process_code: Optional[str] = Field(None, description="Process 코드")
     process_name: Optional[str] = Field(None, description="Process 이름")
     line_id: Optional[str] = Field(None, description="Line ID")
-    line_code: Optional[str] = Field(None, description="Line 코드")
     line_name: Optional[str] = Field(None, description="Line 이름")
 
 

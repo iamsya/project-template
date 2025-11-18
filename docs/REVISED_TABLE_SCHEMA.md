@@ -237,8 +237,13 @@ CREATE TABLE PLC (
     MAPPING_DT TIMESTAMP,
     MAPPING_USER VARCHAR(50),
     
-    -- 활성화 여부
+    -- 활성화 여부 (deprecated: is_deleted 사용)
     IS_ACTIVE BOOLEAN NOT NULL DEFAULT true,
+    
+    -- 삭제 관리
+    IS_DELETED BOOLEAN NOT NULL DEFAULT false,
+    DELETED_AT TIMESTAMP,
+    DELETED_BY VARCHAR(50),
     
     -- 메타데이터
     METADATA_JSON JSON,
@@ -375,7 +380,7 @@ FROM PLC p
 INNER JOIN PLANT_MASTER pm ON p.PLANT_ID = pm.PLANT_ID
 INNER JOIN PROCESS_MASTER prm ON p.PROCESS_ID = prm.PROCESS_ID
 INNER JOIN LINE_MASTER lm ON p.LINE_ID = lm.LINE_ID
-WHERE p.IS_ACTIVE = true
+WHERE p.IS_DELETED = false
     AND pm.IS_ACTIVE = true
     AND prm.IS_ACTIVE = true
     AND lm.IS_ACTIVE = true
@@ -418,7 +423,7 @@ SELECT
 FROM PROGRAMS pr
 INNER JOIN PLC p ON pr.PROGRAM_ID = p.PROGRAM_ID
 WHERE pr.IS_DELETED = false
-    AND p.IS_ACTIVE = true
+    AND p.IS_DELETED = false
     AND (
         -- super 권한 그룹에 속한 경우 모든 공정의 프로그램
         EXISTS (

@@ -22,7 +22,10 @@ erDiagram
         string STATUS "상태 (preparing, uploading, processing, embedding, completed, failed)"
         text ERROR_MESSAGE "에러 메시지"
         datetime COMPLETED_AT "완료일시"
-        boolean IS_USED "사용 여부"
+        boolean IS_USED "사용 여부 (deprecated: is_deleted 사용)"
+        boolean IS_DELETED "삭제 여부 (소프트 삭제, false인 것은 사용 중으로 인식)"
+        datetime DELETED_AT "삭제 일시"
+        string DELETED_BY "삭제자"
     }
     
     DOCUMENTS {
@@ -548,7 +551,10 @@ PROGRAMS (프로그램 마스터)
 ├─ UPDATE_DT           │  │
 ├─ UPDATE_USER        │  │
 ├─ COMPLETED_AT       │  │
-└─ IS_USED            │  │
+├─ IS_USED            │  │ (deprecated: is_deleted 사용)
+├─ IS_DELETED         │  │
+├─ DELETED_AT         │  │
+└─ DELETED_BY         │  │
                       │  │
                       │  │ 1:N
                       │  │

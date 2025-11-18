@@ -23,7 +23,10 @@
 | PROGRAM_ID | String(50) | FK, UNIQUE, INDEX | PLC 1개 → Program 1개 (unique) |
 | MAPPING_DT | DateTime | NULL | 매핑 일시 |
 | MAPPING_USER | String(50) | NULL | 매핑 사용자 |
-| IS_ACTIVE | Boolean | NOT NULL, DEFAULT true | 활성화 여부 |
+| IS_ACTIVE | Boolean | NOT NULL, DEFAULT true | 활성화 여부 (deprecated: is_deleted 사용) |
+| IS_DELETED | Boolean | NOT NULL, DEFAULT false, INDEX | 삭제 여부 (소프트 삭제, false인 것은 사용 중으로 인식) |
+| DELETED_AT | DateTime | NULL | 삭제 일시 |
+| DELETED_BY | String(50) | NULL | 삭제자 |
 | METADATA_JSON | JSON | NULL | 메타데이터 (previous_program_id 등 저장) |
 | CREATE_DT | DateTime | NOT NULL, DEFAULT now() | PLC 등록일시 |
 | CREATE_USER | String(50) | NOT NULL | PLC 입력한 사람 |
@@ -159,48 +162,5 @@
 
 ---
 
-## 6. PLC_HIERARCHY_HISTORY 테이블 (참고)
 
-**용도**: PLC 계층 구조 변경 이력 (하지만 hierarchy는 수정되지 않으므로 사용하지 않을 수 있음)
-
-### 컬럼 정의
-
-| 컬럼명 | 타입 | 제약조건 | 설명 |
-|--------|------|----------|------|
-| HISTORY_ID | String(50) | PK | History ID |
-| PLC_UUID | String(50) | FK, NOT NULL, INDEX | PLC UUID (PLC 테이블 참조) |
-| PREVIOUS_HIERARCHY | JSON | NULL | 변경 전 계층 구조 스냅샷 |
-| NEW_HIERARCHY | JSON | NULL | 변경 후 계층 구조 스냅샷 |
-| CHANGE_REASON | String(500) | NULL | 변경 사유 |
-| CHANGED_AT | DateTime | NOT NULL, DEFAULT now() | 변경 일시 |
-| CHANGED_BY | String(50) | NOT NULL | 변경 사용자 |
-| CHANGE_SEQUENCE | Integer | NOT NULL, DEFAULT 1 | 변경 순서 |
-
-### Foreign Key 관계
-- `PLC_UUID` → `PLC.PLC_UUID`
-
-### 참고
-- Hierarchy는 수정되지 않으므로 이 테이블은 실제로 사용되지 않을 수 있음
-- 필요시 삭제 고려
-
----
-
-## 주요 변경 사항 요약
-
-1. **PLC 테이블**
-   - `ID` → `PLC_UUID`로 변경
-   - 스냅샷 필드 모두 제거 (`*_SNAPSHOT`, `*_CURRENT`)
-   - `plant_id`, `process_id`, `line_id`를 직접 FK로 참조 (필수)
-   - Equipment Group 관련 필드 제거
-
-2. **CHAT_MESSAGES 테이블**
-   - `PLC_ID` → `PLC_UUID`로 변경
-   - 스냅샷 필드 모두 제거
-
-3. **PLCHierarchyHistory 테이블**
-   - `PLC_ID` → `PLC_UUID`로 변경
-   - 하지만 hierarchy는 수정되지 않으므로 사용하지 않을 수 있음
-
-4. **EquipmentGroupMaster 테이블**
-   - 더 이상 사용하지 않음 (필요시 삭제 고려)
 

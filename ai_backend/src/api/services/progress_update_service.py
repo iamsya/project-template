@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from src.config.simple_settings import settings
 from src.database.models.program_models import Program
+from shared_core.models import Document
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +30,7 @@ class ProgressUpdateService:
                 "total_processed": int,  # 전처리 후 전체 파일 수
                 "uploaded": int,  # 업로드 완료 파일 수 (3개 타입 존재 여부)
                 "processed": int,  # 전처리 완료 파일 수
-                "embedded": int,  # status='embedded'인 파일 수
+                "embedded": int,  # status=Document.STATUS_EMBEDDED인 파일 수
             }
         """
         from shared_core.models import Document
@@ -100,7 +101,7 @@ class ProgressUpdateService:
                 )
 
         # 전처리 완료 파일 수: ladder_logic_json 파일 중
-        # status='preprocessed' 또는 'embedding' 또는 'embedded'인 파일 수
+        # status=Document.STATUS_PREPROCESSED 또는 STATUS_EMBEDDING 또는 STATUS_EMBEDDED인 파일 수
         # (전처리 완료 = 임베딩 대기 또는 임베딩 중 또는 임베딩 완료)
         processed_docs = (
             self.db.query(Document)
@@ -109,15 +110,15 @@ class ProgressUpdateService:
             .filter(Document.document_type == "ladder_logic_json")
             .filter(
                 Document.status.in_([
-                    "preprocessed",
-                    "embedding",
-                    "embedded"
+                    Document.STATUS_PREPROCESSED,
+                    Document.STATUS_EMBEDDING,
+                    Document.STATUS_EMBEDDED
                 ])
             )
             .count()
         )
 
-        # 임베딩 완료: status='embedded'인 파일 수
+        # 임베딩 완료: status=Document.STATUS_EMBEDDED인 파일 수
         # (JSON 파일 및 Knowledge Reference 파일 모두 포함)
         embedded_docs = (
             self.db.query(Document)
@@ -127,7 +128,7 @@ class ProgressUpdateService:
                 (Document.document_type == "ladder_logic_json")
                 | (Document.knowledge_reference_id.isnot(None))
             )
-            .filter(Document.status == 'embedded')
+            .filter(Document.status == Document.STATUS_EMBEDDED)
             .count()
         )
 
@@ -453,20 +454,20 @@ class ProgressUpdateService:
                             )
 
                             if is_embedding_target:
-                                # 임베딩 완료 시 status를 'embedded'로 업데이트
+                                # 임베딩 완료 시 status를 STATUS_EMBEDDED로 업데이트
                                 if (
                                     is_embedded_api
-                                    and document.status != "embedded"
+                                    and document.status != Document.STATUS_EMBEDDED
                                 ):
-                                    document.status = "embedded"
+                                    document.status = Document.STATUS_EMBEDDED
                                     status_changed = True
-                                # 임베딩 실패 시 status를 'failed'로 업데이트
+                                # 임베딩 실패 시 status를 STATUS_FAILED로 업데이트
                                 elif (
                                     not is_embedded_api
-                                    and document.status in ["embedding", "preprocessed"]
+                                    and document.status in [Document.STATUS_EMBEDDING, Document.STATUS_PREPROCESSED]
                                 ):
                                     # 임베딩 중이었거나 임베딩 대기 중이었는데 실패한 경우
-                                    document.status = "failed"
+                                    document.status = Document.STATUS_FAILED
                                     status_changed = True
 
                             if status_changed:
@@ -481,9 +482,9 @@ class ProgressUpdateService:
                             )
                             if (
                                 is_embedding_target
-                                and document.status == "embedding"
+                                and document.status == Document.STATUS_EMBEDDING
                             ):
-                                document.status = "failed"
+                                document.status = Document.STATUS_FAILED
                                 updated += 1
                             elif document.vector_count > 0:
                                 document.vector_count = 0

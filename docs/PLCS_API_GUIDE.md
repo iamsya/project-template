@@ -66,8 +66,8 @@ GET /v1/plcs/{plc_uuid}
 
 ### 주의사항
 
-- `is_active=true`인 경우에만 조회됩니다
-- `is_active=false`인 경우 404 Not Found 반환
+- `is_deleted=false`인 경우에만 조회됩니다 (사용 중으로 인식)
+- `is_deleted=true`인 경우 404 Not Found 반환
 
 ### 사용 예시
 
@@ -263,7 +263,8 @@ Plant → 공정(Process) → Line → PLC명 → 호기(Unit) → PLC ID
 
 ### 특징
 
-- 활성화된 PLC만 조회 (`is_active=true`)
+- 삭제되지 않은 PLC만 조회 (`is_deleted=false`, 사용 중으로 인식)
+- `program_id`가 있는 PLC만 조회 (프로그램이 매핑된 PLC만)
 - 활성화된 Plant, Process, Line만 조회
 - 정렬 순서: Plant → Process → Line → PLC명 → 호기
 
@@ -405,7 +406,9 @@ DELETE /v1/plcs/{plc_uuid}
 
 ### 삭제 방식
 
-- 소프트 삭제: `is_active = False`로 설정
+- 소프트 삭제: `is_deleted = True`로 설정
+- `deleted_at`에 삭제 일시 저장
+- `deleted_by`에 삭제자 저장
 - 매핑된 `program_id` 제거 (None으로 설정)
 - 실제 데이터는 삭제되지 않음
 
@@ -612,10 +615,11 @@ curl -X POST "http://localhost:8000/v1/plcs/batch" \
 
 ## 참고사항
 
-1. **소프트 삭제**: PLC 삭제는 실제 데이터를 삭제하지 않고 `is_active=False`로 설정합니다.
+1. **소프트 삭제**: PLC 삭제는 실제 데이터를 삭제하지 않고 `is_deleted=True`로 설정합니다. `is_deleted=false`인 것은 사용 중으로 인식됩니다.
 2. **매핑 해제**: PLC 삭제 시 매핑된 `program_id`도 함께 제거됩니다.
 3. **권한 기반 필터링**: 매핑 화면용 드롭다운 API는 `user_id`가 필수이며, 사용자 권한에 따라 공정 목록이 필터링됩니다.
 4. **일괄 저장**: `plc_uuid`가 있으면 수정, 없으면 생성됩니다.
 5. **페이지네이션**: 기본값은 `page=1`, `page_size=10`입니다.
 6. **검색**: `plc_id`, `plc_name`, `program_name`은 부분 일치 검색을 지원합니다.
+7. **조회 필터링**: 모든 PLC 조회 API는 `is_deleted=false`인 것만 반환합니다.
 

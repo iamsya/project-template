@@ -241,7 +241,7 @@ class S3Service:
     async def upload_program_files(
         self,
         ladder_zip: UploadFile,
-        classification_xlsx: UploadFile,
+        template_xlsx: UploadFile,
         comment_csv: UploadFile,
         program_id: str,
     ) -> Dict[str, str]:
@@ -250,7 +250,7 @@ class S3Service:
 
         Args:
             ladder_zip: Logic 파일 ZIP
-            classification_xlsx: 분류 체계 XLSX 파일
+            template_xlsx: 템플릿 분류 체계 XLSX 파일
             comment_csv: Comment CSV 파일
             program_id: 프로그램 ID
 
@@ -260,7 +260,7 @@ class S3Service:
                     'ladder_zip_path': 's3://...',
                     'unzipped_base_path': 'programs/{program_id}/unzipped/',
                     'unzipped_files': [...],
-                    'classification_xlsx_path': 's3://...',
+                    'template_xlsx_path': 's3://...',
                     'comment_csv_path': 's3://...'
                 }
         """
@@ -268,15 +268,10 @@ class S3Service:
             # S3 프로그램 경로 prefix 가져오기
             program_prefix = settings.s3_program_prefix.rstrip("/")
             
-            # 원본 파일명 가져오기 (안전하게 처리)
-            ladder_zip_filename = ladder_zip.filename or "ladder_logic.zip"
-            classification_xlsx_filename = classification_xlsx.filename or "classification.xlsx"
-            comment_csv_filename = comment_csv.filename or "comment.csv"
-            
-            # 1. ZIP 파일 S3 업로드 (원본 파일명 사용)
+            # 1. ZIP 파일 S3 업로드
             ladder_zip_path = await self.upload_file(
                 file=ladder_zip,
-                s3_key=f"{program_prefix}/{program_id}/{ladder_zip_filename}",
+                s3_key=f"{program_prefix}/{program_id}/ladder_logic.zip",
                 content_type="application/zip",
             )
 
@@ -286,29 +281,26 @@ class S3Service:
                 s3_prefix=f"{program_prefix}/{program_id}/unzipped/",
             )
 
-            # 3. XLSX 파일 S3 업로드 (원본 파일명 사용)
-            classification_xlsx_path = await self.upload_file(
-                file=classification_xlsx,
-                s3_key=f"{program_prefix}/{program_id}/{classification_xlsx_filename}",
+            # 3. XLSX 파일 S3 업로드
+            template_xlsx_path = await self.upload_file(
+                file=template_xlsx,
+                s3_key=f"{program_prefix}/{program_id}/template.xlsx",
                 content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             )
 
-            # 4. CSV 파일 S3 업로드 (원본 파일명 사용)
+            # 4. CSV 파일 S3 업로드
             comment_csv_path = await self.upload_file(
                 file=comment_csv,
-                s3_key=f"{program_prefix}/{program_id}/{comment_csv_filename}",
+                s3_key=f"{program_prefix}/{program_id}/comment.csv",
                 content_type="text/csv",
             )
 
             return {
                 "ladder_zip_path": ladder_zip_path,
-                "ladder_zip_filename": ladder_zip_filename,
                 "unzipped_base_path": f"{program_prefix}/{program_id}/unzipped/",
                 "unzipped_files": unzipped_files,
-                "classification_xlsx_path": classification_xlsx_path,
-                "classification_xlsx_filename": classification_xlsx_filename,
+                "template_xlsx_path": template_xlsx_path,
                 "comment_csv_path": comment_csv_path,
-                "comment_csv_filename": comment_csv_filename,
             }
 
         except Exception as e:

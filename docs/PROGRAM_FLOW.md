@@ -232,7 +232,10 @@
 │    - status: str                                                        │
 │    - error_message: str                                                  │
 │    - completed_at: datetime                                             │
-│    - is_used: bool                                                      │
+│    - is_used: bool (deprecated: is_deleted 사용)                      │
+│    - is_deleted: bool (false인 것은 사용 중으로 인식)                  │
+│    - deleted_at: datetime                                              │
+│    - deleted_by: str                                                    │
 │                                                                          │
 │  shared_core.models.ProcessingJob                                      │
 │    - job_id: str                                                        │
@@ -364,7 +367,7 @@
 │  status: "preparing" → "uploading" → "processing" → "embedding" → "completed" │
 │  error_message: null                                                     │
 │  completed_at: datetime                                                  │
-│  is_used: true                                                           │
+│  is_deleted: false (사용 중으로 인식)                                    │
 └─────────────────────────────────────────────────────────────────────────┘
                             │
                             ▼

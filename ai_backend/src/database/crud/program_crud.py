@@ -50,12 +50,12 @@ class ProgramCRUD:
             raise HandledException(ResponseCode.DATABASE_QUERY_ERROR, e=e)
 
     def get_program(self, program_id: str) -> Optional[Program]:
-        """프로그램 조회"""
+        """프로그램 조회 (is_deleted=False인 것만, 사용 중으로 인식)"""
         try:
             return (
                 self.db.query(Program)
                 .filter(Program.program_id == program_id)
-                .filter(Program.is_used.is_(True))
+                .filter(Program.is_deleted.is_(False))
                 .first()
             )
         except Exception as e:
@@ -63,12 +63,12 @@ class ProgramCRUD:
             raise HandledException(ResponseCode.DATABASE_QUERY_ERROR, e=e)
 
     def get_user_programs(self, user_id: str) -> List[Program]:
-        """사용자의 프로그램 목록 조회"""
+        """사용자의 프로그램 목록 조회 (is_deleted=False인 것만, 사용 중으로 인식)"""
         try:
             return (
                 self.db.query(Program)
                 .filter(Program.create_user == user_id)
-                .filter(Program.is_used.is_(True))
+                .filter(Program.is_deleted.is_(False))
                 .order_by(desc(Program.create_dt))
                 .all()
             )
@@ -260,7 +260,7 @@ class ProgramCRUD:
                     self.db.query(ProcessMaster)
                     .filter(ProcessMaster.is_active.is_(True))
                     .order_by(
-                        ProcessMaster.process_code,
+                        ProcessMaster.process_name,
                     )
                     .all()
                 )
@@ -275,7 +275,7 @@ class ProgramCRUD:
                     .filter(ProcessMaster.process_id.in_(accessible_process_ids))
                     .filter(ProcessMaster.is_active.is_(True))
                     .order_by(
-                        ProcessMaster.process_code,
+                        ProcessMaster.process_name,
                     )
                     .all()
                 )
@@ -318,8 +318,8 @@ class ProgramCRUD:
             Tuple[List[Program], int]: (프로그램 목록, 전체 개수)
         """
         try:
-            query = self.db.query(Program).filter(Program.is_used.is_(True))
-            query = query.filter(Program.is_deleted.is_(False))
+            # is_deleted=False인 것만 조회 (사용 중으로 인식)
+            query = self.db.query(Program).filter(Program.is_deleted.is_(False))
 
             # 권한 기반 필터링 (user_id가 제공된 경우)
             if user_id:
@@ -368,7 +368,7 @@ class ProgramCRUD:
     def delete_programs(self, program_ids: List[str]) -> int:
         """
         프로그램 삭제 (여러 개 일괄 삭제)
-        실제로는 is_used를 False로 설정 (소프트 삭제)
+        실제로는 is_deleted를 True로 설정 (소프트 삭제)
 
         Args:
             program_ids: 삭제할 프로그램 ID 리스트
@@ -380,8 +380,8 @@ class ProgramCRUD:
             deleted_count = (
                 self.db.query(Program)
                 .filter(Program.program_id.in_(program_ids))
-                .filter(Program.is_used.is_(True))
-                .update({"is_used": False}, synchronize_session=False)
+                .filter(Program.is_deleted.is_(False))
+                .update({"is_deleted": True, "deleted_at": datetime.now()}, synchronize_session=False)
             )
             self.db.commit()
             return deleted_count
@@ -393,7 +393,7 @@ class ProgramCRUD:
     def delete_program(self, program_id: str) -> bool:
         """
         프로그램 삭제 (단일)
-        실제로는 is_used를 False로 설정 (소프트 삭제)
+        실제로는 is_deleted를 True로 설정 (소프트 삭제)
 
         Args:
             program_id: 삭제할 프로그램 ID
@@ -404,7 +404,8 @@ class ProgramCRUD:
         try:
             program = self.get_program(program_id)
             if program:
-                program.is_used = False
+                program.is_deleted = True
+                program.deleted_at = datetime.now()
                 self.db.commit()
                 return True
             return False

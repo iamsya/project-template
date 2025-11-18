@@ -22,8 +22,8 @@ PROGRAMS
 ├── UPDATE_DT (DateTime)                 -- 수정 일시
 ├── UPDATE_USER (String(50))             -- 수정자
 ├── COMPLETED_AT (DateTime)              -- 완료 일시
-├── IS_USED (Boolean)                    -- 사용 여부
-├── IS_DELETED (Boolean, index=True)     -- 삭제 여부 (소프트 삭제)
+├── IS_USED (Boolean)                    -- 사용 여부 (deprecated: is_deleted 사용)
+├── IS_DELETED (Boolean, index=True)     -- 삭제 여부 (소프트 삭제, false인 것은 사용 중으로 인식)
 ├── DELETED_AT (DateTime)                -- 삭제 일시
 └── DELETED_BY (String(50))              -- 삭제자
 ```
@@ -405,7 +405,7 @@ WHERE source_type = 'program'
    - `is_deleted = true` (소프트 삭제)
    - `deleted_at = 현재 시간`
    - `deleted_by = 삭제자 ID`
-   - `is_used = false` (기존 필드, 호환성 유지)
+   - `is_used`는 deprecated (호환성 유지용, 실제로는 사용하지 않음)
 
 2. **DOCUMENTS 테이블**
    - 관련 모든 Document의 `is_deleted = true` (소프트 삭제)
@@ -446,4 +446,343 @@ WHERE source_type = 'program'
 - JSON 파일: 생성 시 `status = 'preprocessed'` → 임베딩 시작 시 `status = 'embedding'` → 임베딩 완료 시 `status = 'embedded'`
 - Knowledge Reference 파일: 임베딩 시작 시 `status = 'embedding'` → 임베딩 완료 시 `status = 'embedded'`
 - 실패 시: `status = 'failed'`
+
+---
+
+## Document 생성 및 Status 업데이트 가이드
+
+### Document 생성
+
+#### 1. CRUD 레이어 사용 (권장)
+
+```python
+from src.database.crud.document_crud import DocumentCRUD
+from shared_core.models import Document
+from src.utils.uuid_gen import gen
+
+# CRUD 인스턴스 생성
+document_crud = DocumentCRUD(db)
+
+# Document 생성
+document_id = gen()
+document_crud.create_document(
+    document_id=document_id,
+    document_name="프로그램명_template",
+    original_filename="template.xlsx",
+    file_key="programs/program_001/template.xlsx",
+    file_size=1024,
+    file_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    file_extension="xlsx",
+    user_id="user001",
+    upload_path="s3://bucket/programs/program_001/template.xlsx",
+    status=None,  # template 파일은 status 사용 안 함
+    document_type=Document.TYPE_TEMPLATE,  # 상수 사용
+    program_id="program_001",
+    metadata_json={
+        "program_id": "program_001",
+        "program_title": "프로그램명",
+    },
+)
+```
+
+#### 2. JSON 파일 생성 (전처리 완료 상태)
+
+```python
+from src.database.crud.document_crud import DocumentCRUD
+from shared_core.models import Document
+from src.utils.uuid_gen import gen
+
+document_crud = DocumentCRUD(db)
+
+# 전처리된 JSON 파일 생성
+document_id = gen()
+document_crud.create_document(
+    document_id=document_id,
+    document_name="프로그램명_processed_0",
+    original_filename="processed_program_001_0.json",
+    file_key="programs/program_001/processed/processed_program_001_0.json",
+    file_size=2048,
+    file_type="application/json",
+    file_extension="json",
+    user_id="user001",
+    upload_path="s3://bucket/programs/program_001/processed/processed_program_001_0.json",
+    status=Document.STATUS_PREPROCESSED,  # 전처리 완료 (임베딩 대기)
+    document_type=Document.TYPE_LADDER_LOGIC_JSON,  # 상수 사용
+    program_id="program_001",
+    source_document_id="doc_zip_001",  # 원본 ZIP 파일 참조
+    metadata_json={
+        "program_id": "program_001",
+        "processing_stage": "preprocessed",
+        "logic_id": "logic_001.csv",
+        "source_file_path": "s3://bucket/programs/program_001/unzipped/logic_001.csv",
+    },
+)
+```
+
+### Document Status 업데이트
+
+#### 방법 1: `DocumentCRUD.update_document_status()` (권장)
+
+가장 직접적이고 간단한 방법입니다.
+
+```python
+from src.database.crud.document_crud import DocumentCRUD
+from shared_core.models import Document
+
+# CRUD 인스턴스 생성
+document_crud = DocumentCRUD(db)
+
+# Status 업데이트
+success = document_crud.update_document_status(
+    document_id="doc_001",
+    status=Document.STATUS_EMBEDDED,  # 상수 사용
+    error_message=None  # 선택사항
+)
+
+# 실패 시 에러 메시지 포함
+success = document_crud.update_document_status(
+    document_id="doc_001",
+    status=Document.STATUS_FAILED,
+    error_message="임베딩 중 오류 발생: Connection timeout"
+)
+```
+
+**함수 시그니처:**
+```python
+def update_document_status(
+    self, 
+    document_id: str, 
+    status: str, 
+    error_message: str = None
+) -> bool:
+    """
+    문서 상태 업데이트
+    
+    Args:
+        document_id: 문서 ID
+        status: 상태 값 (Document.STATUS_* 상수 사용 권장)
+        error_message: 에러 메시지 (선택사항)
+        
+    Returns:
+        bool: 업데이트 성공 여부
+        
+    Note:
+        - status가 'completed'인 경우 processed_at도 자동 업데이트
+        - updated_at은 항상 자동 업데이트
+    """
+```
+
+#### 방법 2: `DocumentService.update_document_processing_status()` (서비스 레이어)
+
+권한 체크가 필요하거나 추가 처리 정보를 함께 업데이트할 때 사용합니다.
+
+```python
+from src.api.services.document_service import DocumentService
+from shared_core.models import Document
+
+# 서비스 인스턴스 생성
+document_service = DocumentService(db)
+
+# Status 및 추가 처리 정보 업데이트
+success = document_service.update_document_processing_status(
+    document_id="doc_001",
+    status=Document.STATUS_EMBEDDED,
+    user_id="user001",  # 권한 체크용
+    vector_count=100,  # 추가 정보 (선택사항)
+    milvus_collection_name="collection_001",  # 추가 정보 (선택사항)
+    total_pages=10,  # 추가 정보 (선택사항)
+    processed_pages=10,  # 추가 정보 (선택사항)
+)
+```
+
+**함수 시그니처:**
+```python
+def update_document_processing_status(
+    self,
+    document_id: str,
+    status: str,
+    user_id: str = None,
+    **processing_info
+) -> bool:
+    """
+    문서 처리 상태 및 정보 업데이트
+    
+    Args:
+        document_id: 문서 ID
+        status: 상태 값 (Document.STATUS_* 상수 사용 권장)
+        user_id: 사용자 ID (권한 체크용, 선택사항)
+        **processing_info: 추가 처리 정보 (vector_count, milvus_collection_name 등)
+        
+    Returns:
+        bool: 업데이트 성공 여부
+        
+    Raises:
+        PermissionError: 권한이 없는 경우
+    """
+```
+
+#### 방법 3: `DocumentCRUD.update_document()` (일반 업데이트)
+
+여러 필드를 함께 업데이트할 때 사용합니다.
+
+```python
+from src.database.crud.document_crud import DocumentCRUD
+from shared_core.models import Document
+
+document_crud = DocumentCRUD(db)
+
+# Status와 다른 필드 함께 업데이트
+success = document_crud.update_document(
+    document_id="doc_001",
+    status=Document.STATUS_EMBEDDED,
+    vector_count=100,
+    milvus_collection_name="collection_001",
+    error_message=None
+)
+```
+
+### Status 상수 사용
+
+모든 status 값은 `Document` 모델의 상수를 사용하는 것을 권장합니다:
+
+```python
+from shared_core.models import Document
+
+# Status 상수
+Document.STATUS_PREPROCESSED  # 전처리 완료 (JSON 파일 전용)
+Document.STATUS_EMBEDDING     # 임베딩 진행 중
+Document.STATUS_EMBEDDED     # 임베딩 완료
+Document.STATUS_FAILED        # 실패
+Document.STATUS_COMPLETED     # 완료 (Knowledge Reference 파일 전용)
+
+# Document Type 상수
+Document.TYPE_LADDER_LOGIC_ZIP   # 원본 ZIP 파일
+Document.TYPE_LADDER_LOGIC_JSON  # 전처리된 JSON 파일
+Document.TYPE_COMMENT            # 코멘트 CSV 파일
+Document.TYPE_TEMPLATE           # 템플릿 XLSX 파일
+Document.TYPE_MANUAL             # 매뉴얼 파일
+Document.TYPE_GLOSSARY           # 용어집 파일
+Document.TYPE_PLC                # PLC 레포 파일
+```
+
+### 사용 예시
+
+#### 예시 1: 전처리 완료 후 Status 설정
+
+```python
+from src.database.crud.document_crud import DocumentCRUD
+from shared_core.models import Document
+
+document_crud = DocumentCRUD(db)
+
+# 전처리 완료 후 Document 생성
+document_id = gen()
+document_crud.create_document(
+    document_id=document_id,
+    document_name="프로그램명_processed_0",
+    original_filename="processed_program_001_0.json",
+    file_key="programs/program_001/processed/processed_program_001_0.json",
+    file_size=2048,
+    file_type="application/json",
+    file_extension="json",
+    user_id="user001",
+    upload_path="s3://bucket/programs/program_001/processed/processed_program_001_0.json",
+    status=Document.STATUS_PREPROCESSED,  # 전처리 완료
+    document_type=Document.TYPE_LADDER_LOGIC_JSON,
+    program_id="program_001",
+    source_document_id="doc_zip_001",
+)
+```
+
+#### 예시 2: 임베딩 시작 시 Status 업데이트
+
+```python
+from src.database.crud.document_crud import DocumentCRUD
+from shared_core.models import Document
+
+document_crud = DocumentCRUD(db)
+
+# 임베딩 시작 시 status 업데이트
+document_crud.update_document_status(
+    document_id="doc_001",
+    status=Document.STATUS_EMBEDDING
+)
+```
+
+#### 예시 3: 임베딩 완료 시 Status 업데이트
+
+```python
+from src.database.crud.document_crud import DocumentCRUD
+from shared_core.models import Document
+
+document_crud = DocumentCRUD(db)
+
+# 임베딩 완료 시 status 및 벡터 정보 업데이트
+document_crud.update_document(
+    document_id="doc_001",
+    status=Document.STATUS_EMBEDDED,
+    vector_count=100,
+    milvus_collection_name="collection_001"
+)
+```
+
+#### 예시 4: 임베딩 실패 시 Status 업데이트
+
+```python
+from src.database.crud.document_crud import DocumentCRUD
+from shared_core.models import Document
+
+document_crud = DocumentCRUD(db)
+
+# 임베딩 실패 시 status 및 에러 메시지 업데이트
+document_crud.update_document_status(
+    document_id="doc_001",
+    status=Document.STATUS_FAILED,
+    error_message="임베딩 중 오류 발생: Vector DB connection timeout"
+)
+```
+
+### Status 흐름
+
+#### JSON 파일 (`document_type='ladder_logic_json'`)
+
+```
+생성 시: STATUS_PREPROCESSED
+    ↓
+임베딩 시작: STATUS_EMBEDDING
+    ↓
+임베딩 완료: STATUS_EMBEDDED ✅
+    ↓
+실패 시: STATUS_FAILED ❌
+```
+
+#### Knowledge Reference 파일 (`document_type='manual'`, `'glossary'`, `'plc'`)
+
+```
+임베딩 시작: STATUS_EMBEDDING
+    ↓
+임베딩 완료: STATUS_EMBEDDED ✅
+    ↓
+완료: STATUS_COMPLETED ✅
+    ↓
+실패 시: STATUS_FAILED ❌
+```
+
+### 주의사항
+
+1. **Status는 전처리 및 임베딩 대상 파일만 사용**
+   - `ladder_logic_zip`, `comment`, `template` 파일은 `status=None`
+   - `ladder_logic_json` 및 Knowledge Reference 파일만 status 사용
+
+2. **상수 사용 권장**
+   - 하드코딩된 문자열 대신 `Document.STATUS_*` 상수 사용
+   - 오타 방지 및 타입 안정성 향상
+
+3. **에러 메시지**
+   - 실패 시 `error_message` 파라미터에 상세한 에러 정보 저장
+   - 디버깅 및 문제 추적에 유용
+
+4. **트랜잭션 관리**
+   - `update_document_status()`는 자동으로 commit 처리
+   - 여러 Document를 업데이트할 때는 트랜잭션 관리 필요
 

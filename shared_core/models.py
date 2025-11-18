@@ -60,6 +60,24 @@ class Document(Base):
         TYPE_TYPE2,
     ]
     
+    # 처리 상태 상수
+    # JSON 파일 전용
+    STATUS_PREPROCESSED = 'preprocessed'  # 전처리 완료 (임베딩 대기)
+    # JSON 파일 및 Knowledge Reference 파일 공통
+    STATUS_EMBEDDING = 'embedding'  # 임베딩 진행 중
+    STATUS_EMBEDDED = 'embedded'  # 임베딩 완료
+    STATUS_FAILED = 'failed'  # 전처리 또는 임베딩 실패
+    # Knowledge Reference 파일 전용
+    STATUS_COMPLETED = 'completed'  # 완료
+    
+    VALID_STATUSES = [
+        STATUS_PREPROCESSED,
+        STATUS_EMBEDDING,
+        STATUS_EMBEDDED,
+        STATUS_FAILED,
+        STATUS_COMPLETED,
+    ]
+    
     # 기본 정보
     document_id = Column('DOCUMENT_ID', String(50), primary_key=True)
     document_name = Column('DOCUMENT_NAME', String(255), nullable=False)
@@ -100,9 +118,10 @@ class Document(Base):
     # 처리 상태
     # 주의: status는 전처리 및 벡터 임베딩 대상 파일만 사용
     #       - JSON 파일 (document_type='ladder_logic_json'):
-    #         preprocessed, embedding, embedded, failed
+    #         STATUS_PREPROCESSED, STATUS_EMBEDDING, STATUS_EMBEDDED, STATUS_FAILED
     #       - Knowledge Reference 파일 (document_type='manual', 'glossary', 'plc'):
-    #         embedding, embedded, failed (전처리 없이 바로 임베딩)
+    #         STATUS_EMBEDDING, STATUS_EMBEDDED, STATUS_FAILED, STATUS_COMPLETED
+    #         (전처리 없이 바로 임베딩)
     #       - 다른 파일(ladder_logic_zip, comment, template): None
     status = Column(
         'STATUS',
@@ -110,7 +129,7 @@ class Document(Base):
         nullable=True,
         comment=(
             "전처리 및 벡터 임베딩 상태: "
-            "preprocessed (JSON만), embedding, embedded, failed "
+            "preprocessed (JSON만), embedding, embedded, failed, completed "
             "(JSON 파일 및 Knowledge Reference 파일만 사용)"
         )
     )

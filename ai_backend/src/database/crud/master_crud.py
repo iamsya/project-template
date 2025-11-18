@@ -27,7 +27,6 @@ class PlantMasterCRUD:
     def create_plant(
         self,
         plant_id: str,
-        plant_code: str,
         plant_name: str,
         create_user: str,
         description: Optional[str] = None,
@@ -38,7 +37,6 @@ class PlantMasterCRUD:
         try:
             plant = PlantMaster(
                 plant_id=plant_id,
-                plant_code=plant_code,
                 plant_name=plant_name,
                 description=description,
                 is_active=is_active,
@@ -70,7 +68,7 @@ class PlantMasterCRUD:
     def get_all_plants(
         self,
         include_inactive: bool = False,
-        sort_by: str = "plant_code",
+        sort_by: str = "plant_name",
         sort_order: str = "asc",
     ) -> List[PlantMaster]:
         """모든 공장 기준정보 목록 조회"""
@@ -80,7 +78,7 @@ class PlantMasterCRUD:
                 query = query.filter(PlantMaster.is_active.is_(True))
             
             # 정렬
-            sort_column = getattr(PlantMaster, sort_by, PlantMaster.plant_code)
+            sort_column = getattr(PlantMaster, sort_by, PlantMaster.plant_name)
             if sort_order.lower() == "desc":
                 query = query.order_by(desc(sort_column))
             else:
@@ -121,9 +119,7 @@ class ProcessMasterCRUD:
     def create_process(
         self,
         process_id: str,
-        process_code: str,
         process_name: str,
-        plant_id: str,
         create_user: str,
         description: Optional[str] = None,
         is_active: bool = True,
@@ -133,9 +129,7 @@ class ProcessMasterCRUD:
         try:
             process = ProcessMaster(
                 process_id=process_id,
-                process_code=process_code,
                 process_name=process_name,
-                plant_id=plant_id,
                 description=description,
                 is_active=is_active,
                 metadata_json=metadata_json,
@@ -163,24 +157,21 @@ class ProcessMasterCRUD:
             logger.error(f"공정 기준정보 조회 실패: {str(e)}")
             raise HandledException(ResponseCode.DATABASE_QUERY_ERROR, e=e)
 
-    def get_processes_by_plant(
+    def get_all_processes(
         self,
-        plant_id: str,
         include_inactive: bool = False,
-        sort_by: str = "process_code",
+        sort_by: str = "process_name",
         sort_order: str = "asc",
     ) -> List[ProcessMaster]:
-        """공장별 공정 기준정보 목록 조회"""
+        """모든 공정 기준정보 목록 조회 (Plant와 무관하게 전체 조회)"""
         try:
-            query = self.db.query(ProcessMaster).filter(
-                ProcessMaster.plant_id == plant_id
-            )
+            query = self.db.query(ProcessMaster)
             if not include_inactive:
                 query = query.filter(ProcessMaster.is_active.is_(True))
             
             # 정렬
             sort_column = getattr(
-                ProcessMaster, sort_by, ProcessMaster.process_code
+                ProcessMaster, sort_by, ProcessMaster.process_name
             )
             if sort_order.lower() == "desc":
                 query = query.order_by(desc(sort_column))
@@ -189,7 +180,7 @@ class ProcessMasterCRUD:
             
             return query.all()
         except Exception as e:
-            logger.error(f"공장별 공정 기준정보 목록 조회 실패: {str(e)}")
+            logger.error(f"공정 기준정보 목록 조회 실패: {str(e)}")
             raise HandledException(ResponseCode.DATABASE_QUERY_ERROR, e=e)
 
     def update_process(
@@ -222,7 +213,6 @@ class LineMasterCRUD:
     def create_line(
         self,
         line_id: str,
-        line_code: str,
         line_name: str,
         process_id: str,
         create_user: str,
@@ -234,7 +224,6 @@ class LineMasterCRUD:
         try:
             line = LineMaster(
                 line_id=line_id,
-                line_code=line_code,
                 line_name=line_name,
                 process_id=process_id,
                 description=description,
@@ -268,7 +257,7 @@ class LineMasterCRUD:
         self,
         process_id: str,
         include_inactive: bool = False,
-        sort_by: str = "line_code",
+        sort_by: str = "line_name",
         sort_order: str = "asc",
     ) -> List[LineMaster]:
         """공정별 라인 기준정보 목록 조회"""
@@ -280,7 +269,7 @@ class LineMasterCRUD:
                 query = query.filter(LineMaster.is_active.is_(True))
             
             # 정렬
-            sort_column = getattr(LineMaster, sort_by, LineMaster.line_code)
+            sort_column = getattr(LineMaster, sort_by, LineMaster.line_name)
             if sort_order.lower() == "desc":
                 query = query.order_by(desc(sort_column))
             else:
@@ -353,16 +342,14 @@ class MasterHierarchyCRUD:
                     "lines": [],
                 }
 
-            # 2. 해당 Plant의 모든 Process를 한 번에 조회
-            process_query = self.db.query(ProcessMaster).filter(
-                ProcessMaster.plant_id == plant_id
-            )
+            # 2. 모든 Process 조회 (Plant와 무관하게 전체 조회)
+            process_query = self.db.query(ProcessMaster)
             if not include_inactive:
                 process_query = process_query.filter(
                     ProcessMaster.is_active.is_(True)
                 )
             processes = process_query.order_by(
-                ProcessMaster.process_code
+                ProcessMaster.process_name
             ).all()
 
             if not processes:
@@ -380,7 +367,7 @@ class MasterHierarchyCRUD:
             if not include_inactive:
                 line_query = line_query.filter(LineMaster.is_active.is_(True))
             lines = line_query.order_by(
-                LineMaster.line_code
+                LineMaster.line_name
             ).all()
 
             return {
@@ -430,7 +417,7 @@ class MasterHierarchyCRUD:
             if not include_inactive:
                 line_query = line_query.filter(LineMaster.is_active.is_(True))
             lines = line_query.order_by(
-                LineMaster.line_code
+                LineMaster.line_name
             ).all()
 
             return {
@@ -510,32 +497,26 @@ class MasterHierarchyCRUD:
                     PlantMaster.is_active.is_(True)
                 )
             plants = plant_query.order_by(
-                PlantMaster.plant_code
+                PlantMaster.plant_name
             ).all()
 
             if not plants:
                 return []
 
-            plant_id_list = [p.plant_id for p in plants]
-
-            # 2. 모든 Plant의 Process를 한 번에 조회 (IN 절 사용)
-            process_query = self.db.query(ProcessMaster).filter(
-                ProcessMaster.plant_id.in_(plant_id_list)
-            )
+            # 2. 모든 Process 조회 (Plant와 무관하게 전체 조회)
+            process_query = self.db.query(ProcessMaster)
             if not include_inactive:
                 process_query = process_query.filter(
                     ProcessMaster.is_active.is_(True)
                 )
             all_processes = process_query.order_by(
-                ProcessMaster.process_code
+                ProcessMaster.process_name
             ).all()
 
-            # Process를 plant_id로 그룹화
+            # Process는 모든 Plant에서 공통으로 사용되므로 모든 Plant에 동일하게 표시
             processes_by_plant = {}
-            for process in all_processes:
-                if process.plant_id not in processes_by_plant:
-                    processes_by_plant[process.plant_id] = []
-                processes_by_plant[process.plant_id].append(process)
+            for plant in plants:
+                processes_by_plant[plant.plant_id] = all_processes
 
             if not all_processes:
                 return [
@@ -551,7 +532,7 @@ class MasterHierarchyCRUD:
             if not include_inactive:
                 line_query = line_query.filter(LineMaster.is_active.is_(True))
             all_lines = line_query.order_by(
-                LineMaster.line_code
+                LineMaster.line_name
             ).all()
 
             # Line을 process_id로 그룹화
@@ -564,6 +545,7 @@ class MasterHierarchyCRUD:
             # 결과 구성
             result = []
             for plant in plants:
+                # 모든 Process는 모든 Plant에서 공통으로 사용
                 processes = processes_by_plant.get(plant.plant_id, [])
                 lines = []
 
@@ -642,7 +624,7 @@ class MasterHierarchyCRUD:
             plants = (
                 self.db.query(PlantMaster)
                 .filter(PlantMaster.is_active.is_(True))
-                .order_by(PlantMaster.plant_code)
+                .order_by(PlantMaster.plant_name)
                 .all()
             )
             
@@ -655,25 +637,24 @@ class MasterHierarchyCRUD:
             
             plant_id_list = [p.plant_id for p in plants]
             
-            # 2. 모든 Process 조회
+            # 2. 모든 Process 조회 (Plant와 무관하게 전체 조회)
             processes = (
                 self.db.query(ProcessMaster)
                 .filter(ProcessMaster.is_active.is_(True))
-                .filter(ProcessMaster.plant_id.in_(plant_id_list))
-                .order_by(ProcessMaster.process_code)
+                .order_by(ProcessMaster.process_name)
                 .all()
             )
             
-            # Process를 plant_id로 그룹화
+            # Process는 모든 Plant에서 공통으로 사용되므로 모든 Plant에 동일하게 표시
             processes_by_plant = {}
-            for process in processes:
-                if process.plant_id not in processes_by_plant:
-                    processes_by_plant[process.plant_id] = []
-                processes_by_plant[process.plant_id].append({
-                    "id": process.process_id,
-                    "code": process.process_code,
-                    "name": process.process_name,
-                })
+            for plant in plants:
+                processes_by_plant[plant.plant_id] = [
+                    {
+                        "id": process.process_id,
+                        "name": process.process_name,
+                    }
+                    for process in processes
+                ]
             
             # 3. 모든 Line 조회
             process_id_list = [p.process_id for p in processes]
@@ -683,7 +664,7 @@ class MasterHierarchyCRUD:
                     self.db.query(LineMaster)
                     .filter(LineMaster.is_active.is_(True))
                     .filter(LineMaster.process_id.in_(process_id_list))
-                    .order_by(LineMaster.line_code)
+                    .order_by(LineMaster.line_name)
                     .all()
                 )
             
@@ -694,7 +675,6 @@ class MasterHierarchyCRUD:
                     lines_by_process[line.process_id] = []
                 lines_by_process[line.process_id].append({
                     "id": line.line_id,
-                    "code": line.line_code,
                     "name": line.line_name,
                 })
             
@@ -703,7 +683,6 @@ class MasterHierarchyCRUD:
                 "plants": [
                     {
                         "id": p.plant_id,
-                        "code": p.plant_code,
                         "name": p.plant_name,
                     }
                     for p in plants
@@ -738,7 +717,7 @@ class MasterHierarchyCRUD:
             plants = (
                 self.db.query(PlantMaster)
                 .filter(PlantMaster.is_active.is_(True))
-                .order_by(PlantMaster.plant_code)
+                .order_by(PlantMaster.plant_name)
                 .all()
             )
             
@@ -751,11 +730,10 @@ class MasterHierarchyCRUD:
             
             plant_id_list = [p.plant_id for p in plants]
             
-            # 2. 공정 조회 (권한 필터링 적용)
+            # 2. 공정 조회 (권한 필터링 적용, Plant와 무관하게 전체 조회)
             process_query = (
                 self.db.query(ProcessMaster)
                 .filter(ProcessMaster.is_active.is_(True))
-                .filter(ProcessMaster.plant_id.in_(plant_id_list))
             )
             
             # 접근 가능한 공정만 필터링
@@ -764,18 +742,18 @@ class MasterHierarchyCRUD:
                     ProcessMaster.process_id.in_(accessible_process_ids)
                 )
             
-            processes = process_query.order_by(ProcessMaster.process_code).all()
+            processes = process_query.order_by(ProcessMaster.process_name).all()
             
-            # Process를 plant_id로 그룹화
+            # Process는 모든 Plant에서 공통으로 사용되므로 모든 Plant에 동일하게 표시
             processes_by_plant = {}
-            for process in processes:
-                if process.plant_id not in processes_by_plant:
-                    processes_by_plant[process.plant_id] = []
-                processes_by_plant[process.plant_id].append({
-                    "id": process.process_id,
-                    "code": process.process_code,
-                    "name": process.process_name,
-                })
+            for plant in plants:
+                processes_by_plant[plant.plant_id] = [
+                    {
+                        "id": process.process_id,
+                        "name": process.process_name,
+                    }
+                    for process in processes
+                ]
             
             # 3. Line 조회 (필터링된 공정에 대한 Line만)
             process_id_list = [p.process_id for p in processes]
@@ -785,7 +763,7 @@ class MasterHierarchyCRUD:
                     self.db.query(LineMaster)
                     .filter(LineMaster.is_active.is_(True))
                     .filter(LineMaster.process_id.in_(process_id_list))
-                    .order_by(LineMaster.line_code)
+                    .order_by(LineMaster.line_name)
                     .all()
                 )
             
@@ -796,7 +774,6 @@ class MasterHierarchyCRUD:
                     lines_by_process[line.process_id] = []
                 lines_by_process[line.process_id].append({
                     "id": line.line_id,
-                    "code": line.line_code,
                     "name": line.line_name,
                 })
             
@@ -804,7 +781,6 @@ class MasterHierarchyCRUD:
                 "plants": [
                     {
                         "id": p.plant_id,
-                        "code": p.plant_code,
                         "name": p.plant_name,
                     }
                     for p in plants

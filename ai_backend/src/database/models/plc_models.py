@@ -10,7 +10,7 @@ Hierarchy 구조: Plant → 공정(Process) → Line → PLC명 → 호기(Unit)
 """
 
 from sqlalchemy import Boolean, Column, DateTime, ForeignKey, JSON, String, func
-from sqlalchemy.sql.expression import true
+from sqlalchemy.sql.expression import false, true
 
 from src.database.base import Base
 
@@ -55,6 +55,14 @@ class PLC(Base):
         index=True,
         comment="Line ID (hierarchy 3단계, 필수)"
     )
+    equipment_group_id = Column(
+        "EQUIPMENT_GROUP_ID",
+        String(50),
+        ForeignKey("EQUIPMENT_GROUP_MASTER.EQUIPMENT_GROUP_ID"),
+        nullable=True,
+        index=True,
+        comment="장비 그룹 ID (참고용, 선택사항)"
+    )
 
     # Hierarchy: PLC명 → 호기 (사용자 직접 입력)
     plc_name = Column(
@@ -92,8 +100,30 @@ class PLC(Base):
     mapping_dt = Column("MAPPING_DT", DateTime, nullable=True)
     mapping_user = Column("MAPPING_USER", String(50), nullable=True)
 
-    # 활성화 여부
+    # 활성화 여부 (deprecated: is_deleted 사용)
     is_active = Column("IS_ACTIVE", Boolean, nullable=False, server_default=true())
+
+    # 삭제 관리
+    is_deleted = Column(
+        "IS_DELETED",
+        Boolean,
+        nullable=False,
+        server_default=false(),
+        index=True,
+        comment="삭제 여부 (소프트 삭제, false인 것은 사용 중으로 인식)"
+    )
+    deleted_at = Column(
+        "DELETED_AT",
+        DateTime,
+        nullable=True,
+        comment="삭제 일시"
+    )
+    deleted_by = Column(
+        "DELETED_BY",
+        String(50),
+        nullable=True,
+        comment="삭제자"
+    )
 
     # 메타데이터
     metadata_json = Column("METADATA_JSON", JSON, nullable=True)

@@ -192,14 +192,19 @@ def download_file(
     
     **요청 파라미터:**
     - `program_title`: PGM Name (프로그램 제목, 필수)
-    - `process_id`: 공정 ID (드롭다운 선택, 선택사항)
+    - `process_id`: 공정 ID (드롭다운 선택, 필수)
     - `program_description`: 프로그램 설명 (선택사항)
     - `user_id`: 사용자 ID (기본값: "user")
+    
+    **Program ID 생성 규칙:**
+    - 형식: `pgm_{process_id}_{타임스탬프(10자리)}`
+    - 예: `pgm_process_001_2501011200`
+    - 타임스탬프: YYMMDDHHMM (연도 2자리, 월일시분)
     
     **필수 파일:**
     - `ladder_zip`: Logic 파일 (Program CSV 파일을 zip으로 압축)
       - 압축 해제 후 각 로직 파일이 분리됨
-    - `classification_xlsx`: Logic 분류 체계 엑셀 파일 (XLSX)
+    - `template_xlsx`: 템플릿 분류 체계 엑셀 파일 (XLSX)
       - 컬럼: FOLDER_ID, FOLDER_NAME, SUB_FOLDER_NAME, LOGIC_ID, LOGIC_NAME
       - 로직 파일명과 매칭되어 템플릿 데이터 생성
     - `comment_csv`: PLC Ladder Comment 파일 (CSV)
@@ -224,12 +229,12 @@ def download_file(
 )
 async def register_program(
     ladder_zip: UploadFile = File(..., description="PLC ladder logic ZIP 파일", example="ladder_files.zip"),
-    classification_xlsx: UploadFile = File(
-        ..., description="템플릿 분류체계 데이터 XLSX 파일", example="classification.xlsx"
+    template_xlsx: UploadFile = File(
+        ..., description="템플릿 분류체계 데이터 XLSX 파일", example="template.xlsx"
     ),
     comment_csv: UploadFile = File(..., description="PLC Ladder Comment CSV 파일", example="comment.csv"),
     program_title: str = Form(..., description="PGM Name (프로그램 제목)", example="공정1 PLC 프로그램"),
-    process_id: Optional[str] = Form(None, description="공정 ID (드롭다운 선택, 선택사항)", example="process_001"),
+    process_id: str = Form(..., description="공정 ID (드롭다운 선택, 필수)", example="process_001"),
     program_description: Optional[str] = Form(None, description="프로그램 설명", example="공정1 라인용 PLC 프로그램"),
     user_id: str = Form(default="user", description="사용자 ID", example="user001"),
     program_service: ProgramService = Depends(get_program_service),
@@ -238,7 +243,7 @@ async def register_program(
     프로그램 등록 API
 
     - ladder_zip: PLC ladder logic 파일들이 포함된 압축 파일
-    - classification_xlsx: 템플릿 분류체계 데이터 (로직 파일명 포함)
+    - template_xlsx: 템플릿 분류체계 데이터 (로직 파일명 포함)
     - comment_csv: ladder 로직에 있는 device 설명
 
     유효성 검사를 통과하면:
@@ -255,7 +260,7 @@ async def register_program(
         program_description=program_description,
         user_id=user_id,
         ladder_zip=ladder_zip,
-        classification_xlsx=classification_xlsx,
+        template_xlsx=template_xlsx,
         comment_csv=comment_csv,
     )
 
@@ -361,7 +366,7 @@ def get_program_list(
     create_user: Optional[str] = Query(None, description="작성자로 필터링", example="user001"),
     user_id: str = Query(..., description="사용자 ID (권한 기반 필터링용)", example="user001"),
     page: int = Query(1, ge=1, description="페이지 번호", example=1),
-    page_size: int = Query(10, ge=1, le=100, description="페이지당 항목 수", example=10),
+    page_size: int = Query(10, ge=1, le=10000, description="페이지당 항목 수 (페이지네이션 없이 모든 데이터를 가져오려면 큰 값 사용, 예: 10000)", example=10),
     sort_by: str = Query(
         "create_dt",
         description="정렬 기준 (create_dt, program_id, program_name, status)",
@@ -548,8 +553,8 @@ def get_program_list(
     
     **응답:**
     - `processes`: 접근 가능한 공정 목록
-      - 각 항목: `process_id`, `process_name`, `process_code`
-      - `process_code` 순으로 정렬 (기본값)
+      - 각 항목: `process_id`, `process_name`
+      - `process_name` 순으로 정렬 (기본값)
     
     **사용 예시:**
     ```
@@ -562,13 +567,11 @@ def get_program_list(
       "processes": [
         {
           "process_id": "process_001",
-          "process_name": "모듈",
-          "process_code": "MODULE"
+          "process_name": "모듈"
         },
         {
           "process_id": "process_002",
-          "process_name": "전극",
-          "process_code": "ELECTRODE"
+          "process_name": "전극"
         }
       ]
     }
@@ -601,7 +604,6 @@ def get_accessible_processes(
             ProcessDropdownItem(
                 process_id=p.process_id,
                 process_name=p.process_name,
-                process_code=p.process_code,
             )
             for p in processes
         ]
@@ -620,7 +622,7 @@ def get_program_list_for_mapping(
     program_id: Optional[str] = Query(None, description="PGM ID로 검색"),
     program_name: Optional[str] = Query(None, description="제목으로 검색"),
     page: int = Query(1, ge=1, description="페이지 번호"),
-    page_size: int = Query(10, ge=1, le=100, description="페이지당 항목 수"),
+    page_size: int = Query(10, ge=1, le=10000, description="페이지당 항목 수 (페이지네이션 없이 모든 데이터를 가져오려면 큰 값 사용, 예: 10000)"),
     db: Session = Depends(get_db),
 ):
     """
@@ -692,7 +694,7 @@ async def get_user_programs(
 
 @router.get(
     "/{program_id}",
-    response_model=ProgramInfo,
+    response_model=Optional[ProgramInfo],
     summary="프로그램 상세 정보 조회",
     description="""
     프로그램의 상세 정보를 조회합니다 (팝업 상세 조회용).
@@ -716,8 +718,11 @@ async def get_user_programs(
       GET /v1/programs/files/download?file_type=program_comment&program_id=PGM_000001&user_id=user001
       ```
     
+    **응답:**
+    - 검색 결과가 없으면 200 OK와 함께 null을 반환합니다 (REST API 규칙).
+    - 검색 결과가 있으면 프로그램 상세 정보를 반환합니다.
+    
     **예외 상황:**
-    - `PROGRAM_NOT_FOUND`: 프로그램을 찾을 수 없음
     - `CHAT_ACCESS_DENIED`: 접근 권한 없음
     """,
 )
@@ -728,6 +733,9 @@ async def get_program(
 ):
     """프로그램 상세 정보 조회 (팝업용)"""
     program = await program_service.get_program(program_id, user_id)
+    # 검색 결과가 비어 있어도 200 OK 반환 (REST API 규칙)
+    if program is None:
+        return None
     return ProgramInfo(**program)
 
 

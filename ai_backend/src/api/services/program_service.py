@@ -10,10 +10,9 @@ from sqlalchemy.orm import Session
 from shared_core.models import Document
 from src.api.services.program_uploader import ProgramUploader
 from src.api.services.program_validator import ProgramValidator
-from src.config import settings
 from src.types.response.exceptions import HandledException
 from src.types.response.response_code import ResponseCode
-from src.utils.uuid_gen import gen
+from src.utils.uuid_gen import gen, gen_program_id, gen_template_id
 
 logger = logging.getLogger(__name__)
 
@@ -64,24 +63,28 @@ class ProgramService:
         program_description: Optional[str],
         user_id: str,
         ladder_zip: UploadFile,
-        classification_xlsx: UploadFile,
+        template_xlsx: UploadFile,
         comment_csv: UploadFile,
-        process_id: Optional[str] = None,
+        process_id: str,
     ) -> Dict:
         """
         프로그램 등록 (유효성 검사 + 비동기 처리)
+
+        Args:
+            process_id: 공정 ID (필수)
 
         Returns:
             Dict: 프로그램 등록 결과
         """
         try:
-            program_id = gen()
+            # program_id 생성: pgm_{process_id}_{타임스탬프(10자리)}
+            program_id = gen_program_id(process_id)
 
             # 1. 유효성 검사
             validation_result = self._validate_program_files(
                 program_id=program_id,
                 ladder_zip=ladder_zip,
-                classification_xlsx=classification_xlsx,
+                template_xlsx=template_xlsx,
                 comment_csv=comment_csv,
             )
 
@@ -106,7 +109,7 @@ class ProgramService:
                     user_id=user_id,
                     process_id=process_id,
                     ladder_zip=ladder_zip,
-                    classification_xlsx=classification_xlsx,
+                    template_xlsx=template_xlsx,
                     comment_csv=comment_csv,
                 )
             )
@@ -123,14 +126,14 @@ class ProgramService:
         self,
         program_id: str,
         ladder_zip: UploadFile,
-        classification_xlsx: UploadFile,
+        template_xlsx: UploadFile,
         comment_csv: UploadFile,
     ) -> Dict:
         """프로그램 파일 유효성 검사"""
         logger.info(f"프로그램 유효성 검사 시작: program_id={program_id}")
         is_valid, errors, warnings, checked_files = self.validator.validate_files(
             ladder_zip=ladder_zip,
-            classification_xlsx=classification_xlsx,
+            template_xlsx=template_xlsx,
             comment_csv=comment_csv,
         )
 
@@ -205,7 +208,7 @@ class ProgramService:
         program_title: str,
         program_description: Optional[str],
         user_id: str,
-        process_id: Optional[str] = None,
+        process_id: str,
     ):
         """프로그램 메타데이터 저장"""
         logger.info(f"프로그램 메타데이터 저장 시작: program_id={program_id}")
@@ -228,7 +231,7 @@ class ProgramService:
         program_id: str,
         program_title: str,
         user_id: str,
-        classification_xlsx: UploadFile,
+        template_xlsx: UploadFile,
     ) -> Dict:
         """템플릿 및 템플릿데이터 생성"""
         logger.info(f"템플릿 및 템플릿데이터 생성 시작: program_id={program_id}")
@@ -241,20 +244,19 @@ class ProgramService:
         template_data_crud = TemplateDataCRUD(self.db)
         document_crud = DocumentCRUD(self.db)
 
-        # classification_xlsx 파일 읽기
-        classification_xlsx.file.seek(0)
-        xlsx_content = classification_xlsx.file.read()
-        classification_xlsx.file.seek(0)
-        df = pd.read_excel(io.BytesIO(xlsx_content))
+        # template_xlsx 파일 읽기
+        # header=0: 첫 번째 행을 헤더로 사용 (헤더는 데이터로 저장되지 않음)
+        template_xlsx.file.seek(0)
+        xlsx_content = template_xlsx.file.read()
+        template_xlsx.file.seek(0)
+        df = pd.read_excel(io.BytesIO(xlsx_content), header=0)
 
         # 템플릿 Document 생성
         template_document_id = gen()
-        # 원본 파일명 사용
-        classification_filename = classification_xlsx.filename or "classification.xlsx"
         document_crud.create_document(
             document_id=template_document_id,
             document_name=f"{program_title}_template",
-            original_filename=classification_filename,
+            original_filename="classification.xlsx",
             file_key=None,
             file_size=len(xlsx_content),
             file_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -271,7 +273,8 @@ class ProgramService:
         )
 
         # 템플릿 생성
-        template_id = gen()
+        # template_id 생성: tpl_{program_id}_{타임스탬프(10자리)}
+        template_id = gen_template_id(program_id)
         template_crud.create_template(
             template_id=template_id,
             document_id=template_document_id,
@@ -311,8 +314,15 @@ class ProgramService:
         program_id: str,
         template_data_crud,
     ) -> List[Dict]:
-        """템플릿데이터 행 생성"""
+        """
+        템플릿데이터 행 생성
+        
+        XLSX 파일의 첫 번째 행은 헤더(컬럼명)이고, 
+        두 번째 행부터가 실제 데이터입니다.
+        pandas의 iterrows()는 헤더를 제외한 데이터 행만 순회합니다.
+        """
         template_data_list = []
+        # iterrows()는 헤더를 제외한 데이터 행만 순회 (헤더는 저장되지 않음)
         for idx, row in df.iterrows():
             template_data_id = gen()
 
@@ -460,9 +470,9 @@ class ProgramService:
         program_description: Optional[str],
         user_id: str,
         ladder_zip: UploadFile,
-        classification_xlsx: UploadFile,
+        template_xlsx: UploadFile,
         comment_csv: UploadFile,
-        process_id: Optional[str] = None,
+        process_id: str,
     ):
         """프로그램 등록 완료 처리 (비동기)
         
@@ -486,7 +496,7 @@ class ProgramService:
                 program_id=program_id,
                 program_title=program_title,
                 user_id=user_id,
-                classification_xlsx=classification_xlsx,
+                template_xlsx=template_xlsx,
             )
             template_document_id = template_result["template_document_id"]
             template_data_list = template_result["template_data_list"]
@@ -513,7 +523,7 @@ class ProgramService:
                     program_title=program_title,
                     user_id=user_id,
                     ladder_zip=ladder_zip,
-                    classification_xlsx=classification_xlsx,
+                    template_xlsx=template_xlsx,
                     comment_csv=comment_csv,
                 ladder_document_id=document_ids["ladder_document_id"],
                 comment_document_id=document_ids["comment_document_id"],
@@ -559,7 +569,7 @@ class ProgramService:
         program_title: str,
         user_id: str,
         ladder_zip: UploadFile,
-        classification_xlsx: UploadFile,
+        template_xlsx: UploadFile,
         comment_csv: UploadFile,
         ladder_document_id: str,
         comment_document_id: str,
@@ -576,7 +586,7 @@ class ProgramService:
             logger.info(f"S3 업로드 시작: program_id={program_id}")
             s3_paths = await self.uploader.upload_and_unzip(
                 ladder_zip=ladder_zip,
-                classification_xlsx=classification_xlsx,
+                template_xlsx=template_xlsx,
                 comment_csv=comment_csv,
                 program_id=program_id,
                 user_id=user_id,
@@ -588,34 +598,28 @@ class ProgramService:
             from src.database.crud.document_crud import DocumentCRUD
             document_crud = DocumentCRUD(self.db)
 
-            # S3 프로그램 경로 prefix 가져오기
-            program_prefix = settings.s3_program_prefix.rstrip("/")
-            
-            # ladder_document 업데이트 (원본 파일명 사용)
+            # ladder_document 업데이트
             if ladder_document_id and s3_paths.get("ladder_zip_path"):
-                ladder_filename = s3_paths.get("ladder_zip_filename", "ladder_logic.zip")
                 document_crud.update_document(
                     document_id=ladder_document_id,
-                    file_key=f"{program_prefix}/{program_id}/{ladder_filename}",
+                    file_key=f"programs/{program_id}/ladder_logic.zip",
                     upload_path=s3_paths.get("ladder_zip_path"),
                 )
 
-            # comment_document 업데이트 (원본 파일명 사용)
+            # comment_document 업데이트
             if comment_document_id and s3_paths.get("comment_csv_path"):
-                comment_filename = s3_paths.get("comment_csv_filename", "comment.csv")
                 document_crud.update_document(
                     document_id=comment_document_id,
-                    file_key=f"{program_prefix}/{program_id}/{comment_filename}",
+                    file_key=f"programs/{program_id}/comment.csv",
                     upload_path=s3_paths.get("comment_csv_path"),
                 )
 
-            # template_document 업데이트 (원본 파일명 사용)
-            if template_document_id and s3_paths.get("classification_xlsx_path"):
-                classification_filename = s3_paths.get("classification_xlsx_filename", "classification.xlsx")
+            # template_document 업데이트
+            if template_document_id and s3_paths.get("template_xlsx_path"):
                 document_crud.update_document(
                     document_id=template_document_id,
-                    file_key=f"{program_prefix}/{program_id}/{classification_filename}",
-                    upload_path=s3_paths.get("classification_xlsx_path"),
+                    file_key=f"programs/{program_id}/template.xlsx",
+                    upload_path=s3_paths.get("template_xlsx_path"),
                 )
 
                 self.db.commit()
@@ -645,7 +649,7 @@ class ProgramService:
                 program_title=program_title,
                 user_id=user_id,
                 unzipped_files=unzipped_files,
-                classification_xlsx_path=s3_paths.get("classification_xlsx_path"),
+                template_xlsx_path=s3_paths.get("template_xlsx_path"),
                 comment_csv_path=s3_paths.get("comment_csv_path"),
                 ladder_document_id=ladder_document_id,
                 db_session=self.db,

@@ -28,7 +28,7 @@ class ProgramValidator:
     @staticmethod
     def validate_files(
         ladder_zip: UploadFile,
-        classification_xlsx: UploadFile,
+        template_xlsx: UploadFile,
         comment_csv: UploadFile,
     ) -> Tuple[bool, List[str], List[str], List[str]]:
         """
@@ -53,7 +53,7 @@ class ProgramValidator:
 
             # 2. XLSX 파일 검증 및 컬럼 확인
             xlsx_errors, xlsx_warnings, xlsx_files = (
-                ProgramValidator._validate_xlsx_file(classification_xlsx)
+                ProgramValidator._validate_xlsx_file(template_xlsx)
             )
             errors.extend(xlsx_errors)
             warnings.extend(xlsx_warnings)
@@ -70,7 +70,7 @@ class ProgramValidator:
             # 4. XLSX의 로직파일명이 ZIP에 있는지 확인
             if not errors:  # 에러가 없을 때만 교차 검증
                 cross_errors = ProgramValidator._validate_file_cross_reference(
-                    ladder_zip, classification_xlsx
+                    ladder_zip, template_xlsx
                 )
                 errors.extend(cross_errors)
 
@@ -134,7 +134,8 @@ class ProgramValidator:
             xlsx_file.file.seek(0)
 
             # XLSX 파일 읽기
-            df = pd.read_excel(io.BytesIO(xlsx_content))
+            # header=0: 첫 번째 행을 헤더로 사용 (헤더는 데이터로 저장되지 않음)
+            df = pd.read_excel(io.BytesIO(xlsx_content), header=0)
 
             # 필수 컬럼 확인
             missing_columns = []
@@ -214,7 +215,7 @@ class ProgramValidator:
 
     @staticmethod
     def _validate_file_cross_reference(
-        ladder_zip: UploadFile, classification_xlsx: UploadFile
+        ladder_zip: UploadFile, template_xlsx: UploadFile
     ) -> List[str]:
         """XLSX의 로직파일명이 ZIP 파일에 실제로 있는지 교차 검증"""
         errors = []
@@ -226,9 +227,9 @@ class ProgramValidator:
             ladder_zip.file.seek(0)
 
             # XLSX 파일 내용 읽기
-            classification_xlsx.file.seek(0)
-            xlsx_content = classification_xlsx.file.read()
-            classification_xlsx.file.seek(0)
+            template_xlsx.file.seek(0)
+            xlsx_content = template_xlsx.file.read()
+            template_xlsx.file.seek(0)
 
             # ZIP 파일 내 파일 목록 추출
             with zipfile.ZipFile(io.BytesIO(zip_content), "r") as zip_ref:

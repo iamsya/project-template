@@ -150,7 +150,6 @@ class ChatCRUD:
                 if plant:
                     hierarchy["plant"] = {
                         "id": plant.plant_id,
-                        "code": plant.plant_code,
                         "name": plant.plant_name,
                     }
 
@@ -163,7 +162,6 @@ class ChatCRUD:
                 if process:
                     hierarchy["process"] = {
                         "id": process.process_id,
-                        "code": process.process_code,
                         "name": process.process_name,
                     }
 
@@ -176,7 +174,6 @@ class ChatCRUD:
                 if line:
                     hierarchy["line"] = {
                         "id": line.line_id,
-                        "code": line.line_code,
                         "name": line.line_name,
                     }
 
@@ -331,19 +328,16 @@ class ChatCRUD:
                         if snapshot.get("plant_id"):
                             plc_hierarchy["plant"] = {
                                 "id": snapshot.get("plant_id"),
-                                "code": snapshot.get("plant_code"),
                                 "name": snapshot.get("plant_name"),
                             }
                         if snapshot.get("process_id"):
                             plc_hierarchy["process"] = {
                                 "id": snapshot.get("process_id"),
-                                "code": snapshot.get("process_code"),
                                 "name": snapshot.get("process_name"),
                             }
                         if snapshot.get("line_id"):
                             plc_hierarchy["line"] = {
                                 "id": snapshot.get("line_id"),
-                                "code": snapshot.get("line_code"),
                                 "name": snapshot.get("line_name"),
                             }
                         

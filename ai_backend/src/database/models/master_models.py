@@ -27,9 +27,6 @@ class PlantMaster(Base):
 
     # 기본 정보
     plant_id = Column("PLANT_ID", String(50), primary_key=True)
-    plant_code = Column(
-        "PLANT_CODE", String(50), unique=True, nullable=False, index=True
-    )
     plant_name = Column("PLANT_NAME", String(255), nullable=False)
     description = Column("DESCRIPTION", Text, nullable=True)
 
@@ -60,7 +57,6 @@ class PlantMaster(Base):
     def __repr__(self):
         return (
             f"<PlantMaster(plant_id='{self.plant_id}', "
-            f"plant_code='{self.plant_code}', "
             f"plant_name='{self.plant_name}')>"
         )
 
@@ -72,17 +68,7 @@ class ProcessMaster(Base):
 
     # 기본 정보
     process_id = Column("PROCESS_ID", String(50), primary_key=True)
-    process_code = Column(
-        "PROCESS_CODE", String(50), unique=True, nullable=False, index=True
-    )
     process_name = Column("PROCESS_NAME", String(255), nullable=False)
-    plant_id = Column(
-        "PLANT_ID",
-        String(50),
-        ForeignKey("PLANT_MASTER.PLANT_ID"),
-        nullable=False,
-        index=True,
-    )
     description = Column("DESCRIPTION", Text, nullable=True)
 
     # 활성화
@@ -105,8 +91,6 @@ class ProcessMaster(Base):
 
     # 인덱스 정의 (조회 성능 향상)
     __table_args__ = (
-        # plant_id + is_active 복합 인덱스 (공장별 활성 공정 조회 최적화)
-        Index("idx_process_master_plant_active", "PLANT_ID", "IS_ACTIVE"),
         # is_active 단일 인덱스 (활성 항목 필터링 최적화)
         Index("idx_process_master_active", "IS_ACTIVE"),
     )
@@ -114,7 +98,6 @@ class ProcessMaster(Base):
     def __repr__(self):
         return (
             f"<ProcessMaster(process_id='{self.process_id}', "
-            f"process_code='{self.process_code}', "
             f"process_name='{self.process_name}')>"
         )
 
@@ -126,9 +109,6 @@ class LineMaster(Base):
 
     # 기본 정보
     line_id = Column("LINE_ID", String(50), primary_key=True)
-    line_code = Column(
-        "LINE_CODE", String(50), unique=True, nullable=False, index=True
-    )
     line_name = Column("LINE_NAME", String(255), nullable=False)
     process_id = Column(
         "PROCESS_ID",
@@ -168,7 +148,6 @@ class LineMaster(Base):
     def __repr__(self):
         return (
             f"<LineMaster(line_id='{self.line_id}', "
-            f"line_code='{self.line_code}', "
             f"line_name='{self.line_name}')>"
         )
 

@@ -7,10 +7,9 @@ from typing import Dict, List, Optional
 from sqlalchemy import desc
 from sqlalchemy.orm import Session
 from src.database.models.plc_models import PLC
-from src.database.models.plc_history_models import PLCHierarchyHistory
 from src.types.response.exceptions import HandledException
 from src.types.response.response_code import ResponseCode
-from src.utils.uuid_gen import gen
+from src.utils.uuid_gen import gen_plc_uuid
 
 logger = logging.getLogger(__name__)
 
@@ -22,12 +21,12 @@ class PLCCRUD:
         self.db = db
 
     def get_plc(self, plc_id: str) -> Optional[PLC]:
-        """PLC 조회 (ID로)"""
+        """PLC 조회 (ID로, is_deleted=False인 것만)"""
         try:
             return (
                 self.db.query(PLC)
                 .filter(PLC.id == plc_id)
-                .filter(PLC.is_active.is_(True))
+                .filter(PLC.is_deleted.is_(False))
                 .first()
             )
         except Exception as e:
@@ -35,12 +34,12 @@ class PLCCRUD:
             raise HandledException(ResponseCode.DATABASE_QUERY_ERROR, e=e)
 
     def get_plc_by_plc_id(self, plc_id: str) -> Optional[PLC]:
-        """PLC 조회 (plc_id로)"""
+        """PLC 조회 (plc_id로, is_deleted=False인 것만)"""
         try:
             return (
                 self.db.query(PLC)
                 .filter(PLC.plc_id == plc_id)
-                .filter(PLC.is_active.is_(True))
+                .filter(PLC.is_deleted.is_(False))
                 .first()
             )
         except Exception as e:
@@ -48,12 +47,12 @@ class PLCCRUD:
             raise HandledException(ResponseCode.DATABASE_QUERY_ERROR, e=e)
 
     def get_plc_by_uuid(self, plc_uuid: str) -> Optional[PLC]:
-        """PLC 조회 (plc_uuid로)"""
+        """PLC 조회 (plc_uuid로, is_deleted=False인 것만)"""
         try:
             return (
                 self.db.query(PLC)
                 .filter(PLC.plc_uuid == plc_uuid)
-                .filter(PLC.is_active.is_(True))
+                .filter(PLC.is_deleted.is_(False))
                 .first()
             )
         except Exception as e:
@@ -88,6 +87,79 @@ class PLCCRUD:
                 "PLC UUID %s의 program_id 조회 실패: %s", plc_uuid, str(e)
             )
             return None
+
+    def create_plc(
+        self,
+        plant_id: str,
+        process_id: str,
+        line_id: str,
+        plc_name: str,
+        plc_id: str,
+        create_user: str,
+        unit: Optional[str] = None,
+        equipment_group_id: Optional[str] = None,
+    ) -> PLC:
+        """
+        PLC 생성
+
+        Args:
+            plant_id: Plant ID
+            process_id: Process ID
+            line_id: Line ID
+            plc_name: PLC명
+            plc_id: PLC ID (사용자 입력)
+            create_user: 생성 사용자
+            unit: 호기 (선택사항)
+            equipment_group_id: 장비 그룹 ID (선택사항)
+
+        Returns:
+            PLC: 생성된 PLC 객체
+
+        Note:
+            plc_uuid는 자동 생성됩니다 (plc_{plc_id}_{타임스탬프}_{랜덤문자열} 형식)
+        """
+        try:
+            # PLC ID 중복 확인
+            existing_plc = self.get_plc_by_plc_id(plc_id)
+            if existing_plc:
+                raise HandledException(
+                    ResponseCode.VALIDATION_ERROR,
+                    msg=f"PLC ID '{plc_id}'가 이미 존재합니다."
+                )
+
+            # PLC UUID 자동 생성
+            plc_uuid = gen_plc_uuid(plc_id)
+
+            # PLC 객체 생성
+            plc = PLC(
+                plc_uuid=plc_uuid,
+                plant_id=plant_id,
+                process_id=process_id,
+                line_id=line_id,
+                plc_name=plc_name,
+                plc_id=plc_id,
+                unit=unit,
+                equipment_group_id=equipment_group_id,
+                create_user=create_user,
+            )
+
+            self.db.add(plc)
+            self.db.commit()
+            self.db.refresh(plc)
+
+            logger.info(
+                "PLC 생성 완료: plc_uuid=%s, plc_id=%s",
+                plc_uuid,
+                plc_id
+            )
+            return plc
+
+        except HandledException:
+            raise
+        except Exception as e:
+            self.db.rollback()
+            logger.error("PLC 생성 실패: %s", str(e))
+            raise HandledException(ResponseCode.DATABASE_QUERY_ERROR, e=e)
 
     def create_plc_hierarchy_snapshot(
         self, plc_uuid: str
@@ -144,21 +216,18 @@ class PLCCRUD:
                 plant = hierarchy["plant"]
                 snapshot["plant_id"] = plant.get("id")
                 snapshot["plant_name"] = plant.get("name")
-                snapshot["plant_code"] = plant.get("code")
 
             # Process 정보
             if hierarchy and hierarchy.get("process"):
                 process = hierarchy["process"]
                 snapshot["process_id"] = process.get("id")
                 snapshot["process_name"] = process.get("name")
-                snapshot["process_code"] = process.get("code")
 
             # Line 정보
             if hierarchy and hierarchy.get("line"):
                 line = hierarchy["line"]
                 snapshot["line_id"] = line.get("id")
                 snapshot["line_name"] = line.get("name")
-                snapshot["line_code"] = line.get("code")
 
             # 등록일시 (문자열 형식으로 저장)
             if plc.create_dt:
@@ -176,222 +245,6 @@ class PLCCRUD:
                 str(e),
             )
             return None
-
-    def _get_current_hierarchy_snapshot(self, plc: PLC) -> Optional[Dict]:
-        """
-        PLC의 현재 계층 구조 스냅샷 ID들을 딕셔너리로 반환
-        
-        Returns:
-            {
-                "plant_id": "...",
-                "process_id": "...",
-                "line_id": "...",
-            }
-        """
-        snapshot = {}
-        if plc.plant_id_snapshot:
-            snapshot["plant_id"] = plc.plant_id_snapshot
-        if plc.process_id_snapshot:
-            snapshot["process_id"] = plc.process_id_snapshot
-        if plc.line_id_snapshot:
-            snapshot["line_id"] = plc.line_id_snapshot
-
-        return snapshot if snapshot else None
-
-    def update_plc_hierarchy(
-        self,
-        plc_id: str,
-        plant_id: Optional[str] = None,
-        process_id: Optional[str] = None,
-        line_id: Optional[str] = None,
-        update_user: str = "system",
-        change_reason: Optional[str] = None,
-    ) -> bool:
-        """
-        PLC 계층 구조 업데이트 (변경 이력 자동 저장)
-        
-        Args:
-            plc_id: PLC ID
-            plant_id: 새로운 Plant ID
-            process_id: 새로운 Process ID
-            line_id: 새로운 Line ID
-            update_user: 수정 사용자
-            change_reason: 변경 사유
-            
-        Returns:
-            bool: 업데이트 성공 여부
-        """
-        try:
-            plc = self.get_plc(plc_id)
-            if not plc:
-                return False
-
-            # 변경 전 계층 구조 스냅샷 저장
-            previous_hierarchy = self._get_current_hierarchy_snapshot(plc)
-
-            # Master 테이블에서 최신 정보 조회
-            from src.database.crud.master_crud import (
-                LineMasterCRUD,
-                PlantMasterCRUD,
-                ProcessMasterCRUD,
-            )
-
-            plant_crud = PlantMasterCRUD(self.db)
-            process_crud = ProcessMasterCRUD(self.db)
-            line_crud = LineMasterCRUD(self.db)
-
-            # 새로운 계층 구조 정보 조회 및 스냅샷 업데이트
-            new_snapshot = {}
-            new_current = {}
-
-            if plant_id:
-                plant = plant_crud.get_plant(plant_id)
-                if plant:
-                    new_snapshot["plant_id"] = plant.plant_id
-                    new_current["plant_id"] = plant_id
-
-            if process_id:
-                process = process_crud.get_process(process_id)
-                if process:
-                    new_snapshot["process_id"] = process.process_id
-                    new_current["process_id"] = process_id
-
-            if line_id:
-                line = line_crud.get_line(line_id)
-                if line:
-                    new_snapshot["line_id"] = line.line_id
-                    new_current["line_id"] = line_id
-
-            # 기존 스냅샷과 병합 (변경되지 않은 레벨은 유지)
-            if previous_hierarchy:
-                for key in ["plant_id", "process_id", "line_id"]:
-                    if key not in new_snapshot:
-                        new_snapshot[key] = previous_hierarchy.get(key)
-
-            # PLC 스냅샷 및 current 업데이트
-            plc.plant_id_snapshot = new_snapshot.get("plant_id")
-            plc.process_id_snapshot = new_snapshot.get("process_id")
-            plc.line_id_snapshot = new_snapshot.get("line_id")
-
-            # 계층 구조가 실제로 변경되었는지 확인
-            if previous_hierarchy != new_snapshot:
-                # 변경 이력 저장 (ID만 저장)
-                self._save_hierarchy_history(
-                    plc_id=plc_id,
-                    previous_hierarchy=previous_hierarchy,
-                    new_hierarchy=new_snapshot,
-                    changed_by=update_user,
-                    change_reason=change_reason,
-                )
-
-            # PLC 업데이트
-            plc.update_dt = datetime.now()
-            plc.update_user = update_user
-            self.db.commit()
-
-            return True
-        except Exception as e:
-            self.db.rollback()
-            logger.error(f"PLC 계층 구조 업데이트 실패: {str(e)}")
-            raise HandledException(ResponseCode.DATABASE_QUERY_ERROR, e=e)
-
-    def _save_hierarchy_history(
-        self,
-        plc_id: str,
-        previous_hierarchy: Optional[Dict],
-        new_hierarchy: Optional[Dict],
-        changed_by: str,
-        change_reason: Optional[str] = None,
-    ):
-        """PLC 계층 구조 변경 이력 저장"""
-        try:
-            # 이전 변경 이력의 최대 sequence 조회
-            max_sequence = (
-                self.db.query(PLCHierarchyHistory)
-                .filter(PLCHierarchyHistory.plc_id == plc_id)
-                .order_by(desc(PLCHierarchyHistory.change_sequence))
-                .first()
-            )
-            next_sequence = (max_sequence.change_sequence + 1) if max_sequence else 1
-
-            history = PLCHierarchyHistory(
-                history_id=gen(),
-                plc_id=plc_id,
-                previous_hierarchy=previous_hierarchy,
-                new_hierarchy=new_hierarchy,
-                change_reason=change_reason,
-                changed_by=changed_by,
-                change_sequence=next_sequence,
-                changed_at=datetime.now(),
-            )
-
-            self.db.add(history)
-            # commit은 호출하는 쪽에서 처리
-        except Exception as e:
-            logger.error(f"PLC 계층 구조 변경 이력 저장 실패: {str(e)}")
-            # 이력 저장 실패해도 PLC 업데이트는 계속 진행
-
-    def get_plc_hierarchy_history(
-        self, plc_id: str, limit: int = 10
-    ) -> List[PLCHierarchyHistory]:
-        """
-        PLC 계층 구조 변경 이력 조회
-        
-        Args:
-            plc_id: PLC ID
-            limit: 조회할 이력 개수
-            
-        Returns:
-            List[PLCHierarchyHistory]: 변경 이력 목록 (최신순)
-        """
-        try:
-            return (
-                self.db.query(PLCHierarchyHistory)
-                .filter(PLCHierarchyHistory.plc_id == plc_id)
-                .order_by(desc(PLCHierarchyHistory.changed_at))
-                .limit(limit)
-                .all()
-            )
-        except Exception as e:
-            logger.error(f"PLC 계층 구조 변경 이력 조회 실패: {str(e)}")
-            raise HandledException(ResponseCode.DATABASE_QUERY_ERROR, e=e)
-
-    def get_plc_hierarchy_at_time(
-        self, plc_id: str, target_time: datetime
-    ) -> Optional[Dict]:
-        """
-        특정 시점의 PLC 계층 구조 조회
-        
-        Args:
-            plc_id: PLC ID
-            target_time: 조회할 시점
-            
-        Returns:
-            Optional[Dict]: 해당 시점의 계층 구조 스냅샷
-        """
-        try:
-            # target_time 이전의 가장 최근 변경 이력 조회
-            history = (
-                self.db.query(PLCHierarchyHistory)
-                .filter(PLCHierarchyHistory.plc_id == plc_id)
-                .filter(PLCHierarchyHistory.changed_at <= target_time)
-                .order_by(desc(PLCHierarchyHistory.changed_at))
-                .first()
-            )
-
-            if history:
-                # 변경 이력이 있으면 해당 시점의 계층 구조 반환
-                return history.new_hierarchy
-
-            # 변경 이력이 없으면 현재 PLC의 스냅샷 반환
-            plc = self.get_plc(plc_id)
-            if plc:
-                return self._get_current_hierarchy_snapshot(plc)
-
-            return None
-        except Exception as e:
-            logger.error(f"특정 시점의 PLC 계층 구조 조회 실패: {str(e)}")
-            raise HandledException(ResponseCode.DATABASE_QUERY_ERROR, e=e)
 
     def _get_hierarchy_with_names(
         self, snapshot_ids: Optional[Dict]
@@ -423,7 +276,6 @@ class PLCCRUD:
                 if plant:
                     hierarchy["plant"] = {
                         "id": plant.plant_id,
-                        "code": plant.plant_code,
                         "name": plant.plant_name,
                     }
 
@@ -432,7 +284,6 @@ class PLCCRUD:
                 if process:
                     hierarchy["process"] = {
                         "id": process.process_id,
-                        "code": process.process_code,
                         "name": process.process_name,
                     }
 
@@ -441,7 +292,6 @@ class PLCCRUD:
                 if line:
                     hierarchy["line"] = {
                         "id": line.line_id,
-                        "code": line.line_code,
                         "name": line.line_name,
                     }
 
@@ -510,7 +360,7 @@ class PLCCRUD:
                     Program,
                     PLC.program_id == Program.program_id,
                 )
-                .filter(PLC.is_active.is_(True))
+                .filter(PLC.is_deleted.is_(False))
             )
 
             # 필터링 조건
@@ -620,7 +470,7 @@ class PLCCRUD:
         """
         PLC 삭제 (소프트 삭제)
         
-        - is_active를 False로 설정
+        - is_deleted를 True로 설정
         - program_id를 None으로 설정 (매핑 해제)
         
         Args:
@@ -635,8 +485,10 @@ class PLCCRUD:
             if not plc:
                 return False
 
-            # 소프트 삭제: is_active = False
-            plc.is_active = False
+            # 소프트 삭제: is_deleted = True
+            plc.is_deleted = True
+            plc.deleted_at = datetime.now()
+            plc.deleted_by = delete_user
             
             # 매핑된 program_id 제거
             plc.program_id = None
@@ -648,7 +500,7 @@ class PLCCRUD:
             plc.update_user = delete_user
 
             self.db.commit()
-            logger.info(f"PLC {plc_uuid} 삭제 완료 (is_active=False, program_id=null)")
+            logger.info(f"PLC {plc_uuid} 삭제 완료 (is_deleted=True, program_id=null)")
             return True
 
         except Exception as e:
@@ -660,7 +512,7 @@ class PLCCRUD:
         """
         PLC 일괄 삭제 (소프트 삭제)
         
-        - is_active를 False로 설정
+        - is_deleted를 True로 설정
         - program_id를 None으로 설정 (매핑 해제)
         
         Args:
@@ -686,4 +538,139 @@ class PLCCRUD:
 
         except Exception as e:
             logger.error(f"PLC 일괄 삭제 실패: {str(e)}")
+            raise HandledException(ResponseCode.DATABASE_QUERY_ERROR, e=e)
+
+    def get_plc_tree(self) -> List[Dict]:
+        """
+        PLC Tree 구조 조회 (채팅 메뉴에서 PLC 선택용)
+        
+        Hierarchy: Plant → 공정 → Line → PLC명 → 호기 → PLC ID
+        
+        Returns:
+            List[Dict]: Plant 리스트 (각 Plant는 procList를 포함)
+            
+        Note:
+            program_id가 있는 PLC만 조회합니다 (프로그램이 매핑된 PLC만)
+        """
+        try:
+            from src.database.models.master_models import (
+                LineMaster,
+                PlantMaster,
+                ProcessMaster,
+            )
+
+            # 활성화된 PLC만 조회 (마스터 테이블과 조인하여 이름도 함께 가져옴)
+            # program_id가 있는 것만 조회
+            plcs_with_masters = (
+                self.db.query(
+                    PLC,
+                    PlantMaster.plant_name,
+                    ProcessMaster.process_name,
+                    LineMaster.line_name,
+                )
+                .join(
+                    PlantMaster,
+                    PLC.plant_id == PlantMaster.plant_id,
+                )
+                .join(
+                    ProcessMaster,
+                    PLC.process_id == ProcessMaster.process_id,
+                )
+                .join(
+                    LineMaster,
+                    PLC.line_id == LineMaster.line_id,
+                )
+                .filter(PLC.is_deleted.is_(False))
+                .filter(PLC.program_id.isnot(None))  # program_id가 있는 것만
+                .filter(PlantMaster.is_active.is_(True))
+                .filter(ProcessMaster.is_active.is_(True))
+                .filter(LineMaster.is_active.is_(True))
+                .order_by(
+                    PlantMaster.plant_name,
+                    ProcessMaster.process_name,
+                    LineMaster.line_name,
+                    PLC.plc_name,
+                    PLC.unit,
+                )
+                .all()
+            )
+
+            # 계층 구조로 그룹화
+            # Plant → Process → Line → PLC명 → 호기 → PLC 정보
+            tree = {}
+
+            for plc, plant_name, process_name, line_name in plcs_with_masters:
+                # Plant 레벨
+                if plant_name not in tree:
+                    tree[plant_name] = {}
+
+                # Process 레벨
+                if process_name not in tree[plant_name]:
+                    tree[plant_name][process_name] = {}
+
+                # Line 레벨
+                if line_name not in tree[plant_name][process_name]:
+                    tree[plant_name][process_name][line_name] = {}
+
+                # PLC명 레벨
+                plc_name = plc.plc_name
+                if plc_name not in tree[plant_name][process_name][line_name]:
+                    tree[plant_name][process_name][line_name][plc_name] = {}
+
+                # 호기 레벨
+                unit = plc.unit or "N/A"
+                if unit not in tree[plant_name][process_name][line_name][plc_name]:
+                    tree[plant_name][process_name][line_name][plc_name][unit] = []
+
+                # PLC 정보 추가
+                plc_info = {
+                    "plc_id": plc.plc_id,
+                    "plc_uuid": plc.plc_uuid,
+                    "create_dt": (
+                        plc.create_dt.strftime("%Y/%m/%d %H:%M")
+                        if plc.create_dt
+                        else ""
+                    ),
+                    "user": plc.create_user or "",
+                }
+                tree[plant_name][process_name][line_name][plc_name][unit].append(
+                    plc_info
+                )
+
+            # 응답 형식으로 변환
+            result = []
+            for plant_name, processes in sorted(tree.items()):
+                proc_list = []
+                for process_name, lines in sorted(processes.items()):
+                    line_list = []
+                    for line_name, plc_names in sorted(lines.items()):
+                        plc_name_list = []
+                        for plc_name, units in sorted(plc_names.items()):
+                            unit_list = []
+                            for unit, plc_infos in sorted(units.items()):
+                                unit_list.append({
+                                    "unit": unit,
+                                    "info": plc_infos,
+                                })
+                            plc_name_list.append({
+                                "plcName": plc_name,
+                                "unitList": unit_list,
+                            })
+                        line_list.append({
+                            "line": line_name,
+                            "plcNameList": plc_name_list,
+                        })
+                    proc_list.append({
+                        "proc": process_name,
+                        "lineList": line_list,
+                    })
+                result.append({
+                    "plant": plant_name,
+                    "procList": proc_list,
+                })
+
+            return result
+
+        except Exception as e:
+            logger.error(f"PLC Tree 조회 실패: {str(e)}")
             raise HandledException(ResponseCode.DATABASE_QUERY_ERROR, e=e)

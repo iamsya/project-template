@@ -227,13 +227,10 @@ async def send_message_stream(
             "plc_name": "01_01_CELL_FABRICATOR",
             "plant_id": "plant001",
             "plant_name": "공장1",
-            "plant_code": "P001",
             "process_id": "process001",
             "process_name": "공정1",
-            "process_code": "PR001",
             "line_id": "line001",
             "line_name": "라인1",
-            "line_code": "L001",
             "unit": "1",
             "create_dt": "2025-10-31 18:39:00"
           }

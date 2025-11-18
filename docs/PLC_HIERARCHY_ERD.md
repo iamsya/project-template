@@ -11,7 +11,6 @@ erDiagram
     %% PLC 관련 테이블
     PLC ||--o{ CHAT_MESSAGES : "referenced_by"
     PLC ||--o| PROGRAMS : "mapped_to"
-    PLC ||--o{ PLC_HIERARCHY_HISTORY : "has_history"
     
     %% Master 테이블 계층 구조
     PLANT_MASTER ||--o{ PROCESS_MASTER : "has"
@@ -78,7 +77,10 @@ erDiagram
         string PROGRAM_ID FK "unique"
         datetime MAPPING_DT
         string MAPPING_USER
-        boolean IS_ACTIVE
+        boolean IS_ACTIVE "deprecated: is_deleted 사용"
+        boolean IS_DELETED "삭제 여부 (소프트 삭제, false인 것은 사용 중으로 인식)"
+        datetime DELETED_AT "삭제 일시"
+        string DELETED_BY "삭제자"
         json METADATA_JSON
         datetime CREATE_DT
         string CREATE_USER
@@ -105,18 +107,10 @@ erDiagram
         datetime UPDATE_DT
         string UPDATE_USER
         datetime COMPLETED_AT
-        boolean IS_USED
-    }
-    
-    PLC_HIERARCHY_HISTORY {
-        string HISTORY_ID PK
-        string PLC_ID FK "index"
-        integer CHANGE_SEQUENCE "index"
-        json PREVIOUS_HIERARCHY "ID만 저장"
-        json NEW_HIERARCHY "ID만 저장"
-        string CHANGE_REASON
-        string CHANGED_BY
-        datetime CHANGED_AT
+        boolean IS_USED "deprecated: is_deleted 사용"
+        boolean IS_DELETED "삭제 여부 (소프트 삭제, false인 것은 사용 중으로 인식)"
+        datetime DELETED_AT "삭제 일시"
+        string DELETED_BY "삭제자"
     }
     
     PLANT_MASTER {
@@ -208,10 +202,6 @@ erDiagram
   - `PLC_LINE_ID_SNAPSHOT` (논리적 참조)
   - `PLC_EQUIPMENT_GROUP_ID_SNAPSHOT` (논리적 참조)
 
-### 5. PLC 변경 이력
-- **PLC** → **PLC_HIERARCHY_HISTORY**: 1:N (PLC당 여러 변경 이력)
-- 이력 테이블에는 변경 전/후 스냅샷 ID를 JSON으로 저장
-
 ## 데이터 흐름
 
 ### 메시지 생성 시
@@ -226,17 +216,10 @@ erDiagram
 3. Master 테이블에서 조인하여 code, name 조회
 4. 계층 구조 정보 반환
 
-### PLC 계층 구조 변경 시
-1. 변경 전 스냅샷 저장 (`_get_current_hierarchy_snapshot`)
-2. Master 테이블에서 새로운 정보 조회
-3. PLC의 `*_SNAPSHOT` 필드 업데이트
-4. PLC의 `*_CURRENT` 필드 업데이트 (FK)
-5. `PLC_HIERARCHY_HISTORY`에 변경 이력 저장
-
 ## 설계 특징
 
 1. **스냅샷은 ID만 저장**: code, name은 master 테이블에서 조인으로 조회
 2. **FK는 current만**: snapshot은 불변이므로 FK 없음
 3. **과거 데이터 보존**: ChatMessage의 스냅샷으로 생성 시점의 계층 구조 보존
-4. **변경 이력 추적**: PLC_HIERARCHY_HISTORY로 모든 변경사항 기록
+4. **PLC Hierarchy는 수정 불가**: 한번 입력된 PLC의 hierarchy는 수정되지 않음
 

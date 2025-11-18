@@ -7,6 +7,7 @@ import httpx
 from sqlalchemy.orm import Session
 
 from src.config import settings
+from shared_core.models import Document
 
 logger = logging.getLogger(__name__)
 
@@ -198,14 +199,14 @@ class KnowledgeStatusService:
 
                     if document:
                         # conversion_status에 따라 Document 상태 업데이트
-                        # 예: "completed" -> status="completed"
+                        # 예: "completed" -> status=Document.STATUS_COMPLETED
                         if conversion_status == "completed":
-                            if document.status != "completed":
-                                document.status = "completed"
+                            if document.status != Document.STATUS_COMPLETED:
+                                document.status = Document.STATUS_COMPLETED
                                 total_updated += 1
                         elif conversion_status == "failed":
-                            if document.status != "failed":
-                                document.status = "failed"
+                            if document.status != Document.STATUS_FAILED:
+                                document.status = Document.STATUS_FAILED
                                 document.error_message = doc_info.get(
                                     "error_message", "변환 실패"
                                 )
