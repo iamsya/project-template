@@ -74,7 +74,6 @@ def get_plc_by_id(
             plant=hierarchy.get("plant", {}).get("name") if hierarchy else None,
             process=hierarchy.get("process", {}).get("name") if hierarchy else None,
             line=hierarchy.get("line", {}).get("name") if hierarchy else None,
-            equipment_group=None,  # equipment_group 제거
             unit=plc.unit,
             program_id=plc.program_id,
             program_id_changed=program_id_changed,
@@ -205,7 +204,6 @@ def get_plc_list(
                     line=hierarchy.get("line", {}).get("name")
                     if hierarchy
                     else None,
-                    equipment_group=None,  # equipment_group 제거
                     unit=plc.unit,
                     program_id=plc.program_id,
                     mapping_user=plc.mapping_user,
@@ -767,12 +765,7 @@ def batch_save_plcs(
                     failed_count += 1
                     continue
 
-                if line.process_id != item.process_id:
-                    errors.append(
-                        f"PLC ID {item.plc_id}: Line이 공정에 속하지 않습니다"
-                    )
-                    failed_count += 1
-                    continue
+                # Line은 이제 Process와 무관하므로 process_id 검증 제거
 
                 # plc_uuid가 있으면 수정, 없으면 생성
                 if item.plc_uuid:

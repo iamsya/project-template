@@ -113,7 +113,6 @@ CREATE TABLE LINE_MASTER (
 );
 
 -- 인덱스
-CREATE INDEX idx_line_master_process_active ON LINE_MASTER(PROCESS_ID, IS_ACTIVE);
 CREATE INDEX idx_line_master_active_order ON LINE_MASTER(IS_ACTIVE, DISPLAY_ORDER);
 CREATE INDEX idx_line_master_active ON LINE_MASTER(IS_ACTIVE);
 ```
@@ -121,8 +120,8 @@ CREATE INDEX idx_line_master_active ON LINE_MASTER(IS_ACTIVE);
 **관리자 쿼리 예시:**
 ```sql
 -- 추가
-INSERT INTO LINE_MASTER (LINE_ID, LINE_CODE, LINE_NAME, PROCESS_ID, CREATE_USER)
-VALUES ('line_001', 'L001', '라인1', 'process_001', 'admin');
+INSERT INTO LINE_MASTER (LINE_ID, LINE_NAME, CREATE_USER)
+VALUES ('line_001', '라인1', 'admin');
 
 -- 변경
 UPDATE LINE_MASTER 
@@ -470,8 +469,8 @@ VALUES ('process_002', 'PR002', '공정2', 'plant_001', 'admin');
 
 **라인 추가:**
 ```sql
-INSERT INTO LINE_MASTER (LINE_ID, LINE_CODE, LINE_NAME, PROCESS_ID, CREATE_USER)
-VALUES ('line_002', 'L002', '라인2', 'process_001', 'admin');
+INSERT INTO LINE_MASTER (LINE_ID, LINE_NAME, CREATE_USER)
+VALUES ('line_002', '라인2', 'admin');
 ```
 
 **공정 이름 변경:**

@@ -67,16 +67,16 @@ processes = process_crud.get_processes_by_plant(plant_id, include_inactive=False
             raise HandledException(ResponseCode.DATABASE_QUERY_ERROR, e=e)
 ```
 
-#### Line 목록 조회 (Process별)
+#### Line 목록 조회 (전체)
 ```python
 from src.database.crud.master_crud import LineMasterCRUD
 
 line_crud = LineMasterCRUD(db)
-lines = line_crud.get_lines_by_process(process_id, include_inactive=False)
+lines = line_crud.get_all_lines(include_inactive=False)
 # 반환: List[LineMaster]
-# - 특정 process_id에 속한 line만 조회
+# - 모든 Line 조회 (Process와 무관)
 # - is_active=True인 것만 조회
-# - display_order, line_code 순으로 정렬
+# - line_name 순으로 정렬
 ```
 
 **코드 위치**: `ai_backend/src/database/crud/master_crud.py` (비슷한 패턴)
@@ -102,10 +102,9 @@ const selectedPlantId = 'plant001';
 const processes = await fetch(`/v1/masters/processes?plant_id=${selectedPlantId}`).then(r => r.json());
 // processes: [{ process_id, process_code, process_name, ... }]
 
-// 3. Process 선택 시 Line 드롭다운 로드
-const selectedProcessId = 'process001';
-const lines = await fetch(`/v1/masters/lines?process_id=${selectedProcessId}`).then(r => r.json());
-// lines: [{ line_id, line_code, line_name, ... }]
+// 3. Line 드롭다운 로드 (Process와 무관하게 전체 조회)
+const lines = await fetch(`/v1/masters/lines`).then(r => r.json());
+// lines: [{ line_id, line_name, ... }]
 ```
 
 ### 권한 관리 고려사항
@@ -262,7 +261,7 @@ def get_lines_for_dropdown(
 ):
     """Line 드롭다운용 목록 조회"""
     line_crud = LineMasterCRUD(db)
-    lines = line_crud.get_lines_by_process(process_id, include_inactive=False)
+    lines = line_crud.get_all_lines(include_inactive=False)
     return [{"id": l.line_id, "code": l.line_code, "name": l.line_name} 
             for l in lines]
 ```

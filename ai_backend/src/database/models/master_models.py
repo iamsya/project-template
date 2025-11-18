@@ -8,7 +8,6 @@ from sqlalchemy import (
     Boolean,
     Column,
     DateTime,
-    ForeignKey,
     Index,
     JSON,
     String,
@@ -110,13 +109,6 @@ class LineMaster(Base):
     # 기본 정보
     line_id = Column("LINE_ID", String(50), primary_key=True)
     line_name = Column("LINE_NAME", String(255), nullable=False)
-    process_id = Column(
-        "PROCESS_ID",
-        String(50),
-        ForeignKey("PROCESS_MASTER.PROCESS_ID"),
-        nullable=False,
-        index=True,
-    )
     description = Column("DESCRIPTION", Text, nullable=True)
 
     # 활성화
@@ -139,8 +131,6 @@ class LineMaster(Base):
 
     # 인덱스 정의 (조회 성능 향상)
     __table_args__ = (
-        # process_id + is_active 복합 인덱스 (공정별 활성 라인 조회 최적화)
-        Index("idx_line_master_process_active", "PROCESS_ID", "IS_ACTIVE"),
         # is_active 단일 인덱스 (활성 항목 필터링 최적화)
         Index("idx_line_master_active", "IS_ACTIVE"),
     )

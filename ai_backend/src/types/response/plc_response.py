@@ -15,7 +15,6 @@ class PLCInfo(BaseModel):
     plant: Optional[str] = Field(None, description="계획")
     process: Optional[str] = Field(None, description="공정")
     line: Optional[str] = Field(None, description="라인")
-    equipment_group: Optional[str] = Field(None, description="설비 그룹")
     unit: Optional[str] = Field(None, description="유닛")
     program_id: Optional[str] = Field(None, description="Program ID")
     mapping_dt: Optional[datetime] = Field(None, description="매핑 일시")
@@ -40,7 +39,6 @@ class PLCBasicInfo(BaseModel):
     plant: Optional[str] = Field(None, description="계획")
     process: Optional[str] = Field(None, description="공정")
     line: Optional[str] = Field(None, description="라인")
-    equipment_group: Optional[str] = Field(None, description="설비 그룹")
     unit: Optional[str] = Field(None, description="유닛")
     program_id: Optional[str] = Field(None, description="Program ID")
     program_id_changed: bool = Field(
@@ -62,7 +60,6 @@ class PLCListItem(BaseModel):
     plant: Optional[str] = Field(None, description="Plant")
     process: Optional[str] = Field(None, description="공정")
     line: Optional[str] = Field(None, description="Line")
-    equipment_group: Optional[str] = Field(None, description="장비 그룹")
     unit: Optional[str] = Field(None, description="호기")
     program_id: Optional[str] = Field(
         None, description="매핑된 PGM ID"

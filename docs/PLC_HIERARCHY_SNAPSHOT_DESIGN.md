@@ -2,7 +2,7 @@
 
 ## 문제 상황
 
-PLC의 계층 구조(plant, process, line, equipment_group)가 시간에 따라 변경될 수 있습니다.
+PLC의 계층 구조(plant, process, line)가 시간에 따라 변경될 수 있습니다.
 예를 들어:
 - 3일 전: `bosk > 공정 > 1 > cfb`
 - 현재: `bosk_ky > 공정 > 1 > cfb123`
@@ -39,11 +39,6 @@ ADD COLUMN PLC_HIERARCHY_SNAPSHOT JSON;
     "code": "1",
     "name": "라인 1"
   },
-  "equipment_group": {
-    "id": "equipment_001",
-    "code": "cfb",
-    "name": "CFB"
-  }
 }
 ```
 
@@ -95,7 +90,6 @@ for msg in messages:
         #   "plant": {"code": "bosk", "name": "보스크"},
         #   "process": {"code": "공정", "name": "공정"},
         #   "line": {"code": "1", "name": "라인 1"},
-        #   "equipment_group": {"code": "cfb", "name": "CFB"}
         # }
 ```
 

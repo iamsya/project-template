@@ -301,8 +301,12 @@ GET /v1/plcs/masters/dropdown
   },
   "linesByProcess": {
     "process_001": [
-      {"id": "line_001", "code": "LN1", "name": "1라인"},
-      {"id": "line_002", "code": "LN2", "name": "2라인"}
+      {"id": "line_001", "name": "1라인"},
+      {"id": "line_002", "name": "2라인"}
+    ],
+    "process_002": [
+      {"id": "line_001", "name": "1라인"},
+      {"id": "line_002", "name": "2라인"}
     ]
   }
 }
@@ -318,9 +322,9 @@ const plants = response.plants;
 const selectedPlantId = "KY1";
 const processes = response.processesByPlant[selectedPlantId] || [];
 
-// 3. Process 선택 시 Line 드롭다운 필터링
+// 3. Process 선택 시 Line 드롭다운 (모든 Process에 동일한 Line 목록 표시)
 const selectedProcessId = "process_001";
-const lines = response.linesByProcess[selectedProcessId] || [];
+const lines = response.linesByProcess[selectedProcessId] || []; // 모든 Process에 동일한 Line 목록
 ```
 
 ### 사용 예시
@@ -368,7 +372,10 @@ GET /v1/plcs/mapping/dropdown
   },
   "linesByProcess": {
     "process_001": [
-      {"id": "line_001", "code": "LN1", "name": "1라인"}
+      {"id": "line_001", "name": "1라인"}
+    ],
+    "process_002": [
+      {"id": "line_001", "name": "1라인"}
     ]
   }
 }

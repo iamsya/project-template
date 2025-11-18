@@ -55,14 +55,6 @@ class PLC(Base):
         index=True,
         comment="Line ID (hierarchy 3단계, 필수)"
     )
-    equipment_group_id = Column(
-        "EQUIPMENT_GROUP_ID",
-        String(50),
-        ForeignKey("EQUIPMENT_GROUP_MASTER.EQUIPMENT_GROUP_ID"),
-        nullable=True,
-        index=True,
-        comment="장비 그룹 ID (참고용, 선택사항)"
-    )
 
     # Hierarchy: PLC명 → 호기 (사용자 직접 입력)
     plc_name = Column(

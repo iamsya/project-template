@@ -75,20 +75,21 @@ GET /v1/plcs/mapping/dropdown
     "process_001": [
       {
         "id": "line_001",
-        "code": "LN1",
         "name": "1라인"
       },
       {
         "id": "line_002",
-        "code": "LN2",
         "name": "2라인"
       }
     ],
     "process_002": [
       {
-        "id": "line_003",
-        "code": "LN3",
+        "id": "line_001",
         "name": "1라인"
+      },
+      {
+        "id": "line_002",
+        "name": "2라인"
       }
     ]
   }
@@ -108,10 +109,9 @@ GET /v1/plcs/mapping/dropdown
 | `processesByPlant[plantId][].id` | string | 공정 ID (Primary Key) |
 | `processesByPlant[plantId][].code` | string | 공정 코드 |
 | `processesByPlant[plantId][].name` | string | 공정 이름 |
-| `linesByProcess` | object | Process ID를 키로 하는 Line 목록 맵 (세 번째 드롭다운) |
-| `linesByProcess[processId]` | array | 해당 공정의 Line 목록 |
+| `linesByProcess` | object | Process ID를 키로 하는 Line 목록 맵 (세 번째 드롭다운, 모든 Process에 동일한 Line 목록) |
+| `linesByProcess[processId]` | array | Line 목록 (모든 Process에 동일) |
 | `linesByProcess[processId][].id` | string | Line ID (Primary Key) |
-| `linesByProcess[processId][].code` | string | Line 코드 |
 | `linesByProcess[processId][].name` | string | Line 이름 |
 
 ### 프론트엔드 사용 흐름
@@ -119,7 +119,7 @@ GET /v1/plcs/mapping/dropdown
 1. **API 호출**: `GET /v1/plcs/mapping/dropdown?user_id=user001`
 2. **Plant 드롭다운**: `response.plants` 사용
 3. **Plant 선택 시**: `response.processesByPlant[selectedPlantId]` 사용하여 공정 목록 필터링
-4. **Process 선택 시**: `response.linesByProcess[selectedProcessId]` 사용하여 Line 목록 필터링
+4. **Process 선택 시**: `response.linesByProcess[selectedProcessId]` 사용하여 Line 목록 조회 (모든 Process에 동일한 Line 목록)
 5. **Line 선택 후**: `GET /v1/plcs?plant_id=xxx&process_id=xxx&line_id=xxx` 호출하여 PLC 목록 조회
 
 ### 사용 예시
@@ -144,10 +144,10 @@ const selectedPlantId = "KY1";
 const processes = data.processesByPlant[selectedPlantId] || [];
 // [{id: "process_001", code: "MODULE", name: "모듈"}, ...]
 
-// 4. Process 선택 시 Line 드롭다운 필터링
+// 4. Process 선택 시 Line 드롭다운 (모든 Process에 동일한 Line 목록)
 const selectedProcessId = "process_001";
 const lines = data.linesByProcess[selectedProcessId] || [];
-// [{id: "line_001", code: "LN1", name: "1라인"}, ...]
+// [{id: "line_001", name: "1라인"}, ...] (모든 Process에 동일한 Line 목록)
 
 // 5. Line 선택 후 PLC 목록 조회
 const selectedLineId = "line_001";

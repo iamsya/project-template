@@ -214,7 +214,6 @@ class LineMasterCRUD:
         self,
         line_id: str,
         line_name: str,
-        process_id: str,
         create_user: str,
         description: Optional[str] = None,
         is_active: bool = True,
@@ -225,7 +224,6 @@ class LineMasterCRUD:
             line = LineMaster(
                 line_id=line_id,
                 line_name=line_name,
-                process_id=process_id,
                 description=description,
                 is_active=is_active,
                 metadata_json=metadata_json,
@@ -253,18 +251,15 @@ class LineMasterCRUD:
             logger.error(f"라인 기준정보 조회 실패: {str(e)}")
             raise HandledException(ResponseCode.DATABASE_QUERY_ERROR, e=e)
 
-    def get_lines_by_process(
+    def get_all_lines(
         self,
-        process_id: str,
         include_inactive: bool = False,
         sort_by: str = "line_name",
         sort_order: str = "asc",
     ) -> List[LineMaster]:
-        """공정별 라인 기준정보 목록 조회"""
+        """모든 라인 기준정보 목록 조회"""
         try:
-            query = self.db.query(LineMaster).filter(
-                LineMaster.process_id == process_id
-            )
+            query = self.db.query(LineMaster)
             if not include_inactive:
                 query = query.filter(LineMaster.is_active.is_(True))
             
@@ -277,7 +272,7 @@ class LineMasterCRUD:
             
             return query.all()
         except Exception as e:
-            logger.error(f"공정별 라인 기준정보 목록 조회 실패: {str(e)}")
+            logger.error(f"라인 기준정보 목록 조회 실패: {str(e)}")
             raise HandledException(ResponseCode.DATABASE_QUERY_ERROR, e=e)
 
     def update_line(
@@ -359,11 +354,8 @@ class MasterHierarchyCRUD:
                     "lines": [],
                 }
 
-            # 3. 모든 Process의 Line을 한 번에 조회 (IN 절 사용)
-            process_ids = [p.process_id for p in processes]
-            line_query = self.db.query(LineMaster).filter(
-                LineMaster.process_id.in_(process_ids)
-            )
+            # 3. 모든 Line 조회 (Process와 무관하게 전체 조회)
+            line_query = self.db.query(LineMaster)
             if not include_inactive:
                 line_query = line_query.filter(LineMaster.is_active.is_(True))
             lines = line_query.order_by(
@@ -410,10 +402,8 @@ class MasterHierarchyCRUD:
                     "lines": [],
                 }
 
-            # 2. 해당 Process의 모든 Line을 한 번에 조회
-            line_query = self.db.query(LineMaster).filter(
-                LineMaster.process_id == process_id
-            )
+            # 2. 모든 Line 조회 (Process와 무관하게 전체 조회)
+            line_query = self.db.query(LineMaster)
             if not include_inactive:
                 line_query = line_query.filter(LineMaster.is_active.is_(True))
             lines = line_query.order_by(
@@ -479,8 +469,7 @@ class MasterHierarchyCRUD:
                 {
                     'plant': PlantMaster,
                     'processes': [ProcessMaster],
-                    'lines': [LineMaster],
-                    'equipment_groups': [EquipmentGroupMaster]
+                    'lines': [LineMaster]
                 },
                 ...
             ]
@@ -524,42 +513,25 @@ class MasterHierarchyCRUD:
                     for p in plants
                 ]
 
-            # 3. 모든 Process의 Line을 한 번에 조회 (IN 절 사용)
-            process_id_list = [p.process_id for p in all_processes]
-            line_query = self.db.query(LineMaster).filter(
-                LineMaster.process_id.in_(process_id_list)
-            )
+            # 3. 모든 Line 조회 (Process와 무관하게 전체 조회)
+            line_query = self.db.query(LineMaster)
             if not include_inactive:
                 line_query = line_query.filter(LineMaster.is_active.is_(True))
             all_lines = line_query.order_by(
                 LineMaster.line_name
             ).all()
 
-            # Line을 process_id로 그룹화
-            lines_by_process = {}
-            for line in all_lines:
-                if line.process_id not in lines_by_process:
-                    lines_by_process[line.process_id] = []
-                lines_by_process[line.process_id].append(line)
-
             # 결과 구성
             result = []
             for plant in plants:
                 # 모든 Process는 모든 Plant에서 공통으로 사용
+                # 모든 Line도 모든 Process에서 공통으로 사용
                 processes = processes_by_plant.get(plant.plant_id, [])
-                lines = []
-
-                for process in processes:
-                    process_lines = lines_by_process.get(
-                        process.process_id, []
-                    )
-                    lines.extend(process_lines)
-
                 result.append(
                     {
                         "plant": plant,
                         "processes": processes,
-                        "lines": lines,
+                        "lines": all_lines,  # 모든 Line을 모든 Process에 표시
                     }
                 )
 
@@ -578,8 +550,7 @@ class MasterHierarchyCRUD:
                 {
                     'plant': PlantMaster,
                     'processes': [ProcessMaster],
-                    'lines': [LineMaster],
-                    'equipment_groups': [EquipmentGroupMaster]
+                    'lines': [LineMaster]
                 },
                 ...
             ]
@@ -635,8 +606,6 @@ class MasterHierarchyCRUD:
                     "linesByProcess": {},
                 }
             
-            plant_id_list = [p.plant_id for p in plants]
-            
             # 2. 모든 Process 조회 (Plant와 무관하게 전체 조회)
             processes = (
                 self.db.query(ProcessMaster)
@@ -656,27 +625,25 @@ class MasterHierarchyCRUD:
                     for process in processes
                 ]
             
-            # 3. 모든 Line 조회
-            process_id_list = [p.process_id for p in processes]
-            lines = []
-            if process_id_list:
-                lines = (
-                    self.db.query(LineMaster)
-                    .filter(LineMaster.is_active.is_(True))
-                    .filter(LineMaster.process_id.in_(process_id_list))
-                    .order_by(LineMaster.line_name)
-                    .all()
-                )
+            # 3. 모든 Line 조회 (Process와 무관하게 전체 조회)
+            all_lines = (
+                self.db.query(LineMaster)
+                .filter(LineMaster.is_active.is_(True))
+                .order_by(LineMaster.line_name)
+                .all()
+            )
             
-            # Line을 process_id로 그룹화
+            # Line을 모든 Process에 공통으로 사용 (linesByProcess는 빈 딕셔너리로 반환)
+            # 프론트엔드에서 모든 Line을 모든 Process에 표시할 수 있도록
             lines_by_process = {}
-            for line in lines:
-                if line.process_id not in lines_by_process:
-                    lines_by_process[line.process_id] = []
-                lines_by_process[line.process_id].append({
-                    "id": line.line_id,
-                    "name": line.line_name,
-                })
+            for process in processes:
+                lines_by_process[process.process_id] = [
+                    {
+                        "id": line.line_id,
+                        "name": line.line_name,
+                    }
+                    for line in all_lines
+                ]
             
             # 평면 구조로 변환
             return {
@@ -728,8 +695,6 @@ class MasterHierarchyCRUD:
                     "linesByProcess": {},
                 }
             
-            plant_id_list = [p.plant_id for p in plants]
-            
             # 2. 공정 조회 (권한 필터링 적용, Plant와 무관하게 전체 조회)
             process_query = (
                 self.db.query(ProcessMaster)
@@ -755,27 +720,24 @@ class MasterHierarchyCRUD:
                     for process in processes
                 ]
             
-            # 3. Line 조회 (필터링된 공정에 대한 Line만)
-            process_id_list = [p.process_id for p in processes]
-            lines = []
-            if process_id_list:
-                lines = (
-                    self.db.query(LineMaster)
-                    .filter(LineMaster.is_active.is_(True))
-                    .filter(LineMaster.process_id.in_(process_id_list))
-                    .order_by(LineMaster.line_name)
-                    .all()
-                )
+            # 3. 모든 Line 조회 (Process와 무관하게 전체 조회)
+            all_lines = (
+                self.db.query(LineMaster)
+                .filter(LineMaster.is_active.is_(True))
+                .order_by(LineMaster.line_name)
+                .all()
+            )
             
-            # Line을 process_id로 그룹화
+            # Line을 모든 Process에 공통으로 사용
             lines_by_process = {}
-            for line in lines:
-                if line.process_id not in lines_by_process:
-                    lines_by_process[line.process_id] = []
-                lines_by_process[line.process_id].append({
-                    "id": line.line_id,
-                    "name": line.line_name,
-                })
+            for process in processes:
+                lines_by_process[process.process_id] = [
+                    {
+                        "id": line.line_id,
+                        "name": line.line_name,
+                    }
+                    for line in all_lines
+                ]
             
             return {
                 "plants": [

@@ -97,7 +97,6 @@ class PLCCRUD:
         plc_id: str,
         create_user: str,
         unit: Optional[str] = None,
-        equipment_group_id: Optional[str] = None,
     ) -> PLC:
         """
         PLC 생성
@@ -110,7 +109,6 @@ class PLCCRUD:
             plc_id: PLC ID (사용자 입력)
             create_user: 생성 사용자
             unit: 호기 (선택사항)
-            equipment_group_id: 장비 그룹 ID (선택사항)
 
         Returns:
             PLC: 생성된 PLC 객체
@@ -139,7 +137,6 @@ class PLCCRUD:
                 plc_name=plc_name,
                 plc_id=plc_id,
                 unit=unit,
-                equipment_group_id=equipment_group_id,
                 create_user=create_user,
             )
 

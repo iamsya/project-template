@@ -220,26 +220,8 @@ erDiagram
     
     LINE_MASTER {
         string LINE_ID PK "라인 ID"
-        string LINE_CODE "라인 코드 (unique, 시스템 자동 생성: L001, L002, ...)"
         string LINE_NAME "라인명 (관리자 입력)"
-        string PROCESS_ID FK "공정 ID"
         text DESCRIPTION "설명"
-        integer DISPLAY_ORDER "표시 순서"
-        boolean IS_ACTIVE "활성화 여부"
-        json METADATA_JSON "메타데이터"
-        datetime CREATE_DT "생성일시"
-        string CREATE_USER "생성 사용자"
-        datetime UPDATE_DT "수정일시"
-        string UPDATE_USER "수정 사용자"
-    }
-    
-    EQUIPMENT_GROUP_MASTER {
-        string EQUIPMENT_GROUP_ID PK "장비 그룹 ID"
-        string EQUIPMENT_GROUP_CODE "장비 그룹 코드 (unique, 시스템 자동 생성: EQ-001, EQ-002, ...)"
-        string EQUIPMENT_GROUP_NAME "장비 그룹명 (관리자 입력)"
-        string LINE_ID FK "라인 ID"
-        text DESCRIPTION "설명"
-        integer DISPLAY_ORDER "표시 순서"
         boolean IS_ACTIVE "활성화 여부"
         json METADATA_JSON "메타데이터"
         datetime CREATE_DT "생성일시"
@@ -273,14 +255,10 @@ erDiagram
         string LINE_ID_SNAPSHOT "라인 ID 스냅샷"
         string LINE_CODE_SNAPSHOT "라인 코드 스냅샷"
         string LINE_NAME_SNAPSHOT "라인명 스냅샷"
-        string EQUIPMENT_GROUP_ID_SNAPSHOT "장비 그룹 ID 스냅샷"
-        string EQUIPMENT_GROUP_CODE_SNAPSHOT "장비 그룹 코드 스냅샷"
-        string EQUIPMENT_GROUP_NAME_SNAPSHOT "장비 그룹명 스냅샷"
         %% 현재 기준정보 참조 (선택 시 사용, nullable)
         string PLANT_ID_CURRENT FK "현재 공장 ID (nullable, 선택 시 사용)"
         string PROCESS_ID_CURRENT FK "현재 공정 ID (nullable, 선택 시 사용)"
         string LINE_ID_CURRENT FK "현재 라인 ID (nullable, 선택 시 사용)"
-        string EQUIPMENT_GROUP_ID_CURRENT FK "현재 장비 그룹 ID (nullable, 선택 시 사용)"
     }
     
     %% ============ Chat 관련 테이블 ============
@@ -339,16 +317,13 @@ erDiagram
     TEMPLATES ||--o{ TEMPLATE_DATA : "has (1:N)"
     TEMPLATE_DATA }o--|| DOCUMENTS : "references (N:1, 전처리된 JSON)"
     
-    %% 기준정보 마스터 관계 (계층 구조)
-    PLANT_MASTER ||--o{ PROCESS_MASTER : "has (1:N)"
-    PROCESS_MASTER ||--o{ LINE_MASTER : "has (1:N)"
-    LINE_MASTER ||--o{ EQUIPMENT_GROUP_MASTER : "has (1:N)"
+    %% 기준정보 마스터 관계 (독립적)
+    %% PLANT_MASTER, PROCESS_MASTER, LINE_MASTER는 서로 독립적
     
     %% PLC와 기준정보 관계 (현재 기준정보 참조용, nullable)
     PLANT_MASTER ||--o{ PLC : "current_reference (1:N, nullable)"
     PROCESS_MASTER ||--o{ PLC : "current_reference (1:N, nullable)"
     LINE_MASTER ||--o{ PLC : "current_reference (1:N, nullable)"
-    EQUIPMENT_GROUP_MASTER ||--o{ PLC : "current_reference (1:N, nullable)"
     
     %% Chat 관계
     CHATS ||--o{ CHAT_MESSAGES : "has (1:N)"
@@ -417,21 +392,15 @@ erDiagram
 
 #### PROCESS_MASTER
 - **역할**: 공정 기준정보 마스터
-- **주요 필드**: `process_id` (PK), `process_code` (unique), `process_name`, `plant_id` (FK), `display_order`, `is_active`
-- **관계**: Process N:1 Plant
+- **주요 필드**: `process_id` (PK), `process_name`, `is_active`
+- **관계**: 독립적 (Plant와 무관)
 - **용도**: 공정 기준정보 관리
 
 #### LINE_MASTER
 - **역할**: 라인 기준정보 마스터
-- **주요 필드**: `line_id` (PK), `line_code` (unique), `line_name`, `process_id` (FK), `display_order`, `is_active`
-- **관계**: Line N:1 Process
+- **주요 필드**: `line_id` (PK), `line_name`, `is_active`
+- **관계**: 독립적 (Process와 무관)
 - **용도**: 라인 기준정보 관리
-
-#### EQUIPMENT_GROUP_MASTER
-- **역할**: 장비 그룹 기준정보 마스터
-- **주요 필드**: `equipment_group_id` (PK), `equipment_group_code` (unique), `equipment_group_name`, `line_id` (FK), `display_order`, `is_active`
-- **관계**: Equipment Group N:1 Line
-- **용도**: 장비 그룹 기준정보 관리
 
 ### 5. PLC 관련 테이블
 
@@ -443,12 +412,11 @@ erDiagram
     - `plant_id_snapshot`, `plant_code_snapshot`, `plant_name_snapshot`
     - `process_id_snapshot`, `process_code_snapshot`, `process_name_snapshot`
     - `line_id_snapshot`, `line_code_snapshot`, `line_name_snapshot`
-    - `equipment_group_id_snapshot`, `equipment_group_code_snapshot`, `equipment_group_name_snapshot`
   - **현재 기준정보 참조** (nullable, 선택 시 사용):
-    - `plant_id_current` (FK), `process_id_current` (FK), `line_id_current` (FK), `equipment_group_id_current` (FK)
+    - `plant_id_current` (FK), `process_id_current` (FK), `line_id_current` (FK)
 - **관계**: 
   - PLC 1개 → Program 1개 (unique 제약)
-  - PLC N:1 Plant, Process, Line, Equipment Group (현재 기준정보 참조용, nullable)
+  - PLC N:1 Plant, Process, Line (현재 기준정보 참조용, nullable)
 - **용도**: 
   - PLC 정보 및 Program 매핑 관리
   - **채팅 히스토리**: 스냅샷 기준정보 사용 (예전 정보 유지)
@@ -506,17 +474,16 @@ erDiagram
 ## 기준정보 조회 화면용 마스터 테이블
 
 ### 1. 기준정보 마스터 테이블
-- **PLANT_MASTER**: 공장 기준정보
-- **PROCESS_MASTER**: 공정 기준정보 (Plant 하위)
-- **LINE_MASTER**: 라인 기준정보 (Process 하위)
-- **EQUIPMENT_GROUP_MASTER**: 장비 그룹 기준정보 (Line 하위)
+- **PLANT_MASTER**: 공장 기준정보 (독립적)
+- **PROCESS_MASTER**: 공정 기준정보 (독립적, Plant와 무관)
+- **LINE_MASTER**: 라인 기준정보 (독립적, Process와 무관)
 
 ### 2. PLC 기준정보
 - **테이블**: `PLC`
 - **조회 필드**: 
   - 기본: `plc_name`, `unit`
-  - **스냅샷 기준정보**: `plant_name_snapshot`, `process_name_snapshot`, `line_name_snapshot`, `equipment_group_name_snapshot` (채팅 히스토리용)
-  - **현재 기준정보**: `plant_id_current`, `process_id_current`, `line_id_current`, `equipment_group_id_current` (새로운 PLC 선택용)
+  - **스냅샷 기준정보**: `plant_name_snapshot`, `process_name_snapshot`, `line_name_snapshot` (채팅 히스토리용)
+  - **현재 기준정보**: `plant_id_current`, `process_id_current`, `line_id_current` (새로운 PLC 선택용)
 - **설명**:
   - **채팅 히스토리**: PLC의 스냅샷 기준정보 사용 (생성 시점의 정보 유지)
   - **새로운 PLC 선택**: 현재 기준정보 마스터에서 조회하여 사용
@@ -682,23 +649,11 @@ PROCESS_MASTER (공정 기준정보)
 
 LINE_MASTER (라인 기준정보)
 ├─ LINE_ID (PK)
-├─ LINE_CODE (UNIQUE)              │
 ├─ LINE_NAME                      │
-├─ PROCESS_ID (FK) ───────────────┼──→ PROCESS_MASTER.PROCESS_ID
 ├─ DESCRIPTION                    │
-├─ DISPLAY_ORDER                  │
 ├─ IS_ACTIVE                      │
 └─ ...
 
-EQUIPMENT_GROUP_MASTER (장비 그룹 기준정보)
-├─ EQUIPMENT_GROUP_ID (PK)
-├─ EQUIPMENT_GROUP_CODE (UNIQUE)  │
-├─ EQUIPMENT_GROUP_NAME          │
-├─ LINE_ID (FK) ──────────────────┼──→ LINE_MASTER.LINE_ID
-├─ DESCRIPTION                    │
-├─ DISPLAY_ORDER                  │
-├─ IS_ACTIVE                      │
-└─ ...
 
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │ 5. PLC 관련 테이블                                                          │
@@ -722,14 +677,10 @@ PLC (PLC 기준 정보)
 │  ├─ LINE_ID_SNAPSHOT             │
 │  ├─ LINE_CODE_SNAPSHOT           │
 │  ├─ LINE_NAME_SNAPSHOT           │
-│  ├─ EQUIPMENT_GROUP_ID_SNAPSHOT  │
-│  ├─ EQUIPMENT_GROUP_CODE_SNAPSHOT│
-│  └─ EQUIPMENT_GROUP_NAME_SNAPSHOT│
 ├─ 현재 기준정보 참조 (nullable, 선택 시 사용) │
 │  ├─ PLANT_ID_CURRENT (FK) ──────┼──→ PLANT_MASTER.PLANT_ID
 │  ├─ PROCESS_ID_CURRENT (FK) ────┼──→ PROCESS_MASTER.PROCESS_ID
-│  ├─ LINE_ID_CURRENT (FK) ───────┼──→ LINE_MASTER.LINE_ID
-│  └─ EQUIPMENT_GROUP_ID_CURRENT ──┼──→ EQUIPMENT_GROUP_MASTER.EQUIPMENT_GROUP_ID
+│  └─ LINE_ID_CURRENT (FK) ───────┼──→ LINE_MASTER.LINE_ID
 └─ ...
 
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -785,14 +736,11 @@ TEMPLATES (1) ──→ (N) TEMPLATE_DATA
 TEMPLATES (N) ──→ (1) DOCUMENTS
 TEMPLATE_DATA (N) ──→ (1) DOCUMENTS
 
-PLANT_MASTER (1) ──→ (N) PROCESS_MASTER
-PROCESS_MASTER (1) ──→ (N) LINE_MASTER
-LINE_MASTER (1) ──→ (N) EQUIPMENT_GROUP_MASTER
+PLANT_MASTER, PROCESS_MASTER, LINE_MASTER: 독립적인 마스터 테이블 (서로 종속 관계 없음)
 
 PLANT_MASTER (1) ──→ (N) PLC (현재 기준정보 참조, nullable)
 PROCESS_MASTER (1) ──→ (N) PLC (현재 기준정보 참조, nullable)
 LINE_MASTER (1) ──→ (N) PLC (현재 기준정보 참조, nullable)
-EQUIPMENT_GROUP_MASTER (1) ──→ (N) PLC (현재 기준정보 참조, nullable)
 
 CHATS (1) ──→ (N) CHAT_MESSAGES
 CHAT_MESSAGES (1) ──→ (1) MESSAGE_RATINGS (unique)
@@ -802,17 +750,16 @@ CHAT_MESSAGES (N) ──→ (1) PLC
 │ 기준정보 조회 화면용 마스터 테이블                                           │
 └─────────────────────────────────────────────────────────────────────────────┘
 
-1. 기준정보 마스터
+1. 기준정보 마스터 (독립적)
    ├─ PLANT_MASTER (공장)
-   ├─ PROCESS_MASTER (공정)
-   ├─ LINE_MASTER (라인)
-   └─ EQUIPMENT_GROUP_MASTER (장비 그룹)
+   ├─ PROCESS_MASTER (공정, Plant와 무관)
+   └─ LINE_MASTER (라인, Process와 무관)
 
 2. PLC 기준정보
    └─ PLC 테이블
       ├─ PLC_NAME
       ├─ UNIT
-      └─ 기준정보 FK 참조 (PLANT_ID, PROCESS_ID, LINE_ID, EQUIPMENT_GROUP_ID)
+      └─ 기준정보 FK 참조 (PLANT_ID, PROCESS_ID, LINE_ID)
 
 3. 미쯔비시 매뉴얼 & 용어집
    └─ KNOWLEDGE_REFERENCES 테이블
@@ -872,17 +819,7 @@ PROCESS_MASTER (공정 마스터) │
                           │
 LINE_MASTER (라인 마스터)   │
 ├─ LINE_ID (PK)           │
-├─ LINE_CODE (UNIQUE)     │
 ├─ LINE_NAME ─────────────┤
-├─ PROCESS_ID (FK) ────────┼──→ PROCESS_MASTER.PROCESS_ID
-├─ IS_ACTIVE              │
-└─ ...                    │
-                          │
-EQUIPMENT_GROUP_MASTER (장비 그룹 마스터)
-├─ EQUIPMENT_GROUP_ID (PK)
-├─ EQUIPMENT_GROUP_CODE (UNIQUE)
-├─ EQUIPMENT_GROUP_NAME ──┤
-├─ LINE_ID (FK) ──────────┼──→ LINE_MASTER.LINE_ID
 ├─ IS_ACTIVE              │
 └─ ...                    │
                           │
@@ -912,17 +849,13 @@ PLC (PLC 정보)
 │  ├─ LINE_CODE_SNAPSHOT         │                                       │
 │  ├─ LINE_NAME_SNAPSHOT ────────┤                                       │
 │  │                             │                                       │
-│  ├─ EQUIPMENT_GROUP_ID_SNAPSHOT│                                       │
-│  ├─ EQUIPMENT_GROUP_CODE_SNAPSHOT                                     │
-│  └─ EQUIPMENT_GROUP_NAME_SNAPSHOT                                      │
 │                                                                         │
 │  용도: 채팅 히스토리에서 사용 (예전 정보 유지)                          │
 │                                                                         │
 ├─ [현재 기준정보 참조 필드] (nullable) ────────────────────────────────┤
 │  ├─ PLANT_ID_CURRENT (FK) ────────┼──→ PLANT_MASTER.PLANT_ID         │
 │  ├─ PROCESS_ID_CURRENT (FK) ──────┼──→ PROCESS_MASTER.PROCESS_ID      │
-│  ├─ LINE_ID_CURRENT (FK) ─────────┼──→ LINE_MASTER.LINE_ID            │
-│  └─ EQUIPMENT_GROUP_ID_CURRENT ───┼──→ EQUIPMENT_GROUP_MASTER.EQUIPMENT_GROUP_ID
+│  └─ LINE_ID_CURRENT (FK) ─────────┼──→ LINE_MASTER.LINE_ID            │
 │                                                                         │
 │  용도: PLC 업데이트 시 추적, 새로운 PLC 선택 시 현재 기준정보 조회    │
 │                                                                         │
@@ -949,27 +882,20 @@ CHAT_MESSAGES
 기준정보 마스터 (현재 버전)
     │
     │ 선택: 
-    │   Plant: CODE="P001", NAME="BOSK KY"
-    │   Process: CODE="PRC-001", NAME="조립 공정"
-    │   Line: CODE="L001", NAME="라인 1"
-    │   Equipment: CODE="EQ-001", NAME="장비그룹 1"
+    │   Plant: NAME="BOSK KY"
+    │   Process: NAME="조립 공정"
+    │   Line: NAME="라인 1"
     │
     ▼
 PLC 생성 시
     │
     ├─→ 스냅샷 필드에 저장 (불변)
     │   PLANT_ID_SNAPSHOT = "plant_001"
-    │   PLANT_CODE_SNAPSHOT = "P001"        (시스템 코드)
     │   PLANT_NAME_SNAPSHOT = "BOSK KY"    (이름, 관리자가 화면에서 입력)
     │   PROCESS_ID_SNAPSHOT = "process_001"
-    │   PROCESS_CODE_SNAPSHOT = "PRC-001"   (코드)
     │   PROCESS_NAME_SNAPSHOT = "조립 공정" (이름)
     │   LINE_ID_SNAPSHOT = "line_001"
-    │   LINE_CODE_SNAPSHOT = "L001"         (코드)
     │   LINE_NAME_SNAPSHOT = "라인 1"       (이름)
-    │   EQUIPMENT_GROUP_ID_SNAPSHOT = "eq_001"
-    │   EQUIPMENT_GROUP_CODE_SNAPSHOT = "EQ-001" (코드)
-    │   EQUIPMENT_GROUP_NAME_SNAPSHOT = "장비그룹 1" (이름)
     │
     └─→ 현재 기준정보 참조 필드에 저장 (nullable)
         PLANT_ID_CURRENT = "plant_001"
@@ -1089,7 +1015,6 @@ PLC 생성/수정 시점에 기준정보 마스터의 현재 값을 복사하여
 - `PLANT_ID_SNAPSHOT`, `PLANT_CODE_SNAPSHOT`, `PLANT_NAME_SNAPSHOT`
 - `PROCESS_ID_SNAPSHOT`, `PROCESS_CODE_SNAPSHOT`, `PROCESS_NAME_SNAPSHOT`
 - `LINE_ID_SNAPSHOT`, `LINE_CODE_SNAPSHOT`, `LINE_NAME_SNAPSHOT`
-- `EQUIPMENT_GROUP_ID_SNAPSHOT`, `EQUIPMENT_GROUP_CODE_SNAPSHOT`, `EQUIPMENT_GROUP_NAME_SNAPSHOT`
 
 **ID 필드의 역할** (`PLANT_ID_SNAPSHOT` 등):
 - **ID**: Primary Key, **시스템 내부 식별자**
@@ -1120,7 +1045,6 @@ PLC 생성/수정 시점에 기준정보 마스터의 현재 값을 복사하여
   - `PLANT_CODE = "P001"` (시스템 코드)
   - `PROCESS_CODE = "PRC-001"` (시스템 코드)
   - `LINE_CODE = "L001"` (시스템 코드)
-  - `EQUIPMENT_GROUP_CODE = "EQ-001"` (시스템 코드)
 
 **ID vs CODE 비교**:
 
@@ -1205,7 +1129,6 @@ PLC 생성/수정 시점에 기준정보 마스터의 현재 값을 복사하여
 - `PLANT_ID_CURRENT` (FK) → `PLANT_MASTER.PLANT_ID`
 - `PROCESS_ID_CURRENT` (FK) → `PROCESS_MASTER.PROCESS_ID`
 - `LINE_ID_CURRENT` (FK) → `LINE_MASTER.LINE_ID`
-- `EQUIPMENT_GROUP_ID_CURRENT` (FK) → `EQUIPMENT_GROUP_MASTER.EQUIPMENT_GROUP_ID`
 
 **용도**: 
 - PLC 업데이트 시 어떤 기준정보를 사용했는지 추적
@@ -1214,7 +1137,7 @@ PLC 생성/수정 시점에 기준정보 마스터의 현재 값을 복사하여
 ### 동작 시나리오
 
 #### 시나리오 1: PLC 생성
-1. 사용자가 기준정보 마스터에서 Plant, Process, Line, Equipment Group 선택
+1. 사용자가 기준정보 마스터에서 Plant, Process, Line 선택
    - 사용자는 NAME으로 선택 (예: "BOSK KY" 또는 "SKBA")
    - 시스템은 내부적으로 ID로 매핑
 2. PLC 생성 시:
@@ -1311,9 +1234,6 @@ SELECT
     p.line_id_snapshot,
     p.line_code_snapshot,
     p.line_name_snapshot,
-    p.equipment_group_id_snapshot,
-    p.equipment_group_code_snapshot,
-    p.equipment_group_name_snapshot
 FROM PLC p
 WHERE p.id = :plc_id
 ```
@@ -1333,14 +1253,11 @@ SELECT
     pm.plant_id, pm.plant_code, pm.plant_name,
     prm.process_id, prm.process_code, prm.process_name,
     lm.line_id, lm.line_code, lm.line_name,
-    egm.equipment_group_id, egm.equipment_group_code, egm.equipment_group_name
 FROM PLANT_MASTER pm
-JOIN PROCESS_MASTER prm ON prm.plant_id = pm.plant_id
-JOIN LINE_MASTER lm ON lm.process_id = prm.process_id
-JOIN EQUIPMENT_GROUP_MASTER egm ON egm.line_id = lm.line_id
+CROSS JOIN PROCESS_MASTER prm
+CROSS JOIN LINE_MASTER lm
 WHERE pm.is_active = true
   AND prm.is_active = true
   AND lm.is_active = true
-  AND egm.is_active = true
 ```
 

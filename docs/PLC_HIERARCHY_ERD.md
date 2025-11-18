@@ -12,22 +12,18 @@ erDiagram
     PLC ||--o{ CHAT_MESSAGES : "referenced_by"
     PLC ||--o| PROGRAMS : "mapped_to"
     
-    %% Master 테이블 계층 구조
-    PLANT_MASTER ||--o{ PROCESS_MASTER : "has"
-    PROCESS_MASTER ||--o{ LINE_MASTER : "has"
-    LINE_MASTER ||--o{ EQUIPMENT_GROUP_MASTER : "has"
+    %% Master 테이블 계층 구조 (독립적)
+    %% PLANT_MASTER, PROCESS_MASTER, LINE_MASTER는 서로 독립적
     
     %% PLC와 Master 테이블 관계 (Current 참조 - FK)
     PLANT_MASTER ||--o{ PLC : "current_ref"
     PROCESS_MASTER ||--o{ PLC : "current_ref"
     LINE_MASTER ||--o{ PLC : "current_ref"
-    EQUIPMENT_GROUP_MASTER ||--o{ PLC : "current_ref"
     
     %% CHAT_MESSAGES와 Master 테이블 관계 (Snapshot ID - 논리적 참조)
     PLANT_MASTER ||--o{ CHAT_MESSAGES : "snapshot_ref"
     PROCESS_MASTER ||--o{ CHAT_MESSAGES : "snapshot_ref"
     LINE_MASTER ||--o{ CHAT_MESSAGES : "snapshot_ref"
-    EQUIPMENT_GROUP_MASTER ||--o{ CHAT_MESSAGES : "snapshot_ref"
     
     %% 테이블 정의
     CHATS {
@@ -54,7 +50,6 @@ erDiagram
         string PLC_PLANT_ID_SNAPSHOT "스냅샷 ID"
         string PLC_PROCESS_ID_SNAPSHOT "스냅샷 ID"
         string PLC_LINE_ID_SNAPSHOT "스냅샷 ID"
-        string PLC_EQUIPMENT_GROUP_ID_SNAPSHOT "스냅샷 ID"
         json EXTERNAL_API_NODES
     }
     
@@ -89,11 +84,9 @@ erDiagram
         string PLANT_ID_SNAPSHOT "스냅샷 ID, index"
         string PROCESS_ID_SNAPSHOT "스냅샷 ID, index"
         string LINE_ID_SNAPSHOT "스냅샷 ID, index"
-        string EQUIPMENT_GROUP_ID_SNAPSHOT "스냅샷 ID, index"
         string PLANT_ID_CURRENT FK "index"
         string PROCESS_ID_CURRENT FK "index"
         string LINE_ID_CURRENT FK "index"
-        string EQUIPMENT_GROUP_ID_CURRENT FK "index"
     }
     
     PROGRAMS {
@@ -144,26 +137,8 @@ erDiagram
     
     LINE_MASTER {
         string LINE_ID PK
-        string LINE_CODE "unique, index"
         string LINE_NAME
-        string PROCESS_ID FK "index"
         text DESCRIPTION
-        integer DISPLAY_ORDER
-        boolean IS_ACTIVE "index"
-        json METADATA_JSON
-        datetime CREATE_DT
-        string CREATE_USER
-        datetime UPDATE_DT
-        string UPDATE_USER
-    }
-    
-    EQUIPMENT_GROUP_MASTER {
-        string EQUIPMENT_GROUP_ID PK
-        string EQUIPMENT_GROUP_CODE "unique, index"
-        string EQUIPMENT_GROUP_NAME
-        string LINE_ID FK "index"
-        text DESCRIPTION
-        integer DISPLAY_ORDER
         boolean IS_ACTIVE "index"
         json METADATA_JSON
         datetime CREATE_DT
@@ -180,27 +155,25 @@ erDiagram
 - **CHAT_MESSAGES** ↔ **MESSAGE_RATINGS**: 1:1 (메시지당 평가 1개)
 
 ### 2. PLC 계층 구조
-- **PLANT_MASTER** → **PROCESS_MASTER** → **LINE_MASTER** → **EQUIPMENT_GROUP_MASTER**: 계층 구조 (1:N)
+- **PLANT_MASTER**, **PROCESS_MASTER**, **LINE_MASTER**: 독립적인 마스터 테이블 (서로 종속 관계 없음)
+- **PLC** 테이블이 모든 마스터를 FK로 참조하여 계층 구조 구성
 
 ### 3. PLC와 Master 테이블
 - **PLC.current 참조**: FK로 연결 (현재 기준정보 참조)
   - `PLANT_ID_CURRENT` → `PLANT_MASTER.PLANT_ID`
   - `PROCESS_ID_CURRENT` → `PROCESS_MASTER.PROCESS_ID`
   - `LINE_ID_CURRENT` → `LINE_MASTER.LINE_ID`
-  - `EQUIPMENT_GROUP_ID_CURRENT` → `EQUIPMENT_GROUP_MASTER.EQUIPMENT_GROUP_ID`
 
 - **PLC.snapshot**: ID만 저장 (FK 없음, 불변 스냅샷)
   - `PLANT_ID_SNAPSHOT` (논리적 참조)
   - `PROCESS_ID_SNAPSHOT` (논리적 참조)
   - `LINE_ID_SNAPSHOT` (논리적 참조)
-  - `EQUIPMENT_GROUP_ID_SNAPSHOT` (논리적 참조)
 
 ### 4. ChatMessage와 Master 테이블
 - **CHAT_MESSAGES.snapshot**: ID만 저장 (FK 없음, 메시지 생성 시점의 계층 구조 보존)
   - `PLC_PLANT_ID_SNAPSHOT` (논리적 참조)
   - `PLC_PROCESS_ID_SNAPSHOT` (논리적 참조)
   - `PLC_LINE_ID_SNAPSHOT` (논리적 참조)
-  - `PLC_EQUIPMENT_GROUP_ID_SNAPSHOT` (논리적 참조)
 
 ## 데이터 흐름
 

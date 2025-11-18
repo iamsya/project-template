@@ -109,7 +109,7 @@ class PlantMasterCRUD:
 master:plants:active=true          # 활성 Plant 목록
 master:plants:active=false         # 전체 Plant 목록
 master:processes:plant_id={id}    # 특정 Plant의 Process 목록
-master:lines:process_id={id}       # 특정 Process의 Line 목록
+master:lines                       # 전체 Line 목록
 ```
 
 #### TTL 설정

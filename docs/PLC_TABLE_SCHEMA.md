@@ -52,8 +52,6 @@
 - `PLANT_ID_CURRENT` (불필요)
 - `PROCESS_ID_CURRENT` (불필요)
 - `LINE_ID_CURRENT` (불필요)
-- `EQUIPMENT_GROUP_ID_SNAPSHOT` (Equipment Group 제거)
-- `EQUIPMENT_GROUP_ID_CURRENT` (Equipment Group 제거)
 
 ---
 
@@ -87,7 +85,6 @@
 - `PLC_PLANT_ID_SNAPSHOT` (스냅샷 개념 제거)
 - `PLC_PROCESS_ID_SNAPSHOT` (스냅샷 개념 제거)
 - `PLC_LINE_ID_SNAPSHOT` (스냅샷 개념 제거)
-- `PLC_EQUIPMENT_GROUP_ID_SNAPSHOT` (Equipment Group 제거)
 
 ---
 
@@ -146,9 +143,7 @@
 | 컬럼명 | 타입 | 제약조건 | 설명 |
 |--------|------|----------|------|
 | LINE_ID | String(50) | PK | Line ID |
-| LINE_CODE | String(50) | UNIQUE, NOT NULL, INDEX | Line 코드 |
 | LINE_NAME | String(255) | NOT NULL | Line 이름 |
-| PROCESS_ID | String(50) | FK, NOT NULL, INDEX | Process ID |
 | DESCRIPTION | Text | NULL | 설명 |
 | IS_ACTIVE | Boolean | NOT NULL, DEFAULT true | 활성화 여부 |
 | METADATA_JSON | JSON | NULL | 메타데이터 |
@@ -157,8 +152,6 @@
 | UPDATE_DT | DateTime | NULL | 수정 일시 |
 | UPDATE_USER | String(50) | NULL | 수정 사용자 |
 
-### Foreign Key 관계
-- `PROCESS_ID` → `PROCESS_MASTER.PROCESS_ID`
 
 ---
 

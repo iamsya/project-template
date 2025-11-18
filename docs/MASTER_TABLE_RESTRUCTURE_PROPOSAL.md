@@ -16,7 +16,7 @@
 
 **구조 변경:**
 - `PROCESS_MASTER`에서 `plant_id` FK 제거 → 공통 마스터로 변경
-- `LINE_MASTER`는 `process_id` FK 유지 (Process별 Line)
+- `LINE_MASTER`에서 `process_id` FK 제거 → 공통 마스터로 변경
 - `PLC` 테이블에서 `plant_id`, `process_id`, `line_id` 모두 FK로 직접 참조
 
 **장점:**
@@ -49,10 +49,10 @@ PROCESS_MASTER (공통)
   ├─ process_002 (조립)
   └─ process_003 (화성)
 
-LINE_MASTER (Process별)
-  ├─ process_001 → line_001, line_002, ...
-  ├─ process_002 → line_003, line_004, ...
-  └─ process_003 → line_005, line_006, ...
+LINE_MASTER (공통)
+  ├─ line_001
+  ├─ line_002
+  └─ line_003
 
 PLC (Plant + Process + Line 조합)
   ├─ plant_001 + process_001 + line_001 → PLC1
@@ -141,7 +141,7 @@ PLC (Plant + Process + Line 조합)
 
 4. **API 변경**
    - Process 드롭다운: Plant 선택 없이 전체 Process 조회
-   - Line 드롭다운: Process 선택 시 해당 Process의 Line만 조회
+   - Line 드롭다운: 모든 Line 조회 (Process와 무관)
 
 ---
 
