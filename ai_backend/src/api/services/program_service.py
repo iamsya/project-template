@@ -256,7 +256,7 @@ class ProgramService:
         document_crud.create_document(
             document_id=template_document_id,
             document_name=f"{program_title}_template",
-            original_filename="classification.xlsx",
+            original_filename=template_xlsx.filename or "template.xlsx",
             file_key=None,
             file_size=len(xlsx_content),
             file_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -598,27 +598,30 @@ class ProgramService:
             from src.database.crud.document_crud import DocumentCRUD
             document_crud = DocumentCRUD(self.db)
 
-            # ladder_document 업데이트
+            # ladder_document 업데이트 (원본 파일명 사용)
             if ladder_document_id and s3_paths.get("ladder_zip_path"):
+                ladder_zip_filename = s3_paths.get("ladder_zip_filename", "ladder_logic.zip")
                 document_crud.update_document(
                     document_id=ladder_document_id,
-                    file_key=f"programs/{program_id}/ladder_logic.zip",
+                    file_key=f"programs/{program_id}/{ladder_zip_filename}",
                     upload_path=s3_paths.get("ladder_zip_path"),
                 )
 
-            # comment_document 업데이트
+            # comment_document 업데이트 (원본 파일명 사용)
             if comment_document_id and s3_paths.get("comment_csv_path"):
+                comment_csv_filename = s3_paths.get("comment_csv_filename", "comment.csv")
                 document_crud.update_document(
                     document_id=comment_document_id,
-                    file_key=f"programs/{program_id}/comment.csv",
+                    file_key=f"programs/{program_id}/{comment_csv_filename}",
                     upload_path=s3_paths.get("comment_csv_path"),
                 )
 
-            # template_document 업데이트
+            # template_document 업데이트 (원본 파일명 사용)
             if template_document_id and s3_paths.get("template_xlsx_path"):
+                template_xlsx_filename = s3_paths.get("template_xlsx_filename", "template.xlsx")
                 document_crud.update_document(
                     document_id=template_document_id,
-                    file_key=f"programs/{program_id}/template.xlsx",
+                    file_key=f"programs/{program_id}/{template_xlsx_filename}",
                     upload_path=s3_paths.get("template_xlsx_path"),
                 )
 

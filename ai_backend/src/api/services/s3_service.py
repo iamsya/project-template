@@ -268,10 +268,15 @@ class S3Service:
             # S3 프로그램 경로 prefix 가져오기
             program_prefix = settings.s3_program_prefix.rstrip("/")
             
-            # 1. ZIP 파일 S3 업로드
+            # 원본 파일명 가져오기 (안전하게 처리)
+            ladder_zip_filename = ladder_zip.filename or "ladder_logic.zip"
+            template_xlsx_filename = template_xlsx.filename or "template.xlsx"
+            comment_csv_filename = comment_csv.filename or "comment.csv"
+            
+            # 1. ZIP 파일 S3 업로드 (원본 파일명 사용)
             ladder_zip_path = await self.upload_file(
                 file=ladder_zip,
-                s3_key=f"{program_prefix}/{program_id}/ladder_logic.zip",
+                s3_key=f"{program_prefix}/{program_id}/{ladder_zip_filename}",
                 content_type="application/zip",
             )
 
@@ -281,26 +286,29 @@ class S3Service:
                 s3_prefix=f"{program_prefix}/{program_id}/unzipped/",
             )
 
-            # 3. XLSX 파일 S3 업로드
+            # 3. XLSX 파일 S3 업로드 (원본 파일명 사용)
             template_xlsx_path = await self.upload_file(
                 file=template_xlsx,
-                s3_key=f"{program_prefix}/{program_id}/template.xlsx",
+                s3_key=f"{program_prefix}/{program_id}/{template_xlsx_filename}",
                 content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             )
 
-            # 4. CSV 파일 S3 업로드
+            # 4. CSV 파일 S3 업로드 (원본 파일명 사용)
             comment_csv_path = await self.upload_file(
                 file=comment_csv,
-                s3_key=f"{program_prefix}/{program_id}/comment.csv",
+                s3_key=f"{program_prefix}/{program_id}/{comment_csv_filename}",
                 content_type="text/csv",
             )
 
             return {
                 "ladder_zip_path": ladder_zip_path,
+                "ladder_zip_filename": ladder_zip_filename,
                 "unzipped_base_path": f"{program_prefix}/{program_id}/unzipped/",
                 "unzipped_files": unzipped_files,
                 "template_xlsx_path": template_xlsx_path,
+                "template_xlsx_filename": template_xlsx_filename,
                 "comment_csv_path": comment_csv_path,
+                "comment_csv_filename": comment_csv_filename,
             }
 
         except Exception as e:
