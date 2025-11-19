@@ -347,6 +347,9 @@ class PLCBatchUpdateItem(BaseModel):
     plc_name: str = Field(..., description="PLC명")
     unit: Optional[str] = Field(None, description="호기")
     plc_id: str = Field(..., description="PLC ID")
+    program_id: Optional[str] = Field(
+        None, description='Program ID (변경 시, 빈 문자열("")이면 매핑 해제)'
+    )
     update_user: str = Field(..., description="수정 사용자")
 
 

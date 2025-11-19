@@ -218,7 +218,7 @@ GET /v1/plcs
 <td>integer</td>
 <td>아니오</td>
 <td>10</td>
-<td>페이지당 항목 수 (최소: 1, 최대: 100)</td>
+<td>페이지당 항목 수 (최소: 1, 최대: 10000, 페이지네이션 없이 모든 데이터를 가져오려면 10000 사용)</td>
 </tr>
 <tr>
 <td><code>sort_by</code></td>
@@ -268,10 +268,35 @@ GET /v1/plcs
 }
 ```
 
-### 사용 예시
+### 페이지네이션 비활성화 (모든 데이터 조회)
+
+페이지네이션 없이 모든 데이터를 한 번에 가져오려면 `page_size=10000`을 사용하세요:
 
 ```
+GET /v1/plcs?page=1&page_size=10000
+```
+
+**주의사항:**
+- `page_size`의 최대값은 10000입니다
+- 데이터가 10000개를 초과하는 경우 여러 번 호출해야 합니다
+- 성능을 고려하여 필요한 경우에만 사용하세요
+
+### 사용 예시
+
+#### 페이지네이션 사용 (기본)
+```
 GET /v1/plcs?page=1&page_size=10
+GET /v1/plcs?page=2&page_size=20
+```
+
+#### 페이지네이션 없이 모든 데이터 조회
+```
+GET /v1/plcs?page=1&page_size=10000
+GET /v1/plcs?plant_id=KY1&page=1&page_size=10000
+```
+
+#### 필터링 및 검색
+```
 GET /v1/plcs?plant_id=KY1&process_id=process001&line_id=line001
 GET /v1/plcs?plc_id=M1CFB01000
 GET /v1/plcs?program_name=라벨부착
@@ -851,6 +876,7 @@ PUT /v1/plcs/batch
       "plc_name": "01_01_CELL_FABRICATOR_UPDATED",
       "unit": "1",
       "plc_id": "M1CFB01000",
+      "program_id": "pgm_001",
       "update_user": "admin"
     },
     {
@@ -861,6 +887,7 @@ PUT /v1/plcs/batch
       "plc_name": "01_02_CELL_FABRICATOR_UPDATED",
       "unit": "2",
       "plc_id": "M1CFB02000",
+      "program_id": "",
       "update_user": "admin"
     }
   ]
@@ -928,6 +955,12 @@ PUT /v1/plcs/batch
 <td>PLC ID</td>
 </tr>
 <tr>
+<td><code>items[].program_id</code></td>
+<td>string</td>
+<td>아니오</td>
+<td>Program ID (변경 시, 빈 문자열("")이면 매핑 해제)</td>
+</tr>
+<tr>
 <td><code>items[].update_user</code></td>
 <td>string</td>
 <td><strong>예</strong></td>
@@ -962,8 +995,22 @@ PUT /v1/plcs/batch
 }
 ```
 
+### Program ID 매핑/해제
+
+`program_id` 필드를 사용하여 Program 매핑을 변경하거나 해제할 수 있습니다:
+
+- **Program 매핑**: `program_id`에 실제 Program ID 값을 전달
+- **매핑 해제**: `program_id`에 빈 문자열(`""`)을 전달하면 `null`로 설정되어 매핑이 해제됩니다
+- **변경하지 않음**: `program_id` 필드를 생략하거나 `null`을 전달하면 기존 값이 유지됩니다
+
+**주의사항:**
+- 빈 문자열(`""`)을 전달하면 외래키 제약 위반 없이 안전하게 `null`로 변환됩니다
+- `program_id`는 `unique` 제약이 있으므로, 다른 PLC가 이미 사용 중인 Program ID는 매핑할 수 없습니다
+- Program ID가 존재하지 않으면 에러가 발생합니다
+
 ### 사용 예시
 
+#### 기본 수정 (Program ID 변경 없음)
 ```bash
 curl -X PUT "http://localhost:8000/v1/plcs/batch" \
   -H "Content-Type: application/json" \
@@ -977,6 +1024,40 @@ curl -X PUT "http://localhost:8000/v1/plcs/batch" \
         "plc_name": "01_01_CELL_FABRICATOR_UPDATED",
         "unit": "1",
         "plc_id": "M1CFB01000",
+        "update_user": "admin"
+      }
+    ]
+  }'
+```
+
+#### Program ID 매핑
+```bash
+curl -X PUT "http://localhost:8000/v1/plcs/batch" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "items": [
+      {
+        "plc_uuid": "plc-uuid-001",
+        "plc_name": "01_01_CELL_FABRICATOR",
+        "plc_id": "M1CFB01000",
+        "program_id": "pgm_001",
+        "update_user": "admin"
+      }
+    ]
+  }'
+```
+
+#### Program ID 매핑 해제 (null로 설정)
+```bash
+curl -X PUT "http://localhost:8000/v1/plcs/batch" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "items": [
+      {
+        "plc_uuid": "plc-uuid-001",
+        "plc_name": "01_01_CELL_FABRICATOR",
+        "plc_id": "M1CFB01000",
+        "program_id": "",
         "update_user": "admin"
       }
     ]
@@ -1011,10 +1092,11 @@ curl -X PUT "http://localhost:8000/v1/plcs/batch" \
 
 1. **소프트 삭제**: PLC 삭제는 실제 데이터를 삭제하지 않고 `is_deleted=True`로 설정합니다. `is_deleted=false`인 것은 사용 중으로 인식됩니다.
 2. **매핑 해제**: PLC 삭제 시 매핑된 `program_id`도 함께 제거됩니다.
-3. **권한 기반 필터링**: 매핑 화면용 드롭다운 API는 `user_id`가 필수이며, 사용자 권한에 따라 공정 목록이 필터링됩니다.
-4. **다건 저장/수정**: 저장과 수정은 별도의 API로 분리되어 있습니다. `POST /v1/plcs/batch`는 생성만, `PUT /v1/plcs/batch`는 수정만 처리합니다.
-5. **페이지네이션**: 기본값은 `page=1`, `page_size=10`입니다. 모든 데이터를 가져오려면 `page_size=10000`을 사용하세요.
-6. **검색**: `plc_id`, `plc_name`, `program_name`은 부분 일치 검색을 지원합니다.
-7. **조회 필터링**: 모든 PLC 조회 API는 `is_deleted=false`인 것만 반환합니다.
-8. **단일/일괄 삭제**: 삭제 API는 `plc_uuids` 배열에 1개만 넣으면 단일 삭제, 여러 개를 넣으면 일괄 삭제로 동작합니다.
+3. **Program ID 매핑 해제**: `PUT /v1/plcs/batch` API에서 `program_id`에 빈 문자열(`""`)을 전달하면 외래키 제약 위반 없이 안전하게 `null`로 설정되어 매핑이 해제됩니다. 빈 문자열을 직접 전달하면 자동으로 `None`으로 변환됩니다.
+4. **권한 기반 필터링**: 매핑 화면용 드롭다운 API는 `user_id`가 필수이며, 사용자 권한에 따라 공정 목록이 필터링됩니다.
+5. **다건 저장/수정**: 저장과 수정은 별도의 API로 분리되어 있습니다. `POST /v1/plcs/batch`는 생성만, `PUT /v1/plcs/batch`는 수정만 처리합니다.
+6. **페이지네이션**: 기본값은 `page=1`, `page_size=10`입니다. 페이지네이션 없이 모든 데이터를 한 번에 가져오려면 `page_size=10000`을 사용하세요 (최대값: 10000).
+7. **검색**: `plc_id`, `plc_name`, `program_name`은 부분 일치 검색을 지원합니다.
+8. **조회 필터링**: 모든 PLC 조회 API는 `is_deleted=false`인 것만 반환합니다.
+9. **단일/일괄 삭제**: 삭제 API는 `plc_uuids` 배열에 1개만 넣으면 단일 삭제, 여러 개를 넣으면 일괄 삭제로 동작합니다.
 

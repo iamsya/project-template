@@ -245,7 +245,7 @@ GET /v1/programs
 <td>integer</td>
 <td>아니오</td>
 <td>10</td>
-<td>페이지당 항목 수 (최소: 1, 최대: 100)</td>
+<td>페이지당 항목 수 (최소: 1, 최대: 10000, 페이지네이션 없이 모든 데이터를 가져오려면 10000 사용)</td>
 </tr>
 <tr>
 <td><code>sort_by</code></td>
@@ -306,10 +306,35 @@ GET /v1/programs
 }
 ```
 
-### 사용 예시
+### 페이지네이션 비활성화 (모든 데이터 조회)
+
+페이지네이션 없이 모든 데이터를 한 번에 가져오려면 `page_size=10000`을 사용하세요:
 
 ```
+GET /v1/programs?user_id=user001&page=1&page_size=10000
+```
+
+**주의사항:**
+- `page_size`의 최대값은 10000입니다
+- 데이터가 10000개를 초과하는 경우 여러 번 호출해야 합니다
+- 성능을 고려하여 필요한 경우에만 사용하세요
+
+### 사용 예시
+
+#### 페이지네이션 사용 (기본)
+```
 GET /v1/programs?user_id=user001&page=1&page_size=10
+GET /v1/programs?user_id=user001&page=2&page_size=20
+```
+
+#### 페이지네이션 없이 모든 데이터 조회
+```
+GET /v1/programs?user_id=user001&page=1&page_size=10000
+GET /v1/programs?user_id=user001&process_id=process001&page=1&page_size=10000
+```
+
+#### 필터링 및 검색
+```
 GET /v1/programs?user_id=user001&process_id=process001&status=completed
 GET /v1/programs?user_id=user001&program_name=라벨부착&sort_by=create_dt&sort_order=desc
 ```
@@ -473,22 +498,84 @@ GET /v1/programs/processes
   "processes": [
     {
       "process_id": "process_001",
-      "process_name": "모듈",
-      "process_code": "MODULE"
+      "process_name": "모듈"
     },
     {
       "process_id": "process_002",
-      "process_name": "전극",
-      "process_code": "ELECTRODE"
+      "process_name": "전극"
     }
   ]
 }
 ```
 
+### 응답 필드
+
+<table>
+<thead>
+<tr>
+<th>필드</th>
+<th>타입</th>
+<th>설명</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>processes</code></td>
+<td>array</td>
+<td>접근 가능한 공정 목록 (권한이 없으면 빈 배열)</td>
+</tr>
+<tr>
+<td><code>processes[].process_id</code></td>
+<td>string</td>
+<td>공정 ID</td>
+</tr>
+<tr>
+<td><code>processes[].process_name</code></td>
+<td>string</td>
+<td>공정명</td>
+</tr>
+</tbody>
+</table>
+
 ### 사용 예시
 
+```bash
+curl -X GET "http://localhost:8000/v1/programs/processes?user_id=user001"
 ```
-GET /v1/programs/processes?user_id=user001
+
+### 에러 응답
+
+```json
+{
+  "status": "error",
+  "code": "ERROR_CODE",
+  "message": "에러 메시지",
+  "detail": "상세 에러 정보"
+}
+```
+
+### 주요 에러 코드
+
+- `DATABASE_QUERY_ERROR`: 데이터베이스 쿼리 오류
+- `VALIDATION_ERROR`: 입력값 검증 오류
+
+### 프론트엔드 사용 예시
+
+```javascript
+// 접근 가능한 공정 목록 조회
+async function getAccessibleProcesses(userId) {
+  const response = await fetch(`/v1/programs/processes?user_id=${userId}`);
+  const data = await response.json();
+  
+  // 드롭다운에 공정 목록 추가
+  const processSelect = document.getElementById('processSelect');
+  data.processes.forEach(process => {
+    const option = document.createElement('option');
+    option.value = process.process_id;
+    option.textContent = process.process_name;
+    processSelect.appendChild(option);
+  });
+}
 ```
 
 ---
@@ -606,10 +693,23 @@ GET /v1/programs/mapping
 <td>integer</td>
 <td>아니오</td>
 <td>10</td>
-<td>페이지당 항목 수</td>
+<td>페이지당 항목 수 (최소: 1, 최대: 10000, 페이지네이션 없이 모든 데이터를 가져오려면 10000 사용)</td>
 </tr>
 </tbody>
 </table>
+
+### 페이지네이션 비활성화 (모든 데이터 조회)
+
+페이지네이션 없이 모든 데이터를 한 번에 가져오려면 `page_size=10000`을 사용하세요:
+
+```
+GET /v1/programs/mapping?page=1&page_size=10000
+```
+
+**주의사항:**
+- `page_size`의 최대값은 10000입니다
+- 데이터가 10000개를 초과하는 경우 여러 번 호출해야 합니다
+- 성능을 고려하여 필요한 경우에만 사용하세요
 
 ### 응답 형식
 
@@ -634,8 +734,20 @@ GET /v1/programs/mapping
 
 ### 사용 예시
 
+#### 페이지네이션 사용 (기본)
 ```
 GET /v1/programs/mapping?page=1&page_size=10
+GET /v1/programs/mapping?page=2&page_size=20
+```
+
+#### 페이지네이션 없이 모든 데이터 조회
+```
+GET /v1/programs/mapping?page=1&page_size=10000
+GET /v1/programs/mapping?program_name=라벨부착&page=1&page_size=10000
+```
+
+#### 검색
+```
 GET /v1/programs/mapping?program_name=라벨부착
 ```
 
@@ -1070,7 +1182,7 @@ DELETE /v1/programs?program_ids=PGM_000001&program_ids=PGM_000002&program_ids=PG
 ## 참고사항
 
 1. **권한 기반 필터링**: 목록 조회 API는 `user_id`가 필수이며, 사용자 권한에 따라 결과가 필터링됩니다.
-2. **페이지네이션**: 기본값은 `page=1`, `page_size=10`입니다.
+2. **페이지네이션**: 기본값은 `page=1`, `page_size=10`입니다. 페이지네이션 없이 모든 데이터를 한 번에 가져오려면 `page_size=10000`을 사용하세요 (최대값: 10000).
 3. **검색**: `program_id`, `program_name`은 부분 일치 검색을 지원합니다.
 4. **정렬**: 정렬 기준과 정렬 순서를 조합하여 사용할 수 있습니다.
 5. **파일 다운로드**: 상세 조회 API에서 `files` 배열의 `download_file_type`을 사용하여 다운로드 링크를 생성합니다.

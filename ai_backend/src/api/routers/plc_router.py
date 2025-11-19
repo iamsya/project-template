@@ -759,6 +759,7 @@ def batch_update_plcs(
                     plant_id=item.plant_id,
                     process_id=item.process_id,
                     line_id=item.line_id,
+                    program_id=item.program_id,
                 )
                 if updated_plc:
                     updated_count += 1

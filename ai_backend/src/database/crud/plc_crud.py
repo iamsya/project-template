@@ -473,6 +473,7 @@ class PLCCRUD:
         process_id: Optional[str] = None,
         line_id: Optional[str] = None,
         unit: Optional[str] = None,
+        program_id: Optional[str] = None,
     ) -> Optional[PLC]:
         """
         PLC 수정
@@ -486,6 +487,7 @@ class PLCCRUD:
             process_id: Process ID (선택)
             line_id: Line ID (선택)
             unit: 호기 (선택)
+            program_id: Program ID (선택, None이면 매핑 해제)
             
         Returns:
             Optional[PLC]: 수정된 PLC 객체 (없으면 None)
@@ -504,6 +506,30 @@ class PLCCRUD:
                         msg=f"PLC ID '{plc_id}'가 이미 존재합니다."
                     )
             
+            # program_id 유효성 검사 (None이 아니고 실제 값이 있는 경우)
+            if program_id is not None and program_id != "":
+                from src.database.crud.program_crud import ProgramCRUD
+                program_crud = ProgramCRUD(self.db)
+                program = program_crud.get_program(program_id)
+                if not program:
+                    raise HandledException(
+                        ResponseCode.VALIDATION_ERROR,
+                        msg=f"Program ID '{program_id}'를 찾을 수 없습니다."
+                    )
+                # 다른 PLC가 이미 이 program_id를 사용하는지 확인
+                existing_plc_with_program = (
+                    self.db.query(PLC)
+                    .filter(PLC.program_id == program_id)
+                    .filter(PLC.plc_uuid != plc_uuid)
+                    .filter(PLC.is_deleted.is_(False))
+                    .first()
+                )
+                if existing_plc_with_program:
+                    raise HandledException(
+                        ResponseCode.VALIDATION_ERROR,
+                        msg=f"Program ID '{program_id}'는 이미 다른 PLC에 매핑되어 있습니다."
+                    )
+            
             # 필드 업데이트
             plc.plc_name = plc_name
             plc.plc_id = plc_id
@@ -518,6 +544,27 @@ class PLCCRUD:
                 plc.line_id = line_id
             if unit is not None:
                 plc.unit = unit
+            
+            # program_id 업데이트
+            # - program_id가 None이면 변경하지 않음 (기존 값 유지)
+            # - program_id가 빈 문자열("")이면 매핑 해제 (None으로 설정)
+            # - program_id가 실제 값이면 Program 매핑
+            if program_id is not None:
+                if program_id == "":
+                    # 빈 문자열은 None으로 변환 (외래키 제약 위반 방지)
+                    plc.program_id = None
+                    plc.mapping_dt = None
+                    plc.mapping_user = None
+                else:
+                    # 이전 program_id 저장 (변경 이력용)
+                    if plc.program_id and plc.program_id != program_id:
+                        metadata = plc.metadata_json or {}
+                        metadata["previous_program_id"] = plc.program_id
+                        plc.metadata_json = metadata
+                    
+                    plc.program_id = program_id
+                    plc.mapping_dt = datetime.now()
+                    plc.mapping_user = update_user
             
             self.db.commit()
             self.db.refresh(plc)
