@@ -341,6 +341,9 @@ class PLCBatchUpdateItem(BaseModel):
     """PLC 다건 수정 항목 (수정용)"""
 
     plc_uuid: str = Field(..., description="PLC UUID (필수)")
+    plant_id: Optional[str] = Field(None, description="Plant ID")
+    process_id: Optional[str] = Field(None, description="공정 ID")
+    line_id: Optional[str] = Field(None, description="Line ID")
     plc_name: str = Field(..., description="PLC명")
     unit: Optional[str] = Field(None, description="호기")
     plc_id: str = Field(..., description="PLC ID")

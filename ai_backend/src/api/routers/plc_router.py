@@ -683,7 +683,7 @@ def batch_create_plcs(
     
     **요청 파라미터:**
     - `items`: 수정할 PLC 목록
-      - 각 항목: `plc_uuid` (필수), `plc_name`, `unit`, `plc_id`, `update_user`
+      - 각 항목: `plc_uuid` (필수), `plant_id` (선택), `process_id` (선택), `line_id` (선택), `plc_name`, `unit`, `plc_id`, `update_user`
     
     **응답:**
     - 성공 시: `message="PLC가 수정되었습니다."`
@@ -705,6 +705,15 @@ def batch_update_plcs(
     """
     try:
         plc_crud = PLCCRUD(db)
+        from src.database.crud.master_crud import (
+            LineMasterCRUD,
+            PlantMasterCRUD,
+            ProcessMasterCRUD,
+        )
+
+        plant_crud = PlantMasterCRUD(db)
+        process_crud = ProcessMasterCRUD(db)
+        line_crud = LineMasterCRUD(db)
 
         updated_count = 0
         failed_count = 0
@@ -712,6 +721,34 @@ def batch_update_plcs(
 
         for item in request.items:
             try:
+                # 마스터 데이터 유효성 검사 (plant_id, process_id, line_id가 제공된 경우)
+                if item.plant_id:
+                    plant = plant_crud.get_plant(item.plant_id)
+                    if not plant:
+                        errors.append(
+                            f"PLC UUID {item.plc_uuid}: 존재하지 않는 Plant ID입니다"
+                        )
+                        failed_count += 1
+                        continue
+
+                if item.process_id:
+                    process = process_crud.get_process(item.process_id)
+                    if not process:
+                        errors.append(
+                            f"PLC UUID {item.plc_uuid}: 존재하지 않는 공정 ID입니다"
+                        )
+                        failed_count += 1
+                        continue
+
+                if item.line_id:
+                    line = line_crud.get_line(item.line_id)
+                    if not line:
+                        errors.append(
+                            f"PLC UUID {item.plc_uuid}: 존재하지 않는 Line ID입니다"
+                        )
+                        failed_count += 1
+                        continue
+
                 # PLC 수정
                 updated_plc = plc_crud.update_plc(
                     plc_uuid=item.plc_uuid,
@@ -719,6 +756,9 @@ def batch_update_plcs(
                     unit=item.unit,
                     plc_id=item.plc_id,
                     update_user=item.update_user,
+                    plant_id=item.plant_id,
+                    process_id=item.process_id,
+                    line_id=item.line_id,
                 )
                 if updated_plc:
                     updated_count += 1
@@ -728,6 +768,10 @@ def batch_update_plcs(
                     )
                     failed_count += 1
 
+            except HandledException as e:
+                error_msg = f"PLC UUID {item.plc_uuid}: {e.msg or str(e)}"
+                errors.append(error_msg)
+                failed_count += 1
             except Exception as e:
                 errors.append(f"PLC UUID {item.plc_uuid}: {str(e)}")
                 failed_count += 1

@@ -845,6 +845,9 @@ PUT /v1/plcs/batch
   "items": [
     {
       "plc_uuid": "plc-uuid-001",
+      "plant_id": "KY1",
+      "process_id": "process_001",
+      "line_id": "line_001",
       "plc_name": "01_01_CELL_FABRICATOR_UPDATED",
       "unit": "1",
       "plc_id": "M1CFB01000",
@@ -852,6 +855,9 @@ PUT /v1/plcs/batch
     },
     {
       "plc_uuid": "plc-uuid-002",
+      "plant_id": "KY1",
+      "process_id": "process_002",
+      "line_id": "line_002",
       "plc_name": "01_02_CELL_FABRICATOR_UPDATED",
       "unit": "2",
       "plc_id": "M1CFB02000",
@@ -884,6 +890,24 @@ PUT /v1/plcs/batch
 <td>string</td>
 <td><strong>예</strong></td>
 <td>PLC UUID (필수)</td>
+</tr>
+<tr>
+<td><code>items[].plant_id</code></td>
+<td>string</td>
+<td>아니오</td>
+<td>Plant ID (변경 시)</td>
+</tr>
+<tr>
+<td><code>items[].process_id</code></td>
+<td>string</td>
+<td>아니오</td>
+<td>공정 ID (변경 시)</td>
+</tr>
+<tr>
+<td><code>items[].line_id</code></td>
+<td>string</td>
+<td>아니오</td>
+<td>Line ID (변경 시)</td>
 </tr>
 <tr>
 <td><code>items[].plc_name</code></td>
@@ -947,6 +971,9 @@ curl -X PUT "http://localhost:8000/v1/plcs/batch" \
     "items": [
       {
         "plc_uuid": "plc-uuid-001",
+        "plant_id": "KY1",
+        "process_id": "process_001",
+        "line_id": "line_001",
         "plc_name": "01_01_CELL_FABRICATOR_UPDATED",
         "unit": "1",
         "plc_id": "M1CFB01000",

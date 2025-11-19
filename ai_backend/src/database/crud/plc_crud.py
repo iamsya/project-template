@@ -463,6 +463,75 @@ class PLCCRUD:
             logger.error(f"PLC Program 매핑 저장 실패: {str(e)}")
             raise HandledException(ResponseCode.DATABASE_QUERY_ERROR, e=e)
 
+    def update_plc(
+        self,
+        plc_uuid: str,
+        plc_name: str,
+        plc_id: str,
+        update_user: str,
+        plant_id: Optional[str] = None,
+        process_id: Optional[str] = None,
+        line_id: Optional[str] = None,
+        unit: Optional[str] = None,
+    ) -> Optional[PLC]:
+        """
+        PLC 수정
+        
+        Args:
+            plc_uuid: PLC UUID (필수)
+            plc_name: PLC명
+            plc_id: PLC ID
+            update_user: 수정 사용자
+            plant_id: Plant ID (선택)
+            process_id: Process ID (선택)
+            line_id: Line ID (선택)
+            unit: 호기 (선택)
+            
+        Returns:
+            Optional[PLC]: 수정된 PLC 객체 (없으면 None)
+        """
+        try:
+            plc = self.get_plc_by_uuid(plc_uuid)
+            if not plc:
+                return None
+            
+            # PLC ID 중복 확인 (다른 PLC가 같은 plc_id를 사용하는지)
+            if plc_id != plc.plc_id:
+                existing_plc = self.get_plc_by_plc_id(plc_id)
+                if existing_plc:
+                    raise HandledException(
+                        ResponseCode.VALIDATION_ERROR,
+                        msg=f"PLC ID '{plc_id}'가 이미 존재합니다."
+                    )
+            
+            # 필드 업데이트
+            plc.plc_name = plc_name
+            plc.plc_id = plc_id
+            plc.update_dt = datetime.now()
+            plc.update_user = update_user
+            
+            if plant_id is not None:
+                plc.plant_id = plant_id
+            if process_id is not None:
+                plc.process_id = process_id
+            if line_id is not None:
+                plc.line_id = line_id
+            if unit is not None:
+                plc.unit = unit
+            
+            self.db.commit()
+            self.db.refresh(plc)
+            
+            logger.info(f"PLC {plc_uuid} 수정 완료")
+            return plc
+            
+        except HandledException:
+            raise
+        except Exception as e:
+            self.db.rollback()
+            logger.error(f"PLC 수정 실패: {str(e)}")
+            raise HandledException(ResponseCode.DATABASE_QUERY_ERROR, e=e)
+
     def delete_plc(self, plc_uuid: str, delete_user: str) -> bool:
         """
         PLC 삭제 (소프트 삭제)
