@@ -33,12 +33,6 @@ from src.types.response.program_response import (
     RegisterProgramResponse,
     ProgramListItem,
     ProgramListResponse,
-    ProcessDropdownItem,
-    ProcessDropdownResponse,
-)
-from src.types.response.plc_response import (
-    ProgramMappingItem,
-    ProgramMappingListResponse,
 )
 
 logger = logging.getLogger(__name__)
@@ -321,10 +315,12 @@ async def register_program(
     - `create_user`: 작성자로 필터링
     
     **권한 기반 필터링:**
-    - `user_id`: 사용자 ID (필수)
-    - 첫 호출 시 사용자의 권한 그룹에 따라 접근 가능한 공정의 PGM만 조회
-    - super 권한 그룹: 모든 공정의 PGM 조회 가능
-    - plc 권한 그룹: 지정된 공정의 PGM만 조회 가능
+    - `user_id`: 사용자 ID (선택사항)
+    - `user_id`가 제공된 경우: 사용자의 권한 그룹에 따라 접근 가능한 공정의 PGM만 조회
+      - super 권한 그룹: 모든 공정의 PGM 조회 가능
+      - plc 권한 그룹: 지정된 공정의 PGM만 조회 가능
+      - 권한이 없으면 빈 결과 반환
+    - `user_id`가 없는 경우: 모든 프로그램 조회 (권한 필터링 없음)
     
     **페이지네이션:**
     - `page`: 페이지 번호 (기본값: 1, 최소: 1)
@@ -345,7 +341,8 @@ async def register_program(
     - 전체 개수 및 페이지 정보
     
     **사용 예시:**
-    - 전체 목록: `GET /v1/programs?user_id=user001&page=1&page_size=10`
+    - 전체 목록 (권한 필터링): `GET /v1/programs?user_id=user001&page=1&page_size=10`
+    - 전체 목록 (권한 필터링 없음): `GET /v1/programs?page=1&page_size=10`
     - 공정별 필터링: `GET /v1/programs?user_id=user001&process_id=process001`
     - PGM ID 검색: `GET /v1/programs?user_id=user001&program_id=PGM_000001`
     - PGM Name 검색: `GET /v1/programs?user_id=user001&program_name=라벨부착`
@@ -353,7 +350,8 @@ async def register_program(
     - 복합 검색 및 정렬: `GET /v1/programs?user_id=user001&process_id=process001&program_name=라벨부착&status=completed&sort_by=create_dt&sort_order=desc&page=1&page_size=20`
     
     **주의사항:**
-    - `user_id`는 필수 파라미터입니다. 권한 기반 필터링에 사용됩니다.
+    - `user_id`가 제공되면 권한 기반 필터링이 적용됩니다
+    - `user_id`가 없으면 모든 프로그램을 조회합니다 (권한 필터링 없음)
     """,
 )
 def get_program_list(
@@ -364,7 +362,7 @@ def get_program_list(
         None, description="등록 상태로 필터링 (preparing, uploading, processing, embedding, completed, failed, indexing_failed)", alias="status", example="completed"
     ),
     create_user: Optional[str] = Query(None, description="작성자로 필터링", example="user001"),
-    user_id: str = Query(..., description="사용자 ID (권한 기반 필터링용)", example="user001"),
+    user_id: Optional[str] = Query(None, description="사용자 ID (권한 기반 필터링용, 선택사항)", example="user001"),
     page: int = Query(1, ge=1, description="페이지 번호", example=1),
     page_size: int = Query(10, ge=1, le=10000, description="페이지당 항목 수 (페이지네이션 없이 모든 데이터를 가져오려면 큰 값 사용, 예: 10000)", example=10),
     sort_by: str = Query(
@@ -381,7 +379,7 @@ def get_program_list(
     화면: PLC-PGM 매핑 화면, PGM 등록 화면의 프로그램 목록 테이블
     - PGM ID, 제목으로 검색
     - 공정, 등록 상태, 작성자로 필터링
-    - 사용자 권한 기반 필터링 (user_id 필수)
+    - 사용자 권한 기반 필터링 (user_id 선택사항)
     - 페이지네이션 및 정렬 지원
     """
     try:
@@ -534,162 +532,6 @@ def get_program_list(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"프로그램 목록 조회 중 오류가 발생했습니다: {str(e)}",
         ) from e
-
-
-@router.get(
-    "/processes",
-    response_model=ProcessDropdownResponse,
-    summary="접근 가능한 공정 목록 조회 (드롭다운용)",
-    description="""
-    사용자 권한에 따라 접근 가능한 공정 목록을 조회합니다.
-    
-    **화면 용도:** PGM 등록 화면의 공정 드롭다운 필터
-    
-    **권한 기반 필터링:**
-    - `user_id`: 사용자 ID (필수)
-    - super 권한 그룹: 모든 활성 공정 반환
-    - plc 권한 그룹: 지정된 공정만 반환
-    - 권한이 없으면 빈 배열 반환
-    
-    **응답:**
-    - `processes`: 접근 가능한 공정 목록
-      - 각 항목: `process_id`, `process_name`
-      - `process_name` 순으로 정렬 (기본값)
-    
-    **사용 예시:**
-    ```
-           GET /v1/programs/processes?user_id=user001
-    ```
-    
-    **응답 예시:**
-    ```json
-    {
-      "processes": [
-        {
-          "process_id": "process_001",
-          "process_name": "모듈"
-        },
-        {
-          "process_id": "process_002",
-          "process_name": "전극"
-        }
-      ]
-    }
-    ```
-    
-    **권한이 없는 경우:**
-    ```json
-    {
-      "processes": []
-    }
-    ```
-    """,
-)
-def get_accessible_processes(
-    user_id: str = Query(..., description="사용자 ID (권한 기반 필터링용)", example="user001"),
-    db: Session = Depends(get_db),
-):
-    """
-    접근 가능한 공정 목록 조회 (드롭다운용)
-    
-    사용자 권한에 따라 접근 가능한 공정만 반환합니다.
-    권한이 없으면 빈 배열을 반환합니다.
-    """
-    try:
-        program_crud = ProgramCRUD(db)
-        processes = program_crud.get_accessible_processes(user_id)
-        
-        # ProcessDropdownItem으로 변환
-        items = [
-            ProcessDropdownItem(
-                process_id=p.process_id,
-                process_name=p.process_name,
-            )
-            for p in processes
-        ]
-        
-        return ProcessDropdownResponse(processes=items)
-    except Exception as e:
-        logger.error("접근 가능한 공정 목록 조회 실패: %s", str(e))
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"공정 목록 조회 중 오류가 발생했습니다: {str(e)}",
-        ) from e
-
-
-@router.get("/mapping", response_model=ProgramMappingListResponse)
-def get_program_list_for_mapping(
-    program_id: Optional[str] = Query(None, description="PGM ID로 검색"),
-    program_name: Optional[str] = Query(None, description="제목으로 검색"),
-    page: int = Query(1, ge=1, description="페이지 번호"),
-    page_size: int = Query(10, ge=1, le=10000, description="페이지당 항목 수 (페이지네이션 없이 모든 데이터를 가져오려면 큰 값 사용, 예: 10000)"),
-    db: Session = Depends(get_db),
-):
-    """
-    PGM 프로그램 목록 조회 (매핑용)
-
-    화면: PLC 관리 화면의 PGM 프로그램 테이블
-    - PGM ID, 제목으로 검색
-    - Ladder 파일 개수, Comment 파일 개수 표시
-    - 등록자(등록일시) 표시
-    - 간단한 정보만 반환 (매핑 선택용)
-    """
-    try:
-        program_crud = ProgramCRUD(db)
-        programs, total_count = program_crud.get_programs(
-            program_id=program_id,
-            program_name=program_name,
-            status=None,  # 매핑용이므로 상태 필터링 없음
-            create_user=None,
-            page=page,
-            page_size=page_size,
-            sort_by="create_dt",
-            sort_order="desc",
-        )
-
-        items = []
-        for program in programs:
-            # metadata_json에서 파일 개수 추출
-            metadata = program.metadata_json or {}
-            ladder_file_count = metadata.get("ladder_file_count", 0)
-            comment_file_count = metadata.get("comment_file_count", 1)
-
-            items.append(
-                ProgramMappingItem(
-                    program_id=program.program_id,
-                    program_name=program.program_name,
-                    ladder_file_count=ladder_file_count,
-                    comment_file_count=comment_file_count,
-                    create_user=program.create_user,
-                    create_dt=program.create_dt,
-                )
-            )
-
-        total_pages = (total_count + page_size - 1) // page_size
-
-        return ProgramMappingListResponse(
-            items=items,
-            total_count=total_count,
-            page=page,
-            page_size=page_size,
-            total_pages=total_pages,
-        )
-    except Exception as e:
-        logger.error("PGM 프로그램 목록 조회 실패 (매핑용): %s", str(e))
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"PGM 프로그램 목록 조회 중 오류가 발생했습니다: {str(e)}",
-        ) from e
-
-
-@router.get("/user/{user_id}", response_model=List[ProgramInfo])
-async def get_user_programs(
-    user_id: str,
-    program_service: ProgramService = Depends(get_program_service),
-):
-    """사용자의 프로그램 목록 조회 (기존 API 유지)"""
-    programs = await program_service.get_user_programs(user_id)
-    return [ProgramInfo(**p) for p in programs]
 
 
 @router.get(

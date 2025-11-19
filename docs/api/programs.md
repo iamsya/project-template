@@ -9,13 +9,11 @@ Programs 라우터의 모든 API 엔드포인트 가이드입니다.
 3. [프로그램 상세 조회](#3-프로그램-상세-조회)
 4. [접근 가능한 공정 목록 조회](#4-접근-가능한-공정-목록-조회)
 5. [프로그램 파일 다운로드](#5-프로그램-파일-다운로드)
-6. [매핑용 프로그램 목록 조회](#6-매핑용-프로그램-목록-조회)
-7. [사용자별 프로그램 목록 조회](#7-사용자별-프로그램-목록-조회)
-8. [실패 파일 재시도](#8-실패-파일-재시도)
-9. [실패 정보 조회](#9-실패-정보-조회)
-10. [Knowledge 상태 동기화](#10-knowledge-상태-동기화)
-11. [Knowledge 상태 조회](#11-knowledge-상태-조회)
-12. [프로그램 일괄 삭제](#12-프로그램-일괄-삭제)
+6. [실패 파일 재시도](#6-실패-파일-재시도)
+7. [실패 정보 조회](#7-실패-정보-조회)
+8. [Knowledge 상태 동기화](#8-knowledge-상태-동기화)
+9. [Knowledge 상태 조회](#9-knowledge-상태-조회)
+10. [프로그램 일괄 삭제](#10-프로그램-일괄-삭제)
 
 ---
 
@@ -194,9 +192,9 @@ GET /v1/programs
 <tr>
 <td><code>user_id</code></td>
 <td>string</td>
-<td><strong>예</strong></td>
+<td>아니오</td>
 <td>-</td>
-<td>사용자 ID (권한 기반 필터링용)</td>
+<td>사용자 ID (권한 기반 필터링용, 선택사항)</td>
 </tr>
 <tr>
 <td><code>program_id</code></td>
@@ -276,10 +274,12 @@ GET /v1/programs
 
 ### 권한 기반 필터링
 
-- `user_id`는 필수 파라미터입니다
-- 사용자의 권한 그룹에 따라 접근 가능한 공정의 PGM만 조회됩니다
+- `user_id`는 선택사항입니다
+- `user_id`가 제공된 경우: 사용자의 권한 그룹에 따라 접근 가능한 공정의 PGM만 조회됩니다
   - **super 권한 그룹**: 모든 공정의 PGM 조회 가능
   - **plc 권한 그룹**: 지정된 공정의 PGM만 조회 가능
+  - **권한이 없으면**: 빈 결과 반환
+- `user_id`가 없는 경우: 모든 프로그램 조회 (권한 필터링 없음)
 
 ### 응답 형식
 
@@ -323,21 +323,52 @@ GET /v1/programs?user_id=user001&page=1&page_size=10000
 
 #### 페이지네이션 사용 (기본)
 ```
+# 권한 필터링 적용
 GET /v1/programs?user_id=user001&page=1&page_size=10
 GET /v1/programs?user_id=user001&page=2&page_size=20
+
+# 권한 필터링 없음 (모든 프로그램 조회)
+GET /v1/programs?page=1&page_size=10
+GET /v1/programs?page=2&page_size=20
 ```
 
 #### 페이지네이션 없이 모든 데이터 조회
 ```
+# 권한 필터링 적용
 GET /v1/programs?user_id=user001&page=1&page_size=10000
 GET /v1/programs?user_id=user001&process_id=process001&page=1&page_size=10000
+
+# 권한 필터링 없음
+GET /v1/programs?page=1&page_size=10000
+GET /v1/programs?process_id=process001&page=1&page_size=10000
 ```
 
 #### 필터링 및 검색
 ```
+# 권한 필터링 적용
 GET /v1/programs?user_id=user001&process_id=process001&status=completed
 GET /v1/programs?user_id=user001&program_name=라벨부착&sort_by=create_dt&sort_order=desc
+GET /v1/programs?user_id=user001&create_user=user001
+
+# 권한 필터링 없음
+GET /v1/programs?process_id=process001&status=completed
+GET /v1/programs?program_name=라벨부착&sort_by=create_dt&sort_order=desc
+GET /v1/programs?create_user=user001
 ```
+
+#### 특정 사용자가 생성한 프로그램 조회
+특정 사용자가 생성한 프로그램만 조회하려면 `create_user` 파라미터를 사용하세요:
+```
+# 권한 필터링 적용
+GET /v1/programs?user_id=user001&create_user=user001&page=1&page_size=10
+
+# 권한 필터링 없음
+GET /v1/programs?create_user=user001&page=1&page_size=10
+```
+
+**참고**: 
+- 기존의 `GET /v1/programs/user/{user_id}` API는 삭제되었으며, 위와 같이 `create_user` 필터를 사용하세요.
+- 기존의 `GET /v1/programs/mapping` API는 삭제되었으며, `user_id` 없이 `/v1/programs`를 사용하세요.
 
 ---
 
@@ -454,133 +485,7 @@ GET /v1/programs/PGM_000001?user_id=user001
 
 ---
 
-## 4. 접근 가능한 공정 목록 조회
-
-사용자 권한에 따라 접근 가능한 공정 목록을 조회합니다 (드롭다운용).
-
-### 엔드포인트
-
-```
-GET /v1/programs/processes
-```
-
-### 쿼리 파라미터
-
-<table>
-<thead>
-<tr>
-<th>파라미터</th>
-<th>타입</th>
-<th>필수</th>
-<th>설명</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>user_id</code></td>
-<td>string</td>
-<td><strong>예</strong></td>
-<td>사용자 ID (권한 기반 필터링용)</td>
-</tr>
-</tbody>
-</table>
-
-### 권한 기반 필터링
-
-- **super 권한 그룹**: 모든 활성 공정 반환
-- **plc 권한 그룹**: 지정된 공정만 반환
-- **권한이 없으면**: 빈 배열 반환
-
-### 응답 형식
-
-```json
-{
-  "processes": [
-    {
-      "process_id": "process_001",
-      "process_name": "모듈"
-    },
-    {
-      "process_id": "process_002",
-      "process_name": "전극"
-    }
-  ]
-}
-```
-
-### 응답 필드
-
-<table>
-<thead>
-<tr>
-<th>필드</th>
-<th>타입</th>
-<th>설명</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>processes</code></td>
-<td>array</td>
-<td>접근 가능한 공정 목록 (권한이 없으면 빈 배열)</td>
-</tr>
-<tr>
-<td><code>processes[].process_id</code></td>
-<td>string</td>
-<td>공정 ID</td>
-</tr>
-<tr>
-<td><code>processes[].process_name</code></td>
-<td>string</td>
-<td>공정명</td>
-</tr>
-</tbody>
-</table>
-
-### 사용 예시
-
-```bash
-curl -X GET "http://localhost:8000/v1/programs/processes?user_id=user001"
-```
-
-### 에러 응답
-
-```json
-{
-  "status": "error",
-  "code": "ERROR_CODE",
-  "message": "에러 메시지",
-  "detail": "상세 에러 정보"
-}
-```
-
-### 주요 에러 코드
-
-- `DATABASE_QUERY_ERROR`: 데이터베이스 쿼리 오류
-- `VALIDATION_ERROR`: 입력값 검증 오류
-
-### 프론트엔드 사용 예시
-
-```javascript
-// 접근 가능한 공정 목록 조회
-async function getAccessibleProcesses(userId) {
-  const response = await fetch(`/v1/programs/processes?user_id=${userId}`);
-  const data = await response.json();
-  
-  // 드롭다운에 공정 목록 추가
-  const processSelect = document.getElementById('processSelect');
-  data.processes.forEach(process => {
-    const option = document.createElement('option');
-    option.value = process.process_id;
-    option.textContent = process.process_name;
-    processSelect.appendChild(option);
-  });
-}
-```
-
----
-
-## 5. 프로그램 파일 다운로드
+## 4. 프로그램 파일 다운로드
 
 S3에 저장된 프로그램 관련 파일을 다운로드합니다.
 
@@ -644,168 +549,7 @@ GET /v1/programs/files/download?file_type=program_comment&program_id=PGM_000001&
 
 ---
 
-## 6. 매핑용 프로그램 목록 조회
-
-PLC-PGM 매핑 화면에서 사용할 프로그램 목록을 조회합니다.
-
-### 엔드포인트
-
-```
-GET /v1/programs/mapping
-```
-
-### 쿼리 파라미터
-
-<table>
-<thead>
-<tr>
-<th>파라미터</th>
-<th>타입</th>
-<th>필수</th>
-<th>기본값</th>
-<th>설명</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>program_id</code></td>
-<td>string</td>
-<td>아니오</td>
-<td>-</td>
-<td>PGM ID로 검색</td>
-</tr>
-<tr>
-<td><code>program_name</code></td>
-<td>string</td>
-<td>아니오</td>
-<td>-</td>
-<td>제목으로 검색</td>
-</tr>
-<tr>
-<td><code>page</code></td>
-<td>integer</td>
-<td>아니오</td>
-<td>1</td>
-<td>페이지 번호</td>
-</tr>
-<tr>
-<td><code>page_size</code></td>
-<td>integer</td>
-<td>아니오</td>
-<td>10</td>
-<td>페이지당 항목 수 (최소: 1, 최대: 10000, 페이지네이션 없이 모든 데이터를 가져오려면 10000 사용)</td>
-</tr>
-</tbody>
-</table>
-
-### 페이지네이션 비활성화 (모든 데이터 조회)
-
-페이지네이션 없이 모든 데이터를 한 번에 가져오려면 `page_size=10000`을 사용하세요:
-
-```
-GET /v1/programs/mapping?page=1&page_size=10000
-```
-
-**주의사항:**
-- `page_size`의 최대값은 10000입니다
-- 데이터가 10000개를 초과하는 경우 여러 번 호출해야 합니다
-- 성능을 고려하여 필요한 경우에만 사용하세요
-
-### 응답 형식
-
-```json
-{
-  "items": [
-    {
-      "program_id": "PGM_000001",
-      "program_name": "라벨부착 공정 PLC",
-      "ladder_file_count": 645,
-      "comment_file_count": 1,
-      "create_user": "정윤석",
-      "create_dt": "2025-10-22T13:00:00"
-    }
-  ],
-  "total_count": 50,
-  "page": 1,
-  "page_size": 10,
-  "total_pages": 5
-}
-```
-
-### 사용 예시
-
-#### 페이지네이션 사용 (기본)
-```
-GET /v1/programs/mapping?page=1&page_size=10
-GET /v1/programs/mapping?page=2&page_size=20
-```
-
-#### 페이지네이션 없이 모든 데이터 조회
-```
-GET /v1/programs/mapping?page=1&page_size=10000
-GET /v1/programs/mapping?program_name=라벨부착&page=1&page_size=10000
-```
-
-#### 검색
-```
-GET /v1/programs/mapping?program_name=라벨부착
-```
-
----
-
-## 7. 사용자별 프로그램 목록 조회
-
-특정 사용자가 생성한 프로그램 목록을 조회합니다.
-
-### 엔드포인트
-
-```
-GET /v1/programs/user/{user_id}
-```
-
-### 경로 파라미터
-
-<table>
-<thead>
-<tr>
-<th>파라미터</th>
-<th>타입</th>
-<th>필수</th>
-<th>설명</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>user_id</code></td>
-<td>string</td>
-<td><strong>예</strong></td>
-<td>사용자 ID</td>
-</tr>
-</tbody>
-</table>
-
-### 응답 형식
-
-```json
-[
-  {
-    "program_id": "PGM_000001",
-    "program_title": "라벨부착 공정 PLC",
-    "status": "completed",
-    ...
-  }
-]
-```
-
-### 사용 예시
-
-```
-GET /v1/programs/user/user001
-```
-
----
-
-## 8. 실패 파일 재시도
+## 6. 실패 파일 재시도
 
 실패한 파일의 전처리 또는 Document 저장을 재시도합니다.
 
@@ -891,7 +635,7 @@ POST /v1/programs/PGM_000001/retry?user_id=user001&retry_type=all
 
 ---
 
-## 9. 실패 정보 조회
+## 8. 실패 정보 조회
 
 프로그램의 실패 정보 목록을 조회합니다.
 
@@ -980,7 +724,7 @@ GET /v1/programs/PGM_000001/failures?user_id=user001&failure_type=preprocessing
 
 ---
 
-## 10. Knowledge 상태 동기화
+## 9. Knowledge 상태 동기화
 
 Program의 Knowledge 상태를 외부 Knowledge API와 동기화합니다.
 
@@ -1029,7 +773,7 @@ POST /v1/programs/PGM_000001/knowledge-status/sync
 
 ---
 
-## 11. Knowledge 상태 조회
+## 10. Knowledge 상태 조회
 
 Program의 Knowledge 상태를 조회합니다.
 
@@ -1093,7 +837,7 @@ GET /v1/programs/PGM_000001/knowledge-status
 
 ---
 
-## 12. 프로그램 일괄 삭제
+## 11. 프로그램 일괄 삭제
 
 여러 프로그램을 일괄 삭제합니다.
 

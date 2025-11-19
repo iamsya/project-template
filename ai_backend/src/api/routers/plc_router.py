@@ -6,11 +6,9 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 from src.core.dependencies import get_db
-from src.database.crud.master_crud import MasterHierarchyCRUD
 from src.database.crud.plc_crud import PLCCRUD
 from src.types.response.exceptions import HandledException
 from src.types.response.plc_response import (
-    MasterDropdownResponse,
     PLCBasicInfo,
     PLCDeleteRequest,
     PLCDeleteResponse,
@@ -23,7 +21,6 @@ from src.types.response.plc_response import (
     PLCBatchCreateResponse,
     PLCBatchUpdateRequest,
     PLCBatchUpdateResponse,
-    SimpleMasterDropdownResponse,
 )
 
 logger = logging.getLogger(__name__)
@@ -321,172 +318,6 @@ def get_plc_tree(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"PLC Tree 조회 중 오류가 발생했습니다: {str(e)}",
-        ) from e
-
-
-@router.get(
-    "/masters/dropdown",
-    response_model=SimpleMasterDropdownResponse,
-    summary="드롭다운용 마스터 데이터 전체 조회",
-    description="""
-    PLC 추가 화면에서 사용할 드롭다운 데이터를 전체 조회합니다.
-    
-    **화면 용도:** PLC 추가 화면의 Plant, 공정, Line 드롭다운
-    
-    **응답 구조:**
-    ```json
-    {
-      "plants": [
-        {"id": "plant_001", "name": "Plant 1"},
-        {"id": "plant_002", "name": "Plant 2"}
-      ],
-      "processes": [
-        {"id": "process_001", "name": "Process 1"},
-        {"id": "process_002", "name": "Process 2"}
-      ],
-      "lines": [
-        {"id": "line_001", "name": "Line 1"},
-        {"id": "line_002", "name": "Line 2"}
-      ]
-    }
-    ```
-    
-    **프론트엔드 사용 예시:**
-    ```javascript
-    // 단순 리스트로 반환 (계층 구조 없음)
-    const plants = response.plants;
-    const processes = response.processes;
-    const lines = response.lines;
-    ```
-    
-    **특징:**
-    - 마스터 테이블에서 활성화된 데이터만 조회 (is_active=true)
-    - 계층 구조 없이 단순 리스트로 반환
-    - 정렬 순서: 이름 순서
-    """,
-)
-def get_masters_for_dropdown(
-    db: Session = Depends(get_db),
-):
-    """
-    드롭다운용 마스터 데이터 전체 조회
-    
-    마스터 테이블에서 활성화된 Plant, 공정, Line을 단순 리스트로 반환합니다.
-    계층 구조가 필요 없는 경우 사용합니다.
-    """
-    try:
-        master_crud = MasterHierarchyCRUD(db)
-        masters = master_crud.get_all_masters_for_dropdown()
-
-        return SimpleMasterDropdownResponse(
-            plants=masters["plants"],
-            processes=masters["processes"],
-            lines=masters["lines"],
-        )
-    except Exception as e:
-        logger.error("드롭다운용 마스터 데이터 조회 실패: %s", str(e))
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"드롭다운용 마스터 데이터 조회 중 오류가 발생했습니다: {str(e)}",
-        ) from e
-
-
-@router.get(
-    "/mapping/dropdown",
-    response_model=MasterDropdownResponse,
-    summary="PLC-PGM 매핑 화면용 드롭다운 데이터 조회",
-    description="""
-    PLC-PGM 매핑 화면에서 사용할 드롭다운 데이터를 조회합니다.
-    
-    **화면 용도:** PLC-PGM 매핑 화면의 Plant, 공정, Line 드롭다운
-    
-    **권한 기반 필터링:**
-    - `user_id`: 사용자 ID (필수)
-    - 사용자가 접근 가능한 Plant, Process, Line만 반환
-    - Process는 사용자 권한에 따라 필터링됩니다
-      - super 권한 그룹: 모든 활성 Process 반환
-      - plc 권한 그룹: 지정된 Process만 반환
-      - 권한이 없으면 Process 목록이 비어있음
-    - 계층 구조 포함 (processesByPlant, linesByProcess)
-    
-    **응답 구조:**
-    ```json
-    {
-      "plants": [
-        {"id": "plant_001", "name": "Plant 1"},
-        {"id": "plant_002", "name": "Plant 2"}
-      ],
-      "processesByPlant": {
-        "plant_001": [
-          {"id": "process_001", "name": "모듈"},
-          {"id": "process_002", "name": "전극"}
-        ],
-        "plant_002": [
-          {"id": "process_003", "name": "조립"}
-        ]
-      },
-      "linesByProcess": {
-        "process_001": [
-          {"id": "line_001", "name": "1라인"},
-          {"id": "line_002", "name": "2라인"}
-        ],
-        "process_002": [
-          {"id": "line_003", "name": "1라인"}
-        ]
-      }
-    }
-    ```
-    
-    **프론트엔드 사용 흐름:**
-    1. API 호출: `GET /v1/plcs/mapping/dropdown?user_id=user001`
-    2. Plant 드롭다운: `response.plants` 사용
-    3. Plant 선택 시: `response.processesByPlant[selectedPlantId]` 사용
-    4. Process 선택 시: `response.linesByProcess[selectedProcessId]` 사용
-    5. Line 선택 후: `GET /v1/plcs?plant_id=xxx&process_id=xxx&line_id=xxx` 호출하여 PLC 목록 조회
-    
-    **사용 예시:**
-    ```
-    GET /v1/plcs/mapping/dropdown?user_id=user001
-    ```
-    """,
-)
-def get_mapping_dropdown(
-    user_id: str = Query(..., description="사용자 ID (권한 기반 필터링용)", example="user001"),
-    db: Session = Depends(get_db),
-):
-    """
-    PLC-PGM 매핑 화면용 드롭다운 데이터 조회
-    
-    사용자 권한에 따라 접근 가능한 공정만 포함하여 반환합니다.
-    """
-    try:
-        # 사용자 권한 기반 접근 가능한 공정 조회
-        from src.database.crud.program_crud import ProgramCRUD
-        
-        program_crud = ProgramCRUD(db)
-        accessible_processes = program_crud.get_accessible_processes(user_id)
-        accessible_process_ids = (
-            [p.process_id for p in accessible_processes]
-            if accessible_processes
-            else None
-        )
-        
-        # 권한 필터링된 마스터 데이터 조회
-        master_crud = MasterHierarchyCRUD(db)
-        masters = master_crud.get_masters_for_mapping_dropdown(
-            accessible_process_ids
-        )
-        
-        return MasterDropdownResponse(
-            plants=masters["plants"],
-            processesByPlant=masters["processesByPlant"],
-            linesByProcess=masters["linesByProcess"],
-        )
-    except Exception as e:
-        logger.error("매핑 화면용 드롭다운 데이터 조회 실패: %s", str(e))
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"드롭다운 데이터 조회 중 오류가 발생했습니다: {str(e)}",
         ) from e
 
 

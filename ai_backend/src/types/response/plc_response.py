@@ -270,6 +270,30 @@ class MasterDropdownResponse(BaseModel):
     )
 
 
+# 공정 목록 조회용 Response 모델
+class ProcessItem(BaseModel):
+    """공정 정보 응답"""
+
+    process_id: str = Field(..., description="공정 ID")
+    process_name: str = Field(..., description="공정명")
+    description: Optional[str] = Field(None, description="공정 설명")
+    is_active: bool = Field(..., description="활성화 여부")
+    create_dt: datetime = Field(..., description="생성일시")
+    create_user: str = Field(..., description="생성 사용자")
+    update_dt: Optional[datetime] = Field(None, description="수정일시")
+    update_user: Optional[str] = Field(None, description="수정 사용자")
+
+    class Config:
+        from_attributes = True
+
+
+class ProcessListResponse(BaseModel):
+    """공정 목록 응답"""
+
+    items: List[ProcessItem] = Field(..., description="공정 목록")
+    total_count: int = Field(..., description="전체 개수")
+
+
 # PLC 생성 Request/Response 모델
 class PLCCreateRequest(BaseModel):
     """PLC 생성 요청"""

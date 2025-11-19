@@ -8,7 +8,6 @@ from .base import Base, Database
 from .models.user_models import *
 from .models.chat_models import *
 from .models.document_models import *
-from .models.group_models import *
 from .models.program_models import *
 from .models.master_models import *
 from .models.plc_models import *
@@ -22,8 +21,6 @@ __all__ = [
     "Chat",
     "ChatMessage",
     "Document",
-    "Group",
-    "GroupMember",
     "Program",
     "PLC",
     "ProcessingFailure",

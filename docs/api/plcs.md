@@ -461,135 +461,7 @@ GET /v1/plcs/tree
 
 ---
 
-## 5. 드롭다운용 마스터 데이터 조회
-
-PLC 추가 화면에서 사용할 드롭다운 데이터를 전체 조회합니다.
-
-### 엔드포인트
-
-```
-GET /v1/plcs/masters/dropdown
-```
-
-### 응답 형식
-
-```json
-{
-  "plants": [
-    {"id": "KY1", "code": "KY1", "name": "BOSK KY1"}
-  ],
-  "processesByPlant": {
-    "KY1": [
-      {"id": "process_001", "code": "MODULE", "name": "모듈"},
-      {"id": "process_002", "code": "ELECTRODE", "name": "전극"}
-    ]
-  },
-  "linesByProcess": {
-    "process_001": [
-      {"id": "line_001", "name": "1라인"},
-      {"id": "line_002", "name": "2라인"}
-    ],
-    "process_002": [
-      {"id": "line_001", "name": "1라인"},
-      {"id": "line_002", "name": "2라인"}
-    ]
-  }
-}
-```
-
-### 프론트엔드 사용 예시
-
-```javascript
-// 1. Plant 드롭다운
-const plants = response.plants;
-
-// 2. Plant 선택 시 Process 드롭다운 필터링
-const selectedPlantId = "KY1";
-const processes = response.processesByPlant[selectedPlantId] || [];
-
-// 3. Process 선택 시 Line 드롭다운 (모든 Process에 동일한 Line 목록 표시)
-const selectedProcessId = "process_001";
-const lines = response.linesByProcess[selectedProcessId] || []; // 모든 Process에 동일한 Line 목록
-```
-
-### 사용 예시
-
-```
-GET /v1/plcs/masters/dropdown
-```
-
----
-
-## 6. 매핑 화면용 드롭다운 데이터 조회
-
-PLC-PGM 매핑 화면에서 사용할 드롭다운 데이터를 조회합니다 (권한 기반 공정 필터링 포함).
-
-### 엔드포인트
-
-```
-GET /v1/plcs/mapping/dropdown
-```
-
-### 쿼리 파라미터
-
-<table>
-<thead>
-<tr>
-<th>파라미터</th>
-<th>타입</th>
-<th>필수</th>
-<th>설명</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>user_id</code></td>
-<td>string</td>
-<td><strong>예</strong></td>
-<td>사용자 ID (권한 기반 필터링용)</td>
-</tr>
-</tbody>
-</table>
-
-### 권한 기반 필터링
-
-- 공정은 사용자 권한에 따라 필터링됩니다
-  - **super 권한 그룹**: 모든 활성 공정 반환
-  - **plc 권한 그룹**: 지정된 공정만 반환
-  - **권한이 없으면**: 공정 목록이 비어있음
-
-### 응답 형식
-
-```json
-{
-  "plants": [
-    {"id": "KY1", "code": "KY1", "name": "BOSK KY1"}
-  ],
-  "processesByPlant": {
-    "KY1": [
-      {"id": "process_001", "code": "MODULE", "name": "모듈"}
-    ]
-  },
-  "linesByProcess": {
-    "process_001": [
-      {"id": "line_001", "name": "1라인"}
-    ],
-    "process_002": [
-      {"id": "line_001", "name": "1라인"}
-    ]
-  }
-}
-```
-
-### 사용 예시
-
-```
-GET /v1/plcs/mapping/dropdown?user_id=user001
-```
-
----
-
-## 7. PLC 삭제
+## 5. PLC 삭제
 
 PLC를 삭제합니다 (소프트 삭제). 단일 또는 여러 PLC를 일괄 삭제할 수 있습니다.
 
@@ -705,7 +577,7 @@ curl -X DELETE "http://localhost:8000/v1/plcs" \
 
 ---
 
-## 8. PLC 다건 저장
+## 6. PLC 다건 저장
 
 여러 PLC를 일괄 생성합니다.
 
@@ -853,7 +725,7 @@ curl -X POST "http://localhost:8000/v1/plcs/batch" \
 
 ---
 
-## 9. PLC 다건 수정
+## 7. PLC 다건 수정
 
 여러 PLC를 일괄 수정합니다.
 

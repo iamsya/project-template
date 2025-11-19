@@ -8,6 +8,7 @@ from sqlalchemy import (
     Boolean,
     Column,
     DateTime,
+    ForeignKey,
     Index,
     JSON,
     String,
@@ -139,5 +140,69 @@ class LineMaster(Base):
         return (
             f"<LineMaster(line_id='{self.line_id}', "
             f"line_name='{self.line_name}')>"
+        )
+
+
+class DropdownMaster(Base):
+    """드롭다운 리스트용 마스터 테이블 (Plant-Process-Line 계층 구조)"""
+
+    __tablename__ = "DROPDOWN_MASTER"
+
+    # 기본 정보
+    dropdown_id = Column("DROPDOWN_ID", String(50), primary_key=True)
+    dropdown_name = Column("DROPDOWN_NAME", String(255), nullable=True)
+    description = Column("DESCRIPTION", Text, nullable=True)
+
+    # 계층 구조 (Plant → Process → Line)
+    plant_id = Column(
+        "PLANT_ID",
+        String(50),
+        ForeignKey("PLANT_MASTER.PLANT_ID"),
+        nullable=True,
+        index=True,
+        comment="Plant ID (계층 구조 1단계)",
+    )
+    process_id = Column(
+        "PROCESS_ID",
+        String(50),
+        ForeignKey("PROCESS_MASTER.PROCESS_ID"),
+        nullable=True,
+        index=True,
+        comment="공정 ID (계층 구조 2단계)",
+    )
+    line_id = Column(
+        "LINE_ID",
+        String(50),
+        ForeignKey("LINE_MASTER.LINE_ID"),
+        nullable=True,
+        index=True,
+        comment="Line ID (계층 구조 3단계)",
+    )
+
+    # 메타데이터
+    metadata_json = Column("METADATA_JSON", JSON, nullable=True)
+
+    # 시간 정보
+    create_dt = Column(
+        "CREATE_DT", DateTime, nullable=False, server_default=func.now()
+    )
+    update_dt = Column(
+        "UPDATE_DT", DateTime, nullable=True, onupdate=func.now()
+    )
+
+    # 인덱스 정의 (조회 성능 향상)
+    __table_args__ = (
+        # 계층 구조 조회 최적화 인덱스
+        Index("idx_dropdown_master_plant", "PLANT_ID"),
+        Index("idx_dropdown_master_process", "PROCESS_ID"),
+        Index("idx_dropdown_master_line", "LINE_ID"),
+    )
+
+    def __repr__(self):
+        return (
+            f"<DropdownMaster(dropdown_id='{self.dropdown_id}', "
+            f"dropdown_name='{self.dropdown_name}', "
+            f"plant_id='{self.plant_id}', process_id='{self.process_id}', "
+            f"line_id='{self.line_id}')>"
         )
 

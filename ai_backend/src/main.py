@@ -9,6 +9,9 @@ from datetime import datetime, timedelta
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.openapi.docs import get_swagger_ui_html
+from pathlib import Path
 from src.config import settings
 from src.core.global_exception_handlers import set_global_exception_handlers
 
@@ -265,55 +268,113 @@ def create_app():
     debug_mode = settings.app_debug
     logger.info("애플리케이션 디버그 모드: {}".format('활성화' if debug_mode else '비활성화'))
     
-    app = FastAPI(
-        title="PLC Interpreter Application Backend",
-        description="""
-        PLC 프로그램 관리 및 AI 채팅 서비스 API
-        
-        ## 주요 기능
-        
-        ### 1. 사용자 관리
-        - 사용자 생성, 조회, 수정, 삭제
-        - 사용자 검색 및 목록 조회
-        - 사용자 활성화/비활성화
-        
-        ### 2. 프로그램 관리
-        - PLC 프로그램 등록 (ZIP, XLSX, CSV 파일 업로드)
-        - 프로그램 목록 조회 (검색, 필터링, 페이지네이션)
-        - 프로그램 정보 조회 및 삭제
-        - 실패 파일 재시도
-        
-        ### 3. PLC 관리
-        - PLC 기준 정보 조회
-        - PLC-PGM 매핑 저장
-        - 계층 구조 정보 조회
-        
-        ### 4. 문서 관리
-        - 문서 업로드 및 다운로드
-        - 문서 검색 및 목록 조회
-        - 문서 권한 관리
-        
-        ### 5. AI 채팅
-        - LLM 기반 채팅 서비스
-        - 스트리밍 응답 지원
-        
-        ## API 버전
-        - 현재 버전: v1
-        
-        ## 응답 형식
-        - 성공: HTTP 200 + JSON 응답
-        - 실패: HTTP 4xx/5xx + 에러 정보 포함 JSON
-        
-        ## 에러 코드
-        - 각 API의 description에서 예외 상황을 확인하세요.
-        """,
-        version="1.0.0",
-        debug=debug_mode,
-        root_path=settings.app_root_path,
-        docs_url="/docs",
-        redoc_url="/redoc",
-        openapi_url="/openapi.json",
-    )
+    # Swagger UI 로컬 파일 사용 여부 확인
+    static_dir = Path(__file__).parent.parent / "static"
+    use_local_swagger = static_dir.exists() and (static_dir / "swagger-ui-bundle.js").exists()
+    
+    if use_local_swagger:
+        logger.info("로컬 Swagger UI 파일을 사용합니다: {}".format(static_dir))
+        # 로컬 파일 사용 시 docs_url을 None으로 설정하고 커스텀 엔드포인트 사용
+        app = FastAPI(
+            title="PLC Interpreter Application Backend",
+            description="""
+            PLC 프로그램 관리 및 AI 채팅 서비스 API
+            
+            ## 주요 기능
+            
+            ### 1. 사용자 관리
+            - 사용자 생성, 조회, 수정, 삭제
+            - 사용자 검색 및 목록 조회
+            - 사용자 활성화/비활성화
+            
+            ### 2. 프로그램 관리
+            - PLC 프로그램 등록 (ZIP, XLSX, CSV 파일 업로드)
+            - 프로그램 목록 조회 (검색, 필터링, 페이지네이션)
+            - 프로그램 정보 조회 및 삭제
+            - 실패 파일 재시도
+            
+            ### 3. PLC 관리
+            - PLC 기준 정보 조회
+            - PLC-PGM 매핑 저장
+            - 계층 구조 정보 조회
+            
+            ### 4. 문서 관리
+            - 문서 업로드 및 다운로드
+            - 문서 검색 및 목록 조회
+            - 문서 권한 관리
+            
+            ### 5. AI 채팅
+            - LLM 기반 채팅 서비스
+            - 스트리밍 응답 지원
+            
+            ## API 버전
+            - 현재 버전: v1
+            
+            ## 응답 형식
+            - 성공: HTTP 200 + JSON 응답
+            - 실패: HTTP 4xx/5xx + 에러 정보 포함 JSON
+            
+            ## 에러 코드
+            - 각 API의 description에서 예외 상황을 확인하세요.
+            """,
+            version="1.0.0",
+            debug=debug_mode,
+            root_path=settings.app_root_path,
+            docs_url=None,  # 커스텀 엔드포인트 사용
+            redoc_url="/redoc",
+            openapi_url="/openapi.json",
+        )
+    else:
+        logger.info("기본 Swagger UI (CDN)를 사용합니다")
+        app = FastAPI(
+            title="PLC Interpreter Application Backend",
+            description="""
+            PLC 프로그램 관리 및 AI 채팅 서비스 API
+            
+            ## 주요 기능
+            
+            ### 1. 사용자 관리
+            - 사용자 생성, 조회, 수정, 삭제
+            - 사용자 검색 및 목록 조회
+            - 사용자 활성화/비활성화
+            
+            ### 2. 프로그램 관리
+            - PLC 프로그램 등록 (ZIP, XLSX, CSV 파일 업로드)
+            - 프로그램 목록 조회 (검색, 필터링, 페이지네이션)
+            - 프로그램 정보 조회 및 삭제
+            - 실패 파일 재시도
+            
+            ### 3. PLC 관리
+            - PLC 기준 정보 조회
+            - PLC-PGM 매핑 저장
+            - 계층 구조 정보 조회
+            
+            ### 4. 문서 관리
+            - 문서 업로드 및 다운로드
+            - 문서 검색 및 목록 조회
+            - 문서 권한 관리
+            
+            ### 5. AI 채팅
+            - LLM 기반 채팅 서비스
+            - 스트리밍 응답 지원
+            
+            ## API 버전
+            - 현재 버전: v1
+            
+            ## 응답 형식
+            - 성공: HTTP 200 + JSON 응답
+            - 실패: HTTP 4xx/5xx + 에러 정보 포함 JSON
+            
+            ## 에러 코드
+            - 각 API의 description에서 예외 상황을 확인하세요.
+            """,
+            version="1.0.0",
+            debug=debug_mode,
+            root_path=settings.app_root_path,
+            docs_url="/docs",
+            redoc_url="/redoc",
+            openapi_url="/openapi.json",
+        )
     
     logger.info("FastAPI application created successfully")
     
@@ -341,10 +402,6 @@ def create_app():
     from src.api.routers.user_router import router as user_router
     app.include_router(user_router, prefix=api_prefix)
     
-    # Group 라우터 추가 (그룹 관리)
-    from src.api.routers.group_router import router as group_router
-    app.include_router(group_router, prefix=api_prefix)
-    
     # Rating 라우터 추가 (메시지 평가)
     from src.api.routers.rating_router import router as rating_router
     app.include_router(rating_router, prefix=api_prefix)
@@ -353,6 +410,10 @@ def create_app():
     from src.api.routers.program_router import router as program_router
     app.include_router(program_router, prefix=api_prefix)
     
+    # Master 라우터 추가 (마스터 데이터 관리)
+    from src.api.routers.master_router import router as master_router
+    app.include_router(master_router, prefix=api_prefix)
+    
     # PLC 라우터 추가 (PLC 관리)
     from src.api.routers.plc_router import router as plc_router
     app.include_router(plc_router, prefix=api_prefix)
@@ -360,6 +421,14 @@ def create_app():
     # Knowledge 라우터 추가 (기준정보 관리 - 미쯔비시, 용어집)
     from src.api.routers.knowledge_router import router as knowledge_router
     app.include_router(knowledge_router, prefix=api_prefix)
+    
+    # 정적 파일 마운트 (로컬 Swagger UI 파일 사용 시)
+    if use_local_swagger:
+        try:
+            app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+            logger.info("정적 파일 마운트 완료: /static -> {}".format(static_dir))
+        except Exception as e:
+            logger.warning("정적 파일 마운트 실패: {}".format(e))
     
     # CORS 설정 - 설정 파일에서 가져오기
     origins = settings.get_cors_origins()
@@ -371,6 +440,18 @@ def create_app():
         allow_methods=["GET", "POST", "PUT", "DELETE"],
         allow_headers=["*"],
     )
+    
+    # 로컬 Swagger UI 커스텀 엔드포인트
+    if use_local_swagger:
+        @app.get("/docs", include_in_schema=False)
+        async def custom_swagger_ui_html():
+            """로컬 파일을 사용하는 Swagger UI"""
+            return get_swagger_ui_html(
+                openapi_url=app.openapi_url,
+                title=app.title + " - Swagger UI",
+                swagger_js_url="/static/swagger-ui-bundle.js",
+                swagger_css_url="/static/swagger-ui.css",
+            )
     
     # HTML 클라이언트 서빙
     @app.get("/")

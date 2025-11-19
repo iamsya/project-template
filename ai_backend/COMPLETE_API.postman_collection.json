@@ -1,0 +1,1125 @@
+{
+  "info": {
+    "name": "Complete API Collection",
+    "description": "전체 API 테스트용 Postman 컬렉션",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8000",
+      "type": "string"
+    },
+    {
+      "key": "api_version",
+      "value": "v1",
+      "type": "string"
+    },
+    {
+      "key": "user_id",
+      "value": "user001",
+      "type": "string"
+    },
+    {
+      "key": "plc_uuid",
+      "value": "plc_001_2501011200_abc123",
+      "type": "string"
+    },
+    {
+      "key": "program_id",
+      "value": "pgm_process_001_2501011200",
+      "type": "string"
+    },
+    {
+      "key": "chat_id",
+      "value": "chat_001",
+      "type": "string"
+    },
+    {
+      "key": "plant_id",
+      "value": "plant_001",
+      "type": "string"
+    },
+    {
+      "key": "process_id",
+      "value": "process_001",
+      "type": "string"
+    },
+    {
+      "key": "line_id",
+      "value": "line_001",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "PLC Management",
+      "item": [
+        {
+          "name": "PLC 목록 조회",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/{{api_version}}/plcs?page=1&page_size=10",
+              "host": ["{{base_url}}"],
+              "path": ["{{api_version}}", "plcs"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "page_size",
+                  "value": "10"
+                },
+                {
+                  "key": "plant_id",
+                  "value": "{{plant_id}}",
+                  "disabled": true
+                },
+                {
+                  "key": "process_id",
+                  "value": "{{process_id}}",
+                  "disabled": true
+                },
+                {
+                  "key": "line_id",
+                  "value": "{{line_id}}",
+                  "disabled": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "PLC 단일 조회",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/{{api_version}}/plcs/{{plc_uuid}}",
+              "host": ["{{base_url}}"],
+              "path": ["{{api_version}}", "plcs", "{{plc_uuid}}"]
+            }
+          }
+        },
+        {
+          "name": "PLC Tree 구조 조회",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/{{api_version}}/plcs/tree",
+              "host": ["{{base_url}}"],
+              "path": ["{{api_version}}", "plcs", "tree"]
+            }
+          }
+        },
+        {
+          "name": "드롭다운용 마스터 데이터 조회",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/{{api_version}}/plcs/masters/dropdown",
+              "host": ["{{base_url}}"],
+              "path": ["{{api_version}}", "plcs", "masters", "dropdown"]
+            }
+          }
+        },
+        {
+          "name": "매핑 화면용 드롭다운 조회",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/{{api_version}}/plcs/mapping/dropdown?user_id={{user_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["{{api_version}}", "plcs", "mapping", "dropdown"],
+              "query": [
+                {
+                  "key": "user_id",
+                  "value": "{{user_id}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "PLC-PGM 매핑 저장",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"plc_uuids\": [\"{{plc_uuid}}\"],\n  \"program_id\": \"{{program_id}}\",\n  \"mapping_user\": \"{{user_id}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/{{api_version}}/plcs/mapping",
+              "host": ["{{base_url}}"],
+              "path": ["{{api_version}}", "plcs", "mapping"]
+            }
+          }
+        },
+        {
+          "name": "PLC 다건 저장 (생성)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"items\": [\n    {\n      \"plant_id\": \"{{plant_id}}\",\n      \"process_id\": \"{{process_id}}\",\n      \"line_id\": \"{{line_id}}\",\n      \"plc_name\": \"01_01_CELL_FABRICATOR\",\n      \"unit\": \"1\",\n      \"plc_id\": \"M1CFB01000\",\n      \"create_user\": \"{{user_id}}\"\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/{{api_version}}/plcs/batch",
+              "host": ["{{base_url}}"],
+              "path": ["{{api_version}}", "plcs", "batch"]
+            }
+          }
+        },
+        {
+          "name": "PLC 다건 수정",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"items\": [\n    {\n      \"plc_uuid\": \"{{plc_uuid}}\",\n      \"plant_id\": \"{{plant_id}}\",\n      \"process_id\": \"{{process_id}}\",\n      \"line_id\": \"{{line_id}}\",\n      \"plc_name\": \"01_01_CELL_FABRICATOR_UPDATED\",\n      \"unit\": \"1\",\n      \"plc_id\": \"M1CFB01000\",\n      \"program_id\": \"{{program_id}}\",\n      \"update_user\": \"{{user_id}}\"\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/{{api_version}}/plcs/batch",
+              "host": ["{{base_url}}"],
+              "path": ["{{api_version}}", "plcs", "batch"]
+            }
+          }
+        },
+        {
+          "name": "PLC 삭제 (단일/일괄)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"plc_uuids\": [\"{{plc_uuid}}\"],\n  \"delete_user\": \"{{user_id}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/{{api_version}}/plcs",
+              "host": ["{{base_url}}"],
+              "path": ["{{api_version}}", "plcs"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Program Management",
+      "item": [
+        {
+          "name": "프로그램 목록 조회",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/{{api_version}}/programs?user_id={{user_id}}&page=1&page_size=10",
+              "host": ["{{base_url}}"],
+              "path": ["{{api_version}}", "programs"],
+              "query": [
+                {
+                  "key": "user_id",
+                  "value": "{{user_id}}"
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "page_size",
+                  "value": "10"
+                },
+                {
+                  "key": "process_id",
+                  "value": "{{process_id}}",
+                  "disabled": true
+                },
+                {
+                  "key": "status",
+                  "value": "completed",
+                  "disabled": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "프로그램 상세 조회",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/{{api_version}}/programs/{{program_id}}?user_id={{user_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["{{api_version}}", "programs", "{{program_id}}"],
+              "query": [
+                {
+                  "key": "user_id",
+                  "value": "{{user_id}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "접근 가능한 공정 목록 조회",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/{{api_version}}/programs/processes?user_id={{user_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["{{api_version}}", "programs", "processes"],
+              "query": [
+                {
+                  "key": "user_id",
+                  "value": "{{user_id}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "프로그램 등록",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "program_title",
+                  "value": "라벨부착 공정 PLC",
+                  "type": "text"
+                },
+                {
+                  "key": "process_id",
+                  "value": "{{process_id}}",
+                  "type": "text"
+                },
+                {
+                  "key": "program_description",
+                  "value": "라벨부착 공정용 PLC 프로그램",
+                  "type": "text"
+                },
+                {
+                  "key": "user_id",
+                  "value": "{{user_id}}",
+                  "type": "text"
+                },
+                {
+                  "key": "ladder_zip",
+                  "type": "file",
+                  "src": []
+                },
+                {
+                  "key": "template_xlsx",
+                  "type": "file",
+                  "src": []
+                },
+                {
+                  "key": "comment_csv",
+                  "type": "file",
+                  "src": []
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/{{api_version}}/programs/register",
+              "host": ["{{base_url}}"],
+              "path": ["{{api_version}}", "programs", "register"]
+            }
+          }
+        },
+        {
+          "name": "프로그램 파일 다운로드",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/{{api_version}}/programs/files/download?file_type=program_classification&program_id={{program_id}}&user_id={{user_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["{{api_version}}", "programs", "files", "download"],
+              "query": [
+                {
+                  "key": "file_type",
+                  "value": "program_classification"
+                },
+                {
+                  "key": "program_id",
+                  "value": "{{program_id}}"
+                },
+                {
+                  "key": "user_id",
+                  "value": "{{user_id}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "프로그램 매핑 목록 조회",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/{{api_version}}/programs/mapping?page=1&page_size=10",
+              "host": ["{{base_url}}"],
+              "path": ["{{api_version}}", "programs", "mapping"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "page_size",
+                  "value": "10"
+                },
+                {
+                  "key": "program_id",
+                  "value": "{{program_id}}",
+                  "disabled": true
+                },
+                {
+                  "key": "program_name",
+                  "value": "라벨부착",
+                  "disabled": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "사용자별 프로그램 목록 조회",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/{{api_version}}/programs/user/{{user_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["{{api_version}}", "programs", "user", "{{user_id}}"]
+            }
+          }
+        },
+        {
+          "name": "프로그램 재처리",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/{{api_version}}/programs/{{program_id}}/retry",
+              "host": ["{{base_url}}"],
+              "path": ["{{api_version}}", "programs", "{{program_id}}", "retry"]
+            }
+          }
+        },
+        {
+          "name": "프로그램 삭제",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"program_ids\": [\"{{program_id}}\"],\n  \"delete_user\": \"{{user_id}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/{{api_version}}/programs",
+              "host": ["{{base_url}}"],
+              "path": ["{{api_version}}", "programs"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Chat Management",
+      "item": [
+        {
+          "name": "채팅 목록 조회",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/{{api_version}}/chat/chats?user_id={{user_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["{{api_version}}", "chat", "chats"],
+              "query": [
+                {
+                  "key": "user_id",
+                  "value": "{{user_id}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "채팅 생성",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"user_id\": \"{{user_id}}\",\n  \"title\": \"새로운 채팅\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/{{api_version}}/chat/chats",
+              "host": ["{{base_url}}"],
+              "path": ["{{api_version}}", "chat", "chats"]
+            }
+          }
+        },
+        {
+          "name": "메시지 전송 (비스트리밍)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"message\": \"PLC 프로그램을 확인해주세요\",\n  \"user_id\": \"{{user_id}}\",\n  \"plc_uuid\": \"{{plc_uuid}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/{{api_version}}/chat/{{chat_id}}/message",
+              "host": ["{{base_url}}"],
+              "path": ["{{api_version}}", "chat", "{{chat_id}}", "message"]
+            }
+          }
+        },
+        {
+          "name": "메시지 전송 (스트리밍)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"message\": \"PLC 프로그램을 확인해주세요\",\n  \"user_id\": \"{{user_id}}\",\n  \"plc_uuid\": \"{{plc_uuid}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/{{api_version}}/chat/{{chat_id}}/stream",
+              "host": ["{{base_url}}"],
+              "path": ["{{api_version}}", "chat", "{{chat_id}}", "stream"]
+            }
+          }
+        },
+        {
+          "name": "대화 히스토리 조회",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/{{api_version}}/chat/{{chat_id}}/messages",
+              "host": ["{{base_url}}"],
+              "path": ["{{api_version}}", "chat", "{{chat_id}}", "messages"]
+            }
+          }
+        },
+        {
+          "name": "대화 초기화",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/{{api_version}}/chat/{{chat_id}}/clear",
+              "host": ["{{base_url}}"],
+              "path": ["{{api_version}}", "chat", "{{chat_id}}", "clear"]
+            }
+          }
+        },
+        {
+          "name": "메시지 생성 취소",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/{{api_version}}/chat/{{chat_id}}/cancel",
+              "host": ["{{base_url}}"],
+              "path": ["{{api_version}}", "chat", "{{chat_id}}", "cancel"]
+            }
+          }
+        },
+        {
+          "name": "채팅 삭제",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/{{api_version}}/chat/chats/{{chat_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["{{api_version}}", "chat", "chats", "{{chat_id}}"]
+            }
+          }
+        },
+        {
+          "name": "채팅 제목 수정",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"수정된 제목\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/{{api_version}}/chat/chats/{{chat_id}}/title",
+              "host": ["{{base_url}}"],
+              "path": ["{{api_version}}", "chat", "chats", "{{chat_id}}", "title"]
+            }
+          }
+        },
+        {
+          "name": "제목 자동 생성",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"message\": \"PLC 프로그램을 확인해주세요\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/{{api_version}}/chat/generate-title",
+              "host": ["{{base_url}}"],
+              "path": ["{{api_version}}", "chat", "generate-title"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "User Management",
+      "item": [
+        {
+          "name": "사용자 생성",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"user_id\": \"user002\",\n  \"employee_id\": \"EMP001\",\n  \"name\": \"홍길동\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/{{api_version}}/users",
+              "host": ["{{base_url}}"],
+              "path": ["{{api_version}}", "users"]
+            }
+          }
+        },
+        {
+          "name": "사용자 조회 (ID)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/{{api_version}}/users/{{user_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["{{api_version}}", "users", "{{user_id}}"]
+            }
+          }
+        },
+        {
+          "name": "사용자 조회 (사원번호)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/{{api_version}}/users/employee/EMP001",
+              "host": ["{{base_url}}"],
+              "path": ["{{api_version}}", "users", "employee", "EMP001"]
+            }
+          }
+        },
+        {
+          "name": "사용자 목록 조회",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/{{api_version}}/users?page=1&page_size=10",
+              "host": ["{{base_url}}"],
+              "path": ["{{api_version}}", "users"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "page_size",
+                  "value": "10"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "사용자 검색",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/{{api_version}}/users/search?keyword=홍길동",
+              "host": ["{{base_url}}"],
+              "path": ["{{api_version}}", "users", "search"],
+              "query": [
+                {
+                  "key": "keyword",
+                  "value": "홍길동"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "사용자 수정",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"홍길동 수정\",\n  \"employee_id\": \"EMP001\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/{{api_version}}/users/{{user_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["{{api_version}}", "users", "{{user_id}}"]
+            }
+          }
+        },
+        {
+          "name": "사용자 비활성화",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/{{api_version}}/users/{{user_id}}/deactivate",
+              "host": ["{{base_url}}"],
+              "path": ["{{api_version}}", "users", "{{user_id}}", "deactivate"]
+            }
+          }
+        },
+        {
+          "name": "사용자 활성화",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/{{api_version}}/users/{{user_id}}/activate",
+              "host": ["{{base_url}}"],
+              "path": ["{{api_version}}", "users", "{{user_id}}", "activate"]
+            }
+          }
+        },
+        {
+          "name": "사용자 삭제",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/{{api_version}}/users/{{user_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["{{api_version}}", "users", "{{user_id}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Group Management",
+      "item": [
+        {
+          "name": "그룹 생성",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"group_name\": \"PLC 관리자 그룹\",\n  \"description\": \"PLC 관리 권한을 가진 그룹\",\n  \"owner_id\": \"{{user_id}}\",\n  \"max_members\": 50\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/{{api_version}}/groups",
+              "host": ["{{base_url}}"],
+              "path": ["{{api_version}}", "groups"]
+            }
+          }
+        },
+        {
+          "name": "그룹 조회",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/{{api_version}}/groups/group_001",
+              "host": ["{{base_url}}"],
+              "path": ["{{api_version}}", "groups", "group_001"]
+            }
+          }
+        },
+        {
+          "name": "그룹 목록 조회",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/{{api_version}}/groups?page=1&page_size=10",
+              "host": ["{{base_url}}"],
+              "path": ["{{api_version}}", "groups"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "page_size",
+                  "value": "10"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "그룹 수정",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"group_name\": \"PLC 관리자 그룹 수정\",\n  \"description\": \"수정된 설명\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/{{api_version}}/groups/group_001",
+              "host": ["{{base_url}}"],
+              "path": ["{{api_version}}", "groups", "group_001"]
+            }
+          }
+        },
+        {
+          "name": "그룹 삭제",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/{{api_version}}/groups/group_001",
+              "host": ["{{base_url}}"],
+              "path": ["{{api_version}}", "groups", "group_001"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Rating",
+      "item": [
+        {
+          "name": "평가 생성",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"message_id\": \"msg_001\",\n  \"rating\": 5,\n  \"comment\": \"도움이 되었습니다\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/{{api_version}}/ratings",
+              "host": ["{{base_url}}"],
+              "path": ["{{api_version}}", "ratings"]
+            }
+          }
+        },
+        {
+          "name": "평가 조회",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/{{api_version}}/ratings/msg_001",
+              "host": ["{{base_url}}"],
+              "path": ["{{api_version}}", "ratings", "msg_001"]
+            }
+          }
+        },
+        {
+          "name": "평가 수정",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rating\": 4,\n  \"comment\": \"수정된 평가\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/{{api_version}}/ratings/msg_001",
+              "host": ["{{base_url}}"],
+              "path": ["{{api_version}}", "ratings", "msg_001"]
+            }
+          }
+        },
+        {
+          "name": "평가 삭제",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/{{api_version}}/ratings/msg_001",
+              "host": ["{{base_url}}"],
+              "path": ["{{api_version}}", "ratings", "msg_001"]
+            }
+          }
+        },
+        {
+          "name": "채팅별 평가 목록 조회",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/{{api_version}}/chats/{{chat_id}}/ratings",
+              "host": ["{{base_url}}"],
+              "path": ["{{api_version}}", "chats", "{{chat_id}}", "ratings"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Master Data",
+      "item": [
+        {
+          "name": "권한 기반 마스터 데이터 조회 (드롭다운용)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/{{api_version}}/masters?user_id={{user_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["{{api_version}}", "masters"],
+              "query": [
+                {
+                  "key": "user_id",
+                  "value": "{{user_id}}",
+                  "description": "사용자 ID (권한 기반 필터링용)"
+                }
+              ]
+            },
+            "description": "사용자 권한에 따라 접근 가능한 마스터 데이터를 조회합니다.\n\n**화면 용도:**\n- PLC 관리 화면의 Plant, 공정, Line 드롭다운\n- Program 등록 화면의 공정 드롭다운\n- PLC-PGM 매핑 화면의 드롭다운"
+          }
+        },
+        {
+          "name": "공정 목록 조회",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/{{api_version}}/masters/processes?include_inactive=false&sort_by=process_name&sort_order=asc",
+              "host": ["{{base_url}}"],
+              "path": ["{{api_version}}", "masters", "processes"],
+              "query": [
+                {
+                  "key": "include_inactive",
+                  "value": "false",
+                  "description": "비활성 공정 포함 여부",
+                  "disabled": true
+                },
+                {
+                  "key": "sort_by",
+                  "value": "process_name",
+                  "description": "정렬 기준 (process_id, process_name, create_dt)",
+                  "disabled": true
+                },
+                {
+                  "key": "sort_order",
+                  "value": "asc",
+                  "description": "정렬 순서 (asc, desc)",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "공정 기준정보 목록을 조회합니다.\n\n**화면 용도:**\n- 그룹 관리 화면의 공정 선택 드롭다운\n- 공정 기준정보 관리 화면의 목록 표시\n- 공정별 통계 및 분석 화면\n\n**파라미터:**\n- `include_inactive`: 비활성 공정 포함 여부 (기본값: false)\n- `sort_by`: 정렬 기준 (기본값: process_name)\n- `sort_order`: 정렬 순서 (기본값: asc)"
+          }
+        },
+        {
+          "name": "공정 목록 조회 (비활성 포함)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/{{api_version}}/masters/processes?include_inactive=true",
+              "host": ["{{base_url}}"],
+              "path": ["{{api_version}}", "masters", "processes"],
+              "query": [
+                {
+                  "key": "include_inactive",
+                  "value": "true",
+                  "description": "비활성 공정 포함 여부"
+                }
+              ]
+            },
+            "description": "모든 공정을 조회합니다 (비활성 공정 포함)."
+          }
+        },
+        {
+          "name": "공정 목록 조회 (공정명 내림차순)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/{{api_version}}/masters/processes?sort_by=process_name&sort_order=desc",
+              "host": ["{{base_url}}"],
+              "path": ["{{api_version}}", "masters", "processes"],
+              "query": [
+                {
+                  "key": "sort_by",
+                  "value": "process_name",
+                  "description": "정렬 기준"
+                },
+                {
+                  "key": "sort_order",
+                  "value": "desc",
+                  "description": "정렬 순서"
+                }
+              ]
+            },
+            "description": "공정명 내림차순으로 정렬된 공정 목록을 조회합니다."
+          }
+        },
+        {
+          "name": "공정 목록 조회 (생성일시 최신순)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/{{api_version}}/masters/processes?sort_by=create_dt&sort_order=desc",
+              "host": ["{{base_url}}"],
+              "path": ["{{api_version}}", "masters", "processes"],
+              "query": [
+                {
+                  "key": "sort_by",
+                  "value": "create_dt",
+                  "description": "정렬 기준"
+                },
+                {
+                  "key": "sort_order",
+                  "value": "desc",
+                  "description": "정렬 순서"
+                }
+              ]
+            },
+            "description": "생성일시 내림차순(최신순)으로 정렬된 공정 목록을 조회합니다."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Cache",
+      "item": [
+        {
+          "name": "캐시 상태 조회",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/{{api_version}}/cache/status",
+              "host": ["{{base_url}}"],
+              "path": ["{{api_version}}", "cache", "status"]
+            }
+          }
+        },
+        {
+          "name": "캐시 초기화",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/{{api_version}}/cache/clear",
+              "host": ["{{base_url}}"],
+              "path": ["{{api_version}}", "cache", "clear"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
+

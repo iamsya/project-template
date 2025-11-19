@@ -8,7 +8,6 @@ from src.api.services.llm_chat_service import LLMChatService
 from src.api.services.program_service import ProgramService
 from src.api.services.document_service import DocumentService
 from src.api.services.user_service import UserService
-from src.api.services.group_service import GroupService
 from src.api.services.s3_download_service import S3DownloadService
 from src.api.services.s3_service import S3Service
 from src.api.services.knowledge_status_service import KnowledgeStatusService
@@ -112,12 +111,6 @@ def get_user_service(
     """사용자 관리 서비스 의존성 주입"""
     return UserService(db=db)
 
-
-def get_group_service(
-    db: Session = Depends(get_db)
-) -> GroupService:
-    """그룹 관리 서비스 의존성 주입"""
-    return GroupService(db=db)
 
 def get_program_service(db: Session = Depends(get_db)) -> ProgramService:
     """프로그램 관리 서비스 의존성 주입"""
