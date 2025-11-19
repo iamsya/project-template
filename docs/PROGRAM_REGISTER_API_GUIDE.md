@@ -14,14 +14,54 @@ PLC 프로그램을 등록하고 처리하는 API입니다. 3개의 파일(ZIP, 
 
 ### 필수 파라미터
 
-| 파라미터명 | 타입 | 설명 | 예시 |
-|-----------|------|------|------|
-| `ladder_zip` | File | PLC ladder logic 파일들이 포함된 ZIP 압축 파일 | `ladder_files.zip` |
-| `classification_xlsx` | File | 템플릿 분류체계 데이터 XLSX 파일 | `classification.xlsx` |
-| `device_comment_csv` | File | Device 설명 CSV 파일 | `device_comment.csv` |
-| `program_title` | String (Form) | 프로그램 제목 | `"공정1 PLC 프로그램"` |
-| `program_description` | String (Form, Optional) | 프로그램 설명 | `"공정1 라인용 PLC 프로그램"` |
-| `user_id` | String (Form) | 사용자 ID (기본값: "user") | `"user001"` |
+<table>
+<thead>
+<tr>
+<th>파라미터명</th>
+<th>타입</th>
+<th>설명</th>
+<th>예시</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ladder_zip</code></td>
+<td>File</td>
+<td>PLC ladder logic 파일들이 포함된 ZIP 압축 파일</td>
+<td><code>ladder_files.zip</code></td>
+</tr>
+<tr>
+<td><code>classification_xlsx</code></td>
+<td>File</td>
+<td>템플릿 분류체계 데이터 XLSX 파일</td>
+<td><code>classification.xlsx</code></td>
+</tr>
+<tr>
+<td><code>device_comment_csv</code></td>
+<td>File</td>
+<td>Device 설명 CSV 파일</td>
+<td><code>device_comment.csv</code></td>
+</tr>
+<tr>
+<td><code>program_title</code></td>
+<td>String (Form)</td>
+<td>프로그램 제목</td>
+<td><code>"공정1 PLC 프로그램"</code></td>
+</tr>
+<tr>
+<td><code>program_description</code></td>
+<td>String (Form, Optional)</td>
+<td>프로그램 설명</td>
+<td><code>"공정1 라인용 PLC 프로그램"</code></td>
+</tr>
+<tr>
+<td><code>user_id</code></td>
+<td>String (Form)</td>
+<td>사용자 ID (기본값: "user")</td>
+<td><code>"user001"</code></td>
+</tr>
+</tbody>
+</table>
 
 ### 파일 형식 요구사항
 

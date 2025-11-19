@@ -20,9 +20,24 @@ GET /v1/chat/{chat_id}/history
 
 ### 경로 파라미터
 
-| 파라미터 | 타입 | 필수 | 설명 |
-|---------|------|------|------|
-| `chat_id` | string | **예** | 조회할 채팅방의 고유 ID |
+<table>
+<thead>
+<tr>
+<th>파라미터</th>
+<th>타입</th>
+<th>필수</th>
+<th>설명</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>chat_id</code></td>
+<td>string</td>
+<td><strong>예</strong></td>
+<td>조회할 채팅방의 고유 ID</td>
+</tr>
+</tbody>
+</table>
 
 ### 조회 우선순위
 
@@ -81,21 +96,82 @@ GET /v1/chat/{chat_id}/history
 
 ### 응답 필드 설명
 
-| 필드 | 타입 | 설명 |
-|------|------|------|
-| `type` | string | 응답 타입 (`"conversation_history"`) |
-| `history` | array | 메시지 목록 (시간순 정렬) |
-| `history[].role` | string | 메시지 역할 (`"user"`, `"assistant"`, `"system"`) |
-| `history[].content` | string | 메시지 내용 (텍스트) |
-| `history[].timestamp` | string | 메시지 생성 일시 (ISO 8601 형식, Asia/Seoul 타임존) |
-| `history[].cancelled` | boolean | 메시지 취소 여부 |
-| `history[].message_id` | string | 메시지 고유 ID |
-| `history[].plc_uuid` | string | 관련 PLC UUID (선택적, null 가능) |
-| `history[].plc_hierarchy` | object | PLC 계층 구조 정보 (선택적, null 가능) |
-| `history[].plc_hierarchy.plant` | object | Plant 정보 (`id`, `code`, `name`) |
-| `history[].plc_hierarchy.process` | object | Process 정보 (`id`, `code`, `name`) |
-| `history[].plc_hierarchy.line` | object | Line 정보 (`id`, `code`, `name`) |
-| `history[].plc_snapshot` | object | PLC 전체 스냅샷 정보 (선택적, null 가능) |
+<table>
+<thead>
+<tr>
+<th>필드</th>
+<th>타입</th>
+<th>설명</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>type</code></td>
+<td>string</td>
+<td>응답 타입 (<code>"conversation_history"</code>)</td>
+</tr>
+<tr>
+<td><code>history</code></td>
+<td>array</td>
+<td>메시지 목록 (시간순 정렬)</td>
+</tr>
+<tr>
+<td><code>history[].role</code></td>
+<td>string</td>
+<td>메시지 역할 (<code>"user"</code>, <code>"assistant"</code>, <code>"system"</code>)</td>
+</tr>
+<tr>
+<td><code>history[].content</code></td>
+<td>string</td>
+<td>메시지 내용 (텍스트)</td>
+</tr>
+<tr>
+<td><code>history[].timestamp</code></td>
+<td>string</td>
+<td>메시지 생성 일시 (ISO 8601 형식, Asia/Seoul 타임존)</td>
+</tr>
+<tr>
+<td><code>history[].cancelled</code></td>
+<td>boolean</td>
+<td>메시지 취소 여부</td>
+</tr>
+<tr>
+<td><code>history[].message_id</code></td>
+<td>string</td>
+<td>메시지 고유 ID</td>
+</tr>
+<tr>
+<td><code>history[].plc_uuid</code></td>
+<td>string</td>
+<td>관련 PLC UUID (선택적, null 가능)</td>
+</tr>
+<tr>
+<td><code>history[].plc_hierarchy</code></td>
+<td>object</td>
+<td>PLC 계층 구조 정보 (선택적, null 가능)</td>
+</tr>
+<tr>
+<td><code>history[].plc_hierarchy.plant</code></td>
+<td>object</td>
+<td>Plant 정보 (<code>id</code>, <code>code</code>, <code>name</code>)</td>
+</tr>
+<tr>
+<td><code>history[].plc_hierarchy.process</code></td>
+<td>object</td>
+<td>Process 정보 (<code>id</code>, <code>code</code>, <code>name</code>)</td>
+</tr>
+<tr>
+<td><code>history[].plc_hierarchy.line</code></td>
+<td>object</td>
+<td>Line 정보 (<code>id</code>, <code>code</code>, <code>name</code>)</td>
+</tr>
+<tr>
+<td><code>history[].plc_snapshot</code></td>
+<td>object</td>
+<td>PLC 전체 스냅샷 정보 (선택적, null 가능)</td>
+</tr>
+</tbody>
+</table>
 
 ### PLC 정보 반환 규칙
 

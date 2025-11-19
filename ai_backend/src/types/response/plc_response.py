@@ -325,35 +325,61 @@ class PLCDeleteResponse(BaseModel):
     message: str = Field(..., description="응답 메시지")
 
 
-class PLCBatchItem(BaseModel):
-    """PLC 일괄 저장 항목"""
+class PLCBatchCreateItem(BaseModel):
+    """PLC 다건 저장 항목 (생성용)"""
 
-    plc_uuid: Optional[str] = Field(
-        None, description="PLC UUID (있으면 수정, 없으면 생성)"
-    )
     plant_id: str = Field(..., description="Plant ID")
     process_id: str = Field(..., description="공정 ID")
     line_id: str = Field(..., description="Line ID")
     plc_name: str = Field(..., description="PLC명")
     unit: Optional[str] = Field(None, description="호기")
     plc_id: str = Field(..., description="PLC ID")
-    update_user: str = Field(..., description="저장 사용자")
+    create_user: str = Field(..., description="생성 사용자")
 
 
-class PLCBatchSaveRequest(BaseModel):
-    """PLC 일괄 저장 요청"""
+class PLCBatchUpdateItem(BaseModel):
+    """PLC 다건 수정 항목 (수정용)"""
 
-    items: List[PLCBatchItem] = Field(
+    plc_uuid: str = Field(..., description="PLC UUID (필수)")
+    plc_name: str = Field(..., description="PLC명")
+    unit: Optional[str] = Field(None, description="호기")
+    plc_id: str = Field(..., description="PLC ID")
+    update_user: str = Field(..., description="수정 사용자")
+
+
+class PLCBatchCreateRequest(BaseModel):
+    """PLC 다건 저장 요청"""
+
+    items: List[PLCBatchCreateItem] = Field(
         ..., description="저장할 PLC 목록", min_items=1
     )
 
 
-class PLCBatchSaveResponse(BaseModel):
-    """PLC 일괄 저장 응답"""
+class PLCBatchUpdateRequest(BaseModel):
+    """PLC 다건 수정 요청"""
+
+    items: List[PLCBatchUpdateItem] = Field(
+        ..., description="수정할 PLC 목록", min_items=1
+    )
+
+
+class PLCBatchCreateResponse(BaseModel):
+    """PLC 다건 저장 응답"""
 
     success: bool = Field(..., description="성공 여부")
     message: str = Field(..., description="응답 메시지")
     created_count: int = Field(..., description="생성된 PLC 개수")
+    failed_count: int = Field(..., description="실패한 PLC 개수")
+    errors: List[str] = Field(
+        default_factory=list, description="에러 메시지 리스트"
+    )
+
+
+class PLCBatchUpdateResponse(BaseModel):
+    """PLC 다건 수정 응답"""
+
+    success: bool = Field(..., description="성공 여부")
+    message: str = Field(..., description="응답 메시지")
     updated_count: int = Field(..., description="수정된 PLC 개수")
     failed_count: int = Field(..., description="실패한 PLC 개수")
     errors: List[str] = Field(

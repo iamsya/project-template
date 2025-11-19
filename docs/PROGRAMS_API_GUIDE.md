@@ -37,15 +37,60 @@ multipart/form-data
 
 ### 요청 파라미터
 
-| 파라미터 | 타입 | 필수 | 설명 |
-|---------|------|------|------|
-| `ladder_zip` | File | **예** | PLC ladder logic 파일들이 포함된 ZIP 압축 파일 |
-| `classification_xlsx` | File | **예** | 템플릿 분류체계 데이터 XLSX 파일 |
-| `comment_csv` | File | **예** | PLC Ladder Comment CSV 파일 |
-| `program_title` | string | **예** | PGM Name (프로그램 제목) |
-| `process_id` | string | 아니오 | 공정 ID (드롭다운 선택, 선택사항) |
-| `program_description` | string | 아니오 | 프로그램 설명 |
-| `user_id` | string | 아니오 | 사용자 ID (기본값: "user") |
+<table>
+<thead>
+<tr>
+<th>파라미터</th>
+<th>타입</th>
+<th>필수</th>
+<th>설명</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ladder_zip</code></td>
+<td>File</td>
+<td><strong>예</strong></td>
+<td>PLC ladder logic 파일들이 포함된 ZIP 압축 파일</td>
+</tr>
+<tr>
+<td><code>classification_xlsx</code></td>
+<td>File</td>
+<td><strong>예</strong></td>
+<td>템플릿 분류체계 데이터 XLSX 파일</td>
+</tr>
+<tr>
+<td><code>comment_csv</code></td>
+<td>File</td>
+<td><strong>예</strong></td>
+<td>PLC Ladder Comment CSV 파일</td>
+</tr>
+<tr>
+<td><code>program_title</code></td>
+<td>string</td>
+<td><strong>예</strong></td>
+<td>PGM Name (프로그램 제목)</td>
+</tr>
+<tr>
+<td><code>process_id</code></td>
+<td>string</td>
+<td>아니오</td>
+<td>공정 ID (드롭다운 선택, 선택사항)</td>
+</tr>
+<tr>
+<td><code>program_description</code></td>
+<td>string</td>
+<td>아니오</td>
+<td>프로그램 설명</td>
+</tr>
+<tr>
+<td><code>user_id</code></td>
+<td>string</td>
+<td>아니오</td>
+<td>사용자 ID (기본값: "user")</td>
+</tr>
+</tbody>
+</table>
 
 ### 처리 단계
 
@@ -135,18 +180,89 @@ GET /v1/programs
 
 ### 쿼리 파라미터
 
-| 파라미터 | 타입 | 필수 | 기본값 | 설명 |
-|---------|------|------|--------|------|
-| `user_id` | string | **예** | - | 사용자 ID (권한 기반 필터링용) |
-| `program_id` | string | 아니오 | - | PGM ID로 검색 (정확한 일치) |
-| `program_name` | string | 아니오 | - | 제목으로 검색 (부분 일치) |
-| `process_id` | string | 아니오 | - | 공정 ID로 필터링 |
-| `status` | string | 아니오 | - | 등록 상태로 필터링 |
-| `create_user` | string | 아니오 | - | 작성자로 필터링 |
-| `page` | integer | 아니오 | 1 | 페이지 번호 (최소: 1) |
-| `page_size` | integer | 아니오 | 10 | 페이지당 항목 수 (최소: 1, 최대: 100) |
-| `sort_by` | string | 아니오 | `create_dt` | 정렬 기준 (`create_dt`, `program_id`, `program_name`, `status`) |
-| `sort_order` | string | 아니오 | `desc` | 정렬 순서 (`asc`, `desc`) |
+<table>
+<thead>
+<tr>
+<th>파라미터</th>
+<th>타입</th>
+<th>필수</th>
+<th>기본값</th>
+<th>설명</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>user_id</code></td>
+<td>string</td>
+<td><strong>예</strong></td>
+<td>-</td>
+<td>사용자 ID (권한 기반 필터링용)</td>
+</tr>
+<tr>
+<td><code>program_id</code></td>
+<td>string</td>
+<td>아니오</td>
+<td>-</td>
+<td>PGM ID로 검색 (정확한 일치)</td>
+</tr>
+<tr>
+<td><code>program_name</code></td>
+<td>string</td>
+<td>아니오</td>
+<td>-</td>
+<td>제목으로 검색 (부분 일치)</td>
+</tr>
+<tr>
+<td><code>process_id</code></td>
+<td>string</td>
+<td>아니오</td>
+<td>-</td>
+<td>공정 ID로 필터링</td>
+</tr>
+<tr>
+<td><code>status</code></td>
+<td>string</td>
+<td>아니오</td>
+<td>-</td>
+<td>등록 상태로 필터링</td>
+</tr>
+<tr>
+<td><code>create_user</code></td>
+<td>string</td>
+<td>아니오</td>
+<td>-</td>
+<td>작성자로 필터링</td>
+</tr>
+<tr>
+<td><code>page</code></td>
+<td>integer</td>
+<td>아니오</td>
+<td>1</td>
+<td>페이지 번호 (최소: 1)</td>
+</tr>
+<tr>
+<td><code>page_size</code></td>
+<td>integer</td>
+<td>아니오</td>
+<td>10</td>
+<td>페이지당 항목 수 (최소: 1, 최대: 100)</td>
+</tr>
+<tr>
+<td><code>sort_by</code></td>
+<td>string</td>
+<td>아니오</td>
+<td><code>create_dt</code></td>
+<td>정렬 기준 (<code>create_dt</code>, <code>program_id</code>, <code>program_name</code>, <code>status</code>)</td>
+</tr>
+<tr>
+<td><code>sort_order</code></td>
+<td>string</td>
+<td>아니오</td>
+<td><code>desc</code></td>
+<td>정렬 순서 (<code>asc</code>, <code>desc</code>)</td>
+</tr>
+</tbody>
+</table>
 
 ### 등록 상태 (`status`)
 
@@ -212,15 +328,47 @@ GET /v1/programs/{program_id}
 
 ### 경로 파라미터
 
-| 파라미터 | 타입 | 필수 | 설명 |
-|---------|------|------|------|
-| `program_id` | string | **예** | 프로그램 ID (PGM ID) |
+<table>
+<thead>
+<tr>
+<th>파라미터</th>
+<th>타입</th>
+<th>필수</th>
+<th>설명</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>program_id</code></td>
+<td>string</td>
+<td><strong>예</strong></td>
+<td>프로그램 ID (PGM ID)</td>
+</tr>
+</tbody>
+</table>
 
 ### 쿼리 파라미터
 
-| 파라미터 | 타입 | 필수 | 기본값 | 설명 |
-|---------|------|------|--------|------|
-| `user_id` | string | 아니오 | "user" | 사용자 ID (권한 검증용) |
+<table>
+<thead>
+<tr>
+<th>파라미터</th>
+<th>타입</th>
+<th>필수</th>
+<th>기본값</th>
+<th>설명</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>user_id</code></td>
+<td>string</td>
+<td>아니오</td>
+<td>"user"</td>
+<td>사용자 ID (권한 검증용)</td>
+</tr>
+</tbody>
+</table>
 
 ### 응답 형식
 
@@ -293,9 +441,24 @@ GET /v1/programs/processes
 
 ### 쿼리 파라미터
 
-| 파라미터 | 타입 | 필수 | 설명 |
-|---------|------|------|------|
-| `user_id` | string | **예** | 사용자 ID (권한 기반 필터링용) |
+<table>
+<thead>
+<tr>
+<th>파라미터</th>
+<th>타입</th>
+<th>필수</th>
+<th>설명</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>user_id</code></td>
+<td>string</td>
+<td><strong>예</strong></td>
+<td>사용자 ID (권한 기반 필터링용)</td>
+</tr>
+</tbody>
+</table>
 
 ### 권한 기반 필터링
 
@@ -342,11 +505,36 @@ GET /v1/programs/files/download
 
 ### 쿼리 파라미터
 
-| 파라미터 | 타입 | 필수 | 설명 |
-|---------|------|------|------|
-| `file_type` | string | **예** | 파일 타입 (`program_classification`, `program_logic`, `program_comment`) |
-| `program_id` | string | **예** | Program ID |
-| `user_id` | string | **예** | 사용자 ID (권한 검증용) |
+<table>
+<thead>
+<tr>
+<th>파라미터</th>
+<th>타입</th>
+<th>필수</th>
+<th>설명</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>file_type</code></td>
+<td>string</td>
+<td><strong>예</strong></td>
+<td>파일 타입 (<code>program_classification</code>, <code>program_logic</code>, <code>program_comment</code>)</td>
+</tr>
+<tr>
+<td><code>program_id</code></td>
+<td>string</td>
+<td><strong>예</strong></td>
+<td>Program ID</td>
+</tr>
+<tr>
+<td><code>user_id</code></td>
+<td>string</td>
+<td><strong>예</strong></td>
+<td>사용자 ID (권한 검증용)</td>
+</tr>
+</tbody>
+</table>
 
 ### 파일 타입
 
@@ -381,12 +569,47 @@ GET /v1/programs/mapping
 
 ### 쿼리 파라미터
 
-| 파라미터 | 타입 | 필수 | 기본값 | 설명 |
-|---------|------|------|--------|------|
-| `program_id` | string | 아니오 | - | PGM ID로 검색 |
-| `program_name` | string | 아니오 | - | 제목으로 검색 |
-| `page` | integer | 아니오 | 1 | 페이지 번호 |
-| `page_size` | integer | 아니오 | 10 | 페이지당 항목 수 |
+<table>
+<thead>
+<tr>
+<th>파라미터</th>
+<th>타입</th>
+<th>필수</th>
+<th>기본값</th>
+<th>설명</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>program_id</code></td>
+<td>string</td>
+<td>아니오</td>
+<td>-</td>
+<td>PGM ID로 검색</td>
+</tr>
+<tr>
+<td><code>program_name</code></td>
+<td>string</td>
+<td>아니오</td>
+<td>-</td>
+<td>제목으로 검색</td>
+</tr>
+<tr>
+<td><code>page</code></td>
+<td>integer</td>
+<td>아니오</td>
+<td>1</td>
+<td>페이지 번호</td>
+</tr>
+<tr>
+<td><code>page_size</code></td>
+<td>integer</td>
+<td>아니오</td>
+<td>10</td>
+<td>페이지당 항목 수</td>
+</tr>
+</tbody>
+</table>
 
 ### 응답 형식
 
@@ -430,9 +653,24 @@ GET /v1/programs/user/{user_id}
 
 ### 경로 파라미터
 
-| 파라미터 | 타입 | 필수 | 설명 |
-|---------|------|------|------|
-| `user_id` | string | **예** | 사용자 ID |
+<table>
+<thead>
+<tr>
+<th>파라미터</th>
+<th>타입</th>
+<th>필수</th>
+<th>설명</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>user_id</code></td>
+<td>string</td>
+<td><strong>예</strong></td>
+<td>사용자 ID</td>
+</tr>
+</tbody>
+</table>
 
 ### 응답 형식
 
@@ -467,16 +705,54 @@ POST /v1/programs/{program_id}/retry
 
 ### 경로 파라미터
 
-| 파라미터 | 타입 | 필수 | 설명 |
-|---------|------|------|------|
-| `program_id` | string | **예** | 프로그램 ID |
+<table>
+<thead>
+<tr>
+<th>파라미터</th>
+<th>타입</th>
+<th>필수</th>
+<th>설명</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>program_id</code></td>
+<td>string</td>
+<td><strong>예</strong></td>
+<td>프로그램 ID</td>
+</tr>
+</tbody>
+</table>
 
 ### 쿼리 파라미터
 
-| 파라미터 | 타입 | 필수 | 기본값 | 설명 |
-|---------|------|------|--------|------|
-| `user_id` | string | 아니오 | "user" | 사용자 ID |
-| `retry_type` | string | 아니오 | "all" | 재시도 타입 (`preprocessing`, `document`, `all`) |
+<table>
+<thead>
+<tr>
+<th>파라미터</th>
+<th>타입</th>
+<th>필수</th>
+<th>기본값</th>
+<th>설명</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>user_id</code></td>
+<td>string</td>
+<td>아니오</td>
+<td>"user"</td>
+<td>사용자 ID</td>
+</tr>
+<tr>
+<td><code>retry_type</code></td>
+<td>string</td>
+<td>아니오</td>
+<td>"all"</td>
+<td>재시도 타입 (<code>preprocessing</code>, <code>document</code>, <code>all</code>)</td>
+</tr>
+</tbody>
+</table>
 
 ### 재시도 타입
 
@@ -515,16 +791,54 @@ GET /v1/programs/{program_id}/failures
 
 ### 경로 파라미터
 
-| 파라미터 | 타입 | 필수 | 설명 |
-|---------|------|------|------|
-| `program_id` | string | **예** | 프로그램 ID |
+<table>
+<thead>
+<tr>
+<th>파라미터</th>
+<th>타입</th>
+<th>필수</th>
+<th>설명</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>program_id</code></td>
+<td>string</td>
+<td><strong>예</strong></td>
+<td>프로그램 ID</td>
+</tr>
+</tbody>
+</table>
 
 ### 쿼리 파라미터
 
-| 파라미터 | 타입 | 필수 | 기본값 | 설명 |
-|---------|------|------|--------|------|
-| `user_id` | string | 아니오 | "user" | 사용자 ID |
-| `failure_type` | string | 아니오 | - | 실패 타입 필터 (`preprocessing`, `document_storage`, `vector_indexing`) |
+<table>
+<thead>
+<tr>
+<th>파라미터</th>
+<th>타입</th>
+<th>필수</th>
+<th>기본값</th>
+<th>설명</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>user_id</code></td>
+<td>string</td>
+<td>아니오</td>
+<td>"user"</td>
+<td>사용자 ID</td>
+</tr>
+<tr>
+<td><code>failure_type</code></td>
+<td>string</td>
+<td>아니오</td>
+<td>-</td>
+<td>실패 타입 필터 (<code>preprocessing</code>, <code>document_storage</code>, <code>vector_indexing</code>)</td>
+</tr>
+</tbody>
+</table>
 
 ### 응답 형식
 
@@ -566,9 +880,24 @@ POST /v1/programs/{program_id}/knowledge-status/sync
 
 ### 경로 파라미터
 
-| 파라미터 | 타입 | 필수 | 설명 |
-|---------|------|------|------|
-| `program_id` | string | **예** | 프로그램 ID |
+<table>
+<thead>
+<tr>
+<th>파라미터</th>
+<th>타입</th>
+<th>필수</th>
+<th>설명</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>program_id</code></td>
+<td>string</td>
+<td><strong>예</strong></td>
+<td>프로그램 ID</td>
+</tr>
+</tbody>
+</table>
 
 ### 응답 형식
 
@@ -600,9 +929,24 @@ GET /v1/programs/{program_id}/knowledge-status
 
 ### 경로 파라미터
 
-| 파라미터 | 타입 | 필수 | 설명 |
-|---------|------|------|------|
-| `program_id` | string | **예** | 프로그램 ID |
+<table>
+<thead>
+<tr>
+<th>파라미터</th>
+<th>타입</th>
+<th>필수</th>
+<th>설명</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>program_id</code></td>
+<td>string</td>
+<td><strong>예</strong></td>
+<td>프로그램 ID</td>
+</tr>
+</tbody>
+</table>
 
 ### 응답 형식
 
@@ -649,10 +993,30 @@ DELETE /v1/programs
 
 ### 쿼리 파라미터
 
-| 파라미터 | 타입 | 필수 | 설명 |
-|---------|------|------|------|
-| `program_ids` | array[string] | **예** | 삭제할 프로그램 ID 리스트 |
-| `user_id` | string | 아니오 | 사용자 ID (권한 확인용) |
+<table>
+<thead>
+<tr>
+<th>파라미터</th>
+<th>타입</th>
+<th>필수</th>
+<th>설명</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>program_ids</code></td>
+<td>array[string]</td>
+<td><strong>예</strong></td>
+<td>삭제할 프로그램 ID 리스트</td>
+</tr>
+<tr>
+<td><code>user_id</code></td>
+<td>string</td>
+<td>아니오</td>
+<td>사용자 ID (권한 확인용)</td>
+</tr>
+</tbody>
+</table>
 
 ### 응답 형식
 

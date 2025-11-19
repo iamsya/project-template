@@ -19,9 +19,10 @@ from src.types.response.plc_response import (
     PLCMappingRequest,
     PLCMappingResponse,
     PLCTreeResponse,
-    PLCBatchItem,
-    PLCBatchSaveRequest,
-    PLCBatchSaveResponse,
+    PLCBatchCreateRequest,
+    PLCBatchCreateResponse,
+    PLCBatchUpdateRequest,
+    PLCBatchUpdateResponse,
     SimpleMasterDropdownResponse,
 )
 
@@ -490,87 +491,30 @@ def get_mapping_dropdown(
 
 
 @router.delete(
-    "/{plc_uuid}",
-    response_model=PLCDeleteResponse,
-    summary="PLC 삭제 (단일)",
-    description="""
-    PLC를 삭제합니다 (소프트 삭제).
-    
-    **화면 용도:** PLC 등록 화면에서 PLC 삭제
-    
-    **삭제 방식:**
-    - 소프트 삭제: `is_active = False`로 설정
-    - 매핑된 `program_id` 제거 (None으로 설정)
-    - 실제 데이터는 삭제되지 않음
-    
-    **주의사항:**
-    - PLC 삭제 시 매핑된 PGM ID도 함께 해제됩니다.
-    
-    **예외 상황:**
-    - PLC를 찾을 수 없음: 404 Not Found
-    """,
-)
-def delete_plc(
-    plc_uuid: str,
-    delete_user: str = Query(..., description="삭제 사용자", example="admin"),
-    db: Session = Depends(get_db),
-):
-    """
-    PLC 삭제 (단일)
-    """
-    try:
-        plc_crud = PLCCRUD(db)
-        
-        # 권한 체크 (API 직접 호출 시)
-        if not plc_crud.check_plc_management_permission(delete_user):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="PLC 삭제 권한이 없습니다.",
-            )
-        
-        # PLC 삭제
-        success = plc_crud.delete_plc(plc_uuid=plc_uuid, delete_user=delete_user)
-        
-        if not success:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"PLC를 찾을 수 없습니다. UUID: {plc_uuid}",
-            )
-        
-        return PLCDeleteResponse(
-            success=True,
-            deleted_count=1,
-            message="PLC가 성공적으로 삭제되었습니다.",
-        )
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error("PLC 삭제 실패: %s", str(e))
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"PLC 삭제 중 오류가 발생했습니다: {str(e)}",
-        ) from e
-
-
-@router.delete(
     "",
     response_model=PLCDeleteResponse,
-    summary="PLC 일괄 삭제",
+    summary="PLC 삭제 (단일/일괄)",
     description="""
-    여러 PLC를 일괄 삭제합니다 (소프트 삭제).
+    PLC를 삭제합니다 (소프트 삭제). 단일 또는 여러 PLC를 일괄 삭제할 수 있습니다.
     
-    **화면 용도:** PLC 등록 화면에서 여러 PLC 선택 후 일괄 삭제
+    **화면 용도:** PLC 등록 화면에서 PLC 삭제 (단일 또는 다중 선택)
     
     **삭제 방식:**
-    - 소프트 삭제: `is_active = False`로 설정
+    - 소프트 삭제: `is_deleted = True`로 설정
+    - `deleted_at`에 삭제 일시 저장
+    - `deleted_by`에 삭제자 저장
     - 매핑된 `program_id` 제거 (None으로 설정)
     - 실제 데이터는 삭제되지 않음
+    
+    **단일/일괄 삭제:**
+    - `plc_uuids` 배열에 1개만 넣으면 단일 삭제
+    - `plc_uuids` 배열에 여러 개를 넣으면 일괄 삭제
     
     **주의사항:**
     - PLC 삭제 시 매핑된 PGM ID도 함께 해제됩니다.
     
     **요청 파라미터:**
-    - `plc_uuids`: 삭제할 PLC UUID 리스트
+    - `plc_uuids`: 삭제할 PLC UUID 리스트 (1개 이상)
     - `delete_user`: 삭제 사용자
     
     """,
@@ -614,39 +558,34 @@ def delete_plcs(
 
 @router.post(
     "/batch",
-    response_model=PLCBatchSaveResponse,
-    summary="PLC 일괄 저장",
+    response_model=PLCBatchCreateResponse,
+    summary="PLC 다건 저장",
     description="""
-    여러 PLC를 일괄 저장합니다 (생성 및 수정).
+    여러 PLC를 일괄 생성합니다.
     
-    **화면 용도:** PLC 등록 화면에서 저장 버튼 클릭 시
-    
-    **저장 방식:**
-    - `plc_uuid`가 없으면: 새로 생성
-    - `plc_uuid`가 있으면: 기존 PLC 수정
+    **화면 용도:** PLC 등록 화면에서 새 PLC 추가 시
     
     **요청 파라미터:**
-    - `items`: 저장할 PLC 목록
-      - 각 항목: `plc_uuid` (선택), `plant_id`, `process_id`,
-        `line_id`, `plc_name`, `unit`, `plc_id`, `update_user`
+    - `items`: 생성할 PLC 목록
+      - 각 항목: `plant_id`, `process_id`, `line_id`, `plc_name`, `unit`, `plc_id`, `create_user`
     
     **응답:**
-    - 성공 시: `message="기준 정보가 저장되었습니다."`
-    - 실패 시: `message="저장 중 오류가 발생했습니다."` + `errors` 배열
+    - 성공 시: `message="PLC가 생성되었습니다."`
+    - 실패 시: `message="일부 항목 생성 중 오류가 발생했습니다."` + `errors` 배열
     
     **예외 상황:**
     - 중복된 PLC ID: 해당 항목만 실패 처리
     - 존재하지 않는 Plant/Process/Line ID: 해당 항목만 실패 처리
     """,
 )
-def batch_save_plcs(
-    request: PLCBatchSaveRequest,
+def batch_create_plcs(
+    request: PLCBatchCreateRequest,
     db: Session = Depends(get_db),
 ):
     """
-    PLC 일괄 저장 (생성 및 수정)
+    PLC 다건 저장 (생성)
     
-    저장 버튼 클릭 시 호출되는 API입니다.
+    새 PLC 추가 시 호출되는 API입니다.
     """
     try:
         plc_crud = PLCCRUD(db)
@@ -661,7 +600,6 @@ def batch_save_plcs(
         line_crud = LineMasterCRUD(db)
 
         created_count = 0
-        updated_count = 0
         failed_count = 0
         errors = []
 
@@ -684,8 +622,6 @@ def batch_save_plcs(
                     failed_count += 1
                     continue
 
-                # Process는 이제 Plant와 무관하므로 plant_id 검증 제거
-
                 line = line_crud.get_line(item.line_id)
                 if not line:
                     errors.append(
@@ -694,42 +630,22 @@ def batch_save_plcs(
                     failed_count += 1
                     continue
 
-                # Line은 이제 Process와 무관하므로 process_id 검증 제거
-
-                # plc_uuid가 있으면 수정, 없으면 생성
-                if item.plc_uuid:
-                    # 수정
-                    updated_plc = plc_crud.update_plc(
-                        plc_uuid=item.plc_uuid,
+                # PLC 생성
+                try:
+                    plc_crud.create_plc(
+                        plant_id=item.plant_id,
+                        process_id=item.process_id,
+                        line_id=item.line_id,
                         plc_name=item.plc_name,
-                        unit=item.unit,
                         plc_id=item.plc_id,
-                        update_user=item.update_user,
+                        create_user=item.create_user,
+                        unit=item.unit,
                     )
-                    if updated_plc:
-                        updated_count += 1
-                    else:
-                        errors.append(
-                            f"PLC ID {item.plc_id}: PLC를 찾을 수 없습니다"
-                        )
-                        failed_count += 1
-                else:
-                    # 생성
-                    try:
-                        plc_crud.create_plc(
-                            plant_id=item.plant_id,
-                            process_id=item.process_id,
-                            line_id=item.line_id,
-                            plc_name=item.plc_name,
-                            plc_id=item.plc_id,
-                            create_user=item.update_user,
-                            unit=item.unit,
-                        )
-                        created_count += 1
-                    except HandledException as e:
-                        error_msg = f"PLC ID {item.plc_id}: {e.msg or str(e)}"
-                        errors.append(error_msg)
-                        failed_count += 1
+                    created_count += 1
+                except HandledException as e:
+                    error_msg = f"PLC ID {item.plc_id}: {e.msg or str(e)}"
+                    errors.append(error_msg)
+                    failed_count += 1
 
             except Exception as e:
                 errors.append(f"PLC ID {item.plc_id}: {str(e)}")
@@ -737,23 +653,103 @@ def batch_save_plcs(
 
         # 성공 메시지 결정
         if failed_count == 0:
-            message = "기준 정보가 저장되었습니다."
+            message = f"{created_count}개의 PLC가 생성되었습니다."
         else:
-            message = "일부 항목 저장 중 오류가 발생했습니다."
+            message = "일부 항목 생성 중 오류가 발생했습니다."
 
-        return PLCBatchSaveResponse(
+        return PLCBatchCreateResponse(
             success=failed_count == 0,
             message=message,
             created_count=created_count,
+            failed_count=failed_count,
+            errors=errors,
+        )
+    except Exception as e:
+        logger.error("PLC 다건 저장 실패: %s", str(e))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"PLC 다건 저장 중 오류가 발생했습니다: {str(e)}",
+        ) from e
+
+
+@router.put(
+    "/batch",
+    response_model=PLCBatchUpdateResponse,
+    summary="PLC 다건 수정",
+    description="""
+    여러 PLC를 일괄 수정합니다.
+    
+    **화면 용도:** PLC 등록 화면에서 기존 PLC 수정 시
+    
+    **요청 파라미터:**
+    - `items`: 수정할 PLC 목록
+      - 각 항목: `plc_uuid` (필수), `plc_name`, `unit`, `plc_id`, `update_user`
+    
+    **응답:**
+    - 성공 시: `message="PLC가 수정되었습니다."`
+    - 실패 시: `message="일부 항목 수정 중 오류가 발생했습니다."` + `errors` 배열
+    
+    **예외 상황:**
+    - PLC를 찾을 수 없음: 해당 항목만 실패 처리
+    - 중복된 PLC ID: 해당 항목만 실패 처리
+    """,
+)
+def batch_update_plcs(
+    request: PLCBatchUpdateRequest,
+    db: Session = Depends(get_db),
+):
+    """
+    PLC 다건 수정
+    
+    기존 PLC 수정 시 호출되는 API입니다.
+    """
+    try:
+        plc_crud = PLCCRUD(db)
+
+        updated_count = 0
+        failed_count = 0
+        errors = []
+
+        for item in request.items:
+            try:
+                # PLC 수정
+                updated_plc = plc_crud.update_plc(
+                    plc_uuid=item.plc_uuid,
+                    plc_name=item.plc_name,
+                    unit=item.unit,
+                    plc_id=item.plc_id,
+                    update_user=item.update_user,
+                )
+                if updated_plc:
+                    updated_count += 1
+                else:
+                    errors.append(
+                        f"PLC UUID {item.plc_uuid}: PLC를 찾을 수 없습니다"
+                    )
+                    failed_count += 1
+
+            except Exception as e:
+                errors.append(f"PLC UUID {item.plc_uuid}: {str(e)}")
+                failed_count += 1
+
+        # 성공 메시지 결정
+        if failed_count == 0:
+            message = f"{updated_count}개의 PLC가 수정되었습니다."
+        else:
+            message = "일부 항목 수정 중 오류가 발생했습니다."
+
+        return PLCBatchUpdateResponse(
+            success=failed_count == 0,
+            message=message,
             updated_count=updated_count,
             failed_count=failed_count,
             errors=errors,
         )
     except Exception as e:
-        logger.error("PLC 일괄 저장 실패: %s", str(e))
+        logger.error("PLC 다건 수정 실패: %s", str(e))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"PLC 일괄 저장 중 오류가 발생했습니다: {str(e)}",
+            detail=f"PLC 다건 수정 중 오류가 발생했습니다: {str(e)}",
         ) from e
 
 

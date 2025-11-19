@@ -22,9 +22,26 @@ GET /v1/plcs/mapping/dropdown
 
 ### 쿼리 파라미터
 
-| 파라미터 | 타입 | 필수 | 기본값 | 설명 |
-|---------|------|------|--------|------|
-| `user_id` | string | **예** | - | 사용자 ID (권한 기반 필터링용) |
+<table>
+<thead>
+<tr>
+<th>파라미터</th>
+<th>타입</th>
+<th>필수</th>
+<th>기본값</th>
+<th>설명</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>user_id</code></td>
+<td>string</td>
+<td><strong>예</strong></td>
+<td>-</td>
+<td>사용자 ID (권한 기반 필터링용)</td>
+</tr>
+</tbody>
+</table>
 
 ### 권한 기반 필터링
 
@@ -98,21 +115,82 @@ GET /v1/plcs/mapping/dropdown
 
 ### 응답 필드 설명
 
-| 필드 | 타입 | 설명 |
-|------|------|------|
-| `plants` | array | Plant 목록 (첫 번째 드롭다운) |
-| `plants[].id` | string | Plant ID (Primary Key) |
-| `plants[].code` | string | Plant 코드 |
-| `plants[].name` | string | Plant 이름 |
-| `processesByPlant` | object | Plant ID를 키로 하는 Process 목록 맵 (두 번째 드롭다운) |
-| `processesByPlant[plantId]` | array | 해당 Plant의 공정 목록 |
-| `processesByPlant[plantId][].id` | string | 공정 ID (Primary Key) |
-| `processesByPlant[plantId][].code` | string | 공정 코드 |
-| `processesByPlant[plantId][].name` | string | 공정 이름 |
-| `linesByProcess` | object | Process ID를 키로 하는 Line 목록 맵 (세 번째 드롭다운, 모든 Process에 동일한 Line 목록) |
-| `linesByProcess[processId]` | array | Line 목록 (모든 Process에 동일) |
-| `linesByProcess[processId][].id` | string | Line ID (Primary Key) |
-| `linesByProcess[processId][].name` | string | Line 이름 |
+<table>
+<thead>
+<tr>
+<th>필드</th>
+<th>타입</th>
+<th>설명</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>plants</code></td>
+<td>array</td>
+<td>Plant 목록 (첫 번째 드롭다운)</td>
+</tr>
+<tr>
+<td><code>plants[].id</code></td>
+<td>string</td>
+<td>Plant ID (Primary Key)</td>
+</tr>
+<tr>
+<td><code>plants[].code</code></td>
+<td>string</td>
+<td>Plant 코드</td>
+</tr>
+<tr>
+<td><code>plants[].name</code></td>
+<td>string</td>
+<td>Plant 이름</td>
+</tr>
+<tr>
+<td><code>processesByPlant</code></td>
+<td>object</td>
+<td>Plant ID를 키로 하는 Process 목록 맵 (두 번째 드롭다운)</td>
+</tr>
+<tr>
+<td><code>processesByPlant[plantId]</code></td>
+<td>array</td>
+<td>해당 Plant의 공정 목록</td>
+</tr>
+<tr>
+<td><code>processesByPlant[plantId][].id</code></td>
+<td>string</td>
+<td>공정 ID (Primary Key)</td>
+</tr>
+<tr>
+<td><code>processesByPlant[plantId][].code</code></td>
+<td>string</td>
+<td>공정 코드</td>
+</tr>
+<tr>
+<td><code>processesByPlant[plantId][].name</code></td>
+<td>string</td>
+<td>공정 이름</td>
+</tr>
+<tr>
+<td><code>linesByProcess</code></td>
+<td>object</td>
+<td>Process ID를 키로 하는 Line 목록 맵 (세 번째 드롭다운, 모든 Process에 동일한 Line 목록)</td>
+</tr>
+<tr>
+<td><code>linesByProcess[processId]</code></td>
+<td>array</td>
+<td>Line 목록 (모든 Process에 동일)</td>
+</tr>
+<tr>
+<td><code>linesByProcess[processId][].id</code></td>
+<td>string</td>
+<td>Line ID (Primary Key)</td>
+</tr>
+<tr>
+<td><code>linesByProcess[processId][].name</code></td>
+<td>string</td>
+<td>Line 이름</td>
+</tr>
+</tbody>
+</table>
 
 ### 프론트엔드 사용 흐름
 
@@ -170,18 +248,89 @@ GET /v1/plcs
 
 ### 쿼리 파라미터
 
-| 파라미터 | 타입 | 필수 | 기본값 | 설명 |
-|---------|------|------|--------|------|
-| `plant_id` | string | 아니오 | - | Plant ID로 필터링 |
-| `process_id` | string | 아니오 | - | 공정 ID로 필터링 |
-| `line_id` | string | 아니오 | - | Line ID로 필터링 |
-| `plc_id` | string | 아니오 | - | PLC ID로 검색 (부분 일치) |
-| `plc_name` | string | 아니오 | - | PLC 명으로 검색 (부분 일치) |
-| `program_name` | string | 아니오 | - | PGM명으로 필터링 (부분 일치) |
-| `page` | integer | 아니오 | 1 | 페이지 번호 (최소: 1) |
-| `page_size` | integer | 아니오 | 10 | 페이지당 항목 수 (최소: 1, 최대: 100) |
-| `sort_by` | string | 아니오 | `plc_id` | 정렬 기준 (`plc_id`, `plc_name`, `create_dt`) |
-| `sort_order` | string | 아니오 | `asc` | 정렬 순서 (`asc`, `desc`) |
+<table>
+<thead>
+<tr>
+<th>파라미터</th>
+<th>타입</th>
+<th>필수</th>
+<th>기본값</th>
+<th>설명</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>plant_id</code></td>
+<td>string</td>
+<td>아니오</td>
+<td>-</td>
+<td>Plant ID로 필터링</td>
+</tr>
+<tr>
+<td><code>process_id</code></td>
+<td>string</td>
+<td>아니오</td>
+<td>-</td>
+<td>공정 ID로 필터링</td>
+</tr>
+<tr>
+<td><code>line_id</code></td>
+<td>string</td>
+<td>아니오</td>
+<td>-</td>
+<td>Line ID로 필터링</td>
+</tr>
+<tr>
+<td><code>plc_id</code></td>
+<td>string</td>
+<td>아니오</td>
+<td>-</td>
+<td>PLC ID로 검색 (부분 일치)</td>
+</tr>
+<tr>
+<td><code>plc_name</code></td>
+<td>string</td>
+<td>아니오</td>
+<td>-</td>
+<td>PLC 명으로 검색 (부분 일치)</td>
+</tr>
+<tr>
+<td><code>program_name</code></td>
+<td>string</td>
+<td>아니오</td>
+<td>-</td>
+<td>PGM명으로 필터링 (부분 일치)</td>
+</tr>
+<tr>
+<td><code>page</code></td>
+<td>integer</td>
+<td>아니오</td>
+<td>1</td>
+<td>페이지 번호 (최소: 1)</td>
+</tr>
+<tr>
+<td><code>page_size</code></td>
+<td>integer</td>
+<td>아니오</td>
+<td>10</td>
+<td>페이지당 항목 수 (최소: 1, 최대: 100)</td>
+</tr>
+<tr>
+<td><code>sort_by</code></td>
+<td>string</td>
+<td>아니오</td>
+<td><code>plc_id</code></td>
+<td>정렬 기준 (<code>plc_id</code>, <code>plc_name</code>, <code>create_dt</code>)</td>
+</tr>
+<tr>
+<td><code>sort_order</code></td>
+<td>string</td>
+<td>아니오</td>
+<td><code>asc</code></td>
+<td>정렬 순서 (<code>asc</code>, <code>desc</code>)</td>
+</tr>
+</tbody>
+</table>
 
 ### 정렬 기준 (`sort_by`)
 
@@ -221,23 +370,92 @@ GET /v1/plcs
 
 ### 응답 필드 설명
 
-| 필드 | 타입 | 설명 |
-|------|------|------|
-| `items` | array | PLC 목록 |
-| `items[].id` | string | PLC UUID (Primary Key) |
-| `items[].plc_id` | string | PLC 식별자 |
-| `items[].plc_name` | string | PLC 이름 |
-| `items[].plant` | string | Plant 이름 |
-| `items[].process` | string | 공정 이름 |
-| `items[].line` | string | Line 이름 |
-| `items[].unit` | string | 호기 |
-| `items[].program_id` | string | 매핑된 PGM ID |
-| `items[].mapping_user` | string | 매핑 등록자 |
-| `items[].mapping_dt` | datetime | 매핑 일시 |
-| `total_count` | integer | 전체 개수 |
-| `page` | integer | 현재 페이지 |
-| `page_size` | integer | 페이지당 항목 수 |
-| `total_pages` | integer | 전체 페이지 수 |
+<table>
+<thead>
+<tr>
+<th>필드</th>
+<th>타입</th>
+<th>설명</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>items</code></td>
+<td>array</td>
+<td>PLC 목록</td>
+</tr>
+<tr>
+<td><code>items[].id</code></td>
+<td>string</td>
+<td>PLC UUID (Primary Key)</td>
+</tr>
+<tr>
+<td><code>items[].plc_id</code></td>
+<td>string</td>
+<td>PLC 식별자</td>
+</tr>
+<tr>
+<td><code>items[].plc_name</code></td>
+<td>string</td>
+<td>PLC 이름</td>
+</tr>
+<tr>
+<td><code>items[].plant</code></td>
+<td>string</td>
+<td>Plant 이름</td>
+</tr>
+<tr>
+<td><code>items[].process</code></td>
+<td>string</td>
+<td>공정 이름</td>
+</tr>
+<tr>
+<td><code>items[].line</code></td>
+<td>string</td>
+<td>Line 이름</td>
+</tr>
+<tr>
+<td><code>items[].unit</code></td>
+<td>string</td>
+<td>호기</td>
+</tr>
+<tr>
+<td><code>items[].program_id</code></td>
+<td>string</td>
+<td>매핑된 PGM ID</td>
+</tr>
+<tr>
+<td><code>items[].mapping_user</code></td>
+<td>string</td>
+<td>매핑 등록자</td>
+</tr>
+<tr>
+<td><code>items[].mapping_dt</code></td>
+<td>datetime</td>
+<td>매핑 일시</td>
+</tr>
+<tr>
+<td><code>total_count</code></td>
+<td>integer</td>
+<td>전체 개수</td>
+</tr>
+<tr>
+<td><code>page</code></td>
+<td>integer</td>
+<td>현재 페이지</td>
+</tr>
+<tr>
+<td><code>page_size</code></td>
+<td>integer</td>
+<td>페이지당 항목 수</td>
+</tr>
+<tr>
+<td><code>total_pages</code></td>
+<td>integer</td>
+<td>전체 페이지 수</td>
+</tr>
+</tbody>
+</table>
 
 ### 사용 예시
 
@@ -285,18 +503,89 @@ GET /v1/programs
 
 ### 쿼리 파라미터
 
-| 파라미터 | 타입 | 필수 | 기본값 | 설명 |
-|---------|------|------|--------|------|
-| `user_id` | string | **예** | - | 사용자 ID (권한 기반 필터링용) |
-| `program_id` | string | 아니오 | - | PGM ID로 검색 (정확한 일치) |
-| `program_name` | string | 아니오 | - | 제목으로 검색 (부분 일치) |
-| `process_id` | string | 아니오 | - | 공정 ID로 필터링 (드롭다운 선택) |
-| `status` | string | 아니오 | - | 등록 상태로 필터링 |
-| `create_user` | string | 아니오 | - | 작성자로 필터링 |
-| `page` | integer | 아니오 | 1 | 페이지 번호 (최소: 1) |
-| `page_size` | integer | 아니오 | 10 | 페이지당 항목 수 (최소: 1, 최대: 100) |
-| `sort_by` | string | 아니오 | `create_dt` | 정렬 기준 (`create_dt`, `program_id`, `program_name`, `status`) |
-| `sort_order` | string | 아니오 | `desc` | 정렬 순서 (`asc`, `desc`) |
+<table>
+<thead>
+<tr>
+<th>파라미터</th>
+<th>타입</th>
+<th>필수</th>
+<th>기본값</th>
+<th>설명</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>user_id</code></td>
+<td>string</td>
+<td><strong>예</strong></td>
+<td>-</td>
+<td>사용자 ID (권한 기반 필터링용)</td>
+</tr>
+<tr>
+<td><code>program_id</code></td>
+<td>string</td>
+<td>아니오</td>
+<td>-</td>
+<td>PGM ID로 검색 (정확한 일치)</td>
+</tr>
+<tr>
+<td><code>program_name</code></td>
+<td>string</td>
+<td>아니오</td>
+<td>-</td>
+<td>제목으로 검색 (부분 일치)</td>
+</tr>
+<tr>
+<td><code>process_id</code></td>
+<td>string</td>
+<td>아니오</td>
+<td>-</td>
+<td>공정 ID로 필터링 (드롭다운 선택)</td>
+</tr>
+<tr>
+<td><code>status</code></td>
+<td>string</td>
+<td>아니오</td>
+<td>-</td>
+<td>등록 상태로 필터링</td>
+</tr>
+<tr>
+<td><code>create_user</code></td>
+<td>string</td>
+<td>아니오</td>
+<td>-</td>
+<td>작성자로 필터링</td>
+</tr>
+<tr>
+<td><code>page</code></td>
+<td>integer</td>
+<td>아니오</td>
+<td>1</td>
+<td>페이지 번호 (최소: 1)</td>
+</tr>
+<tr>
+<td><code>page_size</code></td>
+<td>integer</td>
+<td>아니오</td>
+<td>10</td>
+<td>페이지당 항목 수 (최소: 1, 최대: 100)</td>
+</tr>
+<tr>
+<td><code>sort_by</code></td>
+<td>string</td>
+<td>아니오</td>
+<td><code>create_dt</code></td>
+<td>정렬 기준 (<code>create_dt</code>, <code>program_id</code>, <code>program_name</code>, <code>status</code>)</td>
+</tr>
+<tr>
+<td><code>sort_order</code></td>
+<td>string</td>
+<td>아니오</td>
+<td><code>desc</code></td>
+<td>정렬 순서 (<code>asc</code>, <code>desc</code>)</td>
+</tr>
+</tbody>
+</table>
 
 ### 등록 상태 (`status`)
 
@@ -354,23 +643,92 @@ GET /v1/programs
 
 ### 응답 필드 설명
 
-| 필드 | 타입 | 설명 |
-|------|------|------|
-| `items` | array | 프로그램 목록 |
-| `items[].program_id` | string | 프로그램 ID (PGM ID) |
-| `items[].program_name` | string | 프로그램 제목 |
-| `items[].process_name` | string | 공정명 |
-| `items[].ladder_file_count` | integer | Ladder 파일 개수 |
-| `items[].comment_file_count` | integer | Comment 파일 개수 |
-| `items[].status` | string | 등록 상태 |
-| `items[].status_display` | string | 등록 상태 표시명 |
-| `items[].processing_time` | string | 등록 소요시간 (예: "10 min", "-") |
-| `items[].create_user` | string | 작성자 |
-| `items[].create_dt` | datetime | 등록일시 |
-| `total_count` | integer | 전체 개수 |
-| `page` | integer | 현재 페이지 |
-| `page_size` | integer | 페이지당 항목 수 |
-| `total_pages` | integer | 전체 페이지 수 |
+<table>
+<thead>
+<tr>
+<th>필드</th>
+<th>타입</th>
+<th>설명</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>items</code></td>
+<td>array</td>
+<td>프로그램 목록</td>
+</tr>
+<tr>
+<td><code>items[].program_id</code></td>
+<td>string</td>
+<td>프로그램 ID (PGM ID)</td>
+</tr>
+<tr>
+<td><code>items[].program_name</code></td>
+<td>string</td>
+<td>프로그램 제목</td>
+</tr>
+<tr>
+<td><code>items[].process_name</code></td>
+<td>string</td>
+<td>공정명</td>
+</tr>
+<tr>
+<td><code>items[].ladder_file_count</code></td>
+<td>integer</td>
+<td>Ladder 파일 개수</td>
+</tr>
+<tr>
+<td><code>items[].comment_file_count</code></td>
+<td>integer</td>
+<td>Comment 파일 개수</td>
+</tr>
+<tr>
+<td><code>items[].status</code></td>
+<td>string</td>
+<td>등록 상태</td>
+</tr>
+<tr>
+<td><code>items[].status_display</code></td>
+<td>string</td>
+<td>등록 상태 표시명</td>
+</tr>
+<tr>
+<td><code>items[].processing_time</code></td>
+<td>string</td>
+<td>등록 소요시간 (예: "10 min", "-")</td>
+</tr>
+<tr>
+<td><code>items[].create_user</code></td>
+<td>string</td>
+<td>작성자</td>
+</tr>
+<tr>
+<td><code>items[].create_dt</code></td>
+<td>datetime</td>
+<td>등록일시</td>
+</tr>
+<tr>
+<td><code>total_count</code></td>
+<td>integer</td>
+<td>전체 개수</td>
+</tr>
+<tr>
+<td><code>page</code></td>
+<td>integer</td>
+<td>현재 페이지</td>
+</tr>
+<tr>
+<td><code>page_size</code></td>
+<td>integer</td>
+<td>페이지당 항목 수</td>
+</tr>
+<tr>
+<td><code>total_pages</code></td>
+<td>integer</td>
+<td>전체 페이지 수</td>
+</tr>
+</tbody>
+</table>
 
 ### 사용 예시
 
