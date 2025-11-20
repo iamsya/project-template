@@ -9,6 +9,91 @@ Masters 라우터의 모든 API 엔드포인트 가이드입니다.
 
 ---
 
+## 두 API의 차이점
+
+두 API는 서로 다른 용도로 사용됩니다. 다음 표를 참고하여 적절한 API를 선택하세요.
+
+<table>
+<thead>
+<tr>
+<th>구분</th>
+<th><code>GET /v1/masters</code><br/>(권한 기반 마스터 데이터 조회)</th>
+<th><code>GET /v1/masters/processes</code><br/>(공정 목록 조회)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>주요 용도</strong></td>
+<td>드롭다운용 계층 구조 데이터 조회</td>
+<td>공정 기준정보 단순 목록 조회</td>
+</tr>
+<tr>
+<td><strong>권한 필터링</strong></td>
+<td>✅ 있음 (<code>user_id</code> 필수)</td>
+<td>❌ 없음</td>
+</tr>
+<tr>
+<td><strong>데이터 구조</strong></td>
+<td>계층 구조 (Plant → Process → Line)</td>
+<td>단순 리스트 (Process만)</td>
+</tr>
+<tr>
+<td><strong>반환 데이터</strong></td>
+<td>Plant, Process, Line 모두 반환</td>
+<td>Process만 반환</td>
+</tr>
+<tr>
+<td><strong>정렬/필터링</strong></td>
+<td>❌ 없음</td>
+<td>✅ 있음 (<code>include_inactive</code>, <code>sort_by</code>, <code>sort_order</code>)</td>
+</tr>
+<tr>
+<td><strong>메타데이터</strong></td>
+<td>기본 정보만 (id, code, name)</td>
+<td>상세 정보 포함 (description, is_active, create_dt, update_dt 등)</td>
+</tr>
+<tr>
+<td><strong>사용 화면</strong></td>
+<td>PLC 관리, Program 등록, PLC-PGM 매핑 화면의 드롭다운</td>
+<td>그룹 관리, 공정 기준정보 관리, 통계/분석 화면</td>
+</tr>
+</tbody>
+</table>
+
+### 언제 어떤 API를 사용해야 할까요?
+
+#### `GET /v1/masters`를 사용하는 경우
+
+- ✅ **드롭다운 구성이 필요한 경우**
+  - Plant, Process, Line의 연쇄 드롭다운을 구현할 때
+  - 계층 구조 선택이 필요한 화면에서
+  
+- ✅ **권한 기반 필터링이 필요한 경우**
+  - 사용자 권한에 따라 접근 가능한 Process만 표시해야 할 때
+  - `user_id`를 통해 권한 체크가 필요한 경우
+
+- ✅ **한 번의 호출로 모든 계층 데이터가 필요한 경우**
+  - Plant, Process, Line을 모두 한 번에 가져와야 할 때
+
+#### `GET /v1/masters/processes`를 사용하는 경우
+
+- ✅ **공정 목록만 필요한 경우**
+  - Process 정보만 조회하면 될 때
+  - Plant나 Line 정보가 필요 없을 때
+
+- ✅ **정렬이나 필터링이 필요한 경우**
+  - 공정명, 생성일시 등으로 정렬이 필요할 때
+  - 비활성 공정도 포함해서 조회해야 할 때
+
+- ✅ **상세 정보가 필요한 경우**
+  - 공정의 description, is_active, 생성/수정 일시 등 메타데이터가 필요할 때
+
+- ✅ **권한 체크 없이 모든 공정을 조회해야 하는 경우**
+  - 관리자 화면에서 모든 공정을 조회할 때
+  - 권한과 무관하게 전체 공정 목록이 필요할 때
+
+---
+
 ## 1. 권한 기반 마스터 데이터 조회 (드롭다운용)
 
 사용자 권한에 따라 접근 가능한 마스터 데이터를 조회합니다.
