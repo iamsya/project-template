@@ -427,15 +427,18 @@ class PLCCRUD:
                         errors.append(f"PLC를 찾을 수 없습니다: {plc_id}")
                         continue
 
+                    # 빈 문자열이면 NULL로 처리
+                    normalized_program_id = program_id if program_id and program_id != "" else None
+
                     # 이전 program_id 저장 (변경 이력용)
-                    if plc.program_id and plc.program_id != program_id:
+                    if plc.program_id and plc.program_id != normalized_program_id:
                         # metadata_json에 이전 program_id 저장
                         metadata = plc.metadata_json or {}
                         metadata["previous_program_id"] = plc.program_id
                         plc.metadata_json = metadata
 
                     # Program 매핑 업데이트
-                    plc.program_id = program_id
+                    plc.program_id = normalized_program_id
                     plc.mapping_dt = datetime.now()
                     plc.mapping_user = mapping_user if mapping_user else "user"
                     plc.update_dt = datetime.now()

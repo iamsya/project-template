@@ -306,7 +306,7 @@ GET /v1/plcs?program_name=라벨부착
 
 ## 3. PLC-PGM 매핑 저장
 
-여러 PLC에 하나의 PGM 프로그램을 매핑합니다.
+여러 PLC에 각각 다른 PGM 프로그램을 매핑합니다. 여러 매핑 항목을 한 번에 처리할 수 있습니다.
 
 ### 엔드포인트
 
@@ -318,9 +318,20 @@ PUT /v1/plcs/mapping
 
 ```json
 {
-  "plc_uuids": ["plc-uuid-001", "plc-uuid-002", "plc-uuid-003"],
-  "program_id": "PGM_01",
-  "mapping_user": "user001"
+  "items": [
+    {
+      "plc_uuids": ["plc-uuid-001", "plc-uuid-002"],
+      "program_id": "PGM_01"
+    },
+    {
+      "plc_uuids": ["plc-uuid-003"],
+      "program_id": "PGM_02"
+    },
+    {
+      "plc_uuids": ["plc-uuid-004"],
+      "program_id": ""
+    }
+  ]
 }
 ```
 
@@ -337,25 +348,31 @@ PUT /v1/plcs/mapping
 </thead>
 <tbody>
 <tr>
-<td><code>plc_uuids</code></td>
+<td><code>items</code></td>
+<td>array</td>
+<td><strong>예</strong></td>
+<td>PLC-PGM 매핑 항목 리스트 (최소 1개 이상)</td>
+</tr>
+<tr>
+<td><code>items[].plc_uuids</code></td>
 <td>array[string]</td>
 <td><strong>예</strong></td>
-<td>매핑할 PLC UUID 리스트</td>
+<td>매핑할 PLC UUID 리스트 (최소 1개 이상)</td>
 </tr>
 <tr>
-<td><code>program_id</code></td>
+<td><code>items[].program_id</code></td>
 <td>string</td>
 <td><strong>예</strong></td>
-<td>매핑할 PGM 프로그램 ID</td>
-</tr>
-<tr>
-<td><code>mapping_user</code></td>
-<td>string</td>
-<td><strong>예</strong></td>
-<td>매핑을 수행한 사용자 ID</td>
+<td>매핑할 PGM 프로그램 ID (빈 문자열("")이면 매핑 해제)</td>
 </tr>
 </tbody>
 </table>
+
+### Program ID 처리 규칙
+
+- **Program 매핑**: `program_id`에 실제 Program ID 값을 전달
+- **매핑 해제**: `program_id`에 빈 문자열(`""`)을 전달하면 자동으로 `null`로 변환되어 매핑이 해제됩니다
+- **외래키 제약**: 빈 문자열은 자동으로 `null`로 변환되므로 외래키 제약 위반 없이 안전하게 처리됩니다
 
 ### 응답 형식
 
@@ -368,25 +385,116 @@ PUT /v1/plcs/mapping
 }
 ```
 
+### 응답 필드 설명
+
+<table>
+<thead>
+<tr>
+<th>필드</th>
+<th>타입</th>
+<th>설명</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>success</code></td>
+<td>boolean</td>
+<td>전체 성공 여부 (모든 PLC가 성공적으로 매핑된 경우 true)</td>
+</tr>
+<tr>
+<td><code>mapped_count</code></td>
+<td>integer</td>
+<td>성공적으로 매핑된 PLC 개수</td>
+</tr>
+<tr>
+<td><code>failed_count</code></td>
+<td>integer</td>
+<td>매핑 실패한 PLC 개수</td>
+</tr>
+<tr>
+<td><code>errors</code></td>
+<td>array[string]</td>
+<td>실패한 PLC의 오류 정보 리스트</td>
+</tr>
+</tbody>
+</table>
+
 ### 처리 로직
 
-1. 각 PLC의 현재 `program_id`를 `metadata_json.previous_program_id`에 저장
-2. 새로운 `program_id`로 업데이트
-3. `mapping_user`, `mapping_dt` 업데이트
+1. 각 매핑 항목을 순회하며 처리
+2. 각 PLC의 현재 `program_id`를 `metadata_json.previous_program_id`에 저장 (변경 이력 관리)
+3. 새로운 `program_id`로 업데이트 (빈 문자열이면 `null`로 변환)
+4. `mapping_dt` 업데이트
+5. `mapping_user`는 내부에서 임시로 "user"로 설정 (나중에 헤더 토큰으로 처리 예정)
 
-**참고:** `previous_program_id`는 `METADATA_JSON` 필드 내에 저장되며, Program ID 변경 이력을 추적하기 위해 사용됩니다.
+**참고:** 
+- `previous_program_id`는 `METADATA_JSON` 필드 내에 저장되며, Program ID 변경 이력을 추적하기 위해 사용됩니다.
+- `mapping_user` 파라미터는 제거되었으며, 현재는 내부에서 임시로 "user"로 설정됩니다. 향후 헤더의 인증 토큰에서 사용자 정보를 추출하여 처리할 예정입니다.
 
 ### 사용 예시
 
+#### 여러 PLC에 각각 다른 Program 매핑
 ```bash
 curl -X PUT "http://localhost:8000/v1/plcs/mapping" \
   -H "Content-Type: application/json" \
   -d '{
-    "plc_uuids": ["plc-uuid-001", "plc-uuid-002"],
-    "program_id": "PGM_01",
-    "mapping_user": "user001"
+    "items": [
+      {
+        "plc_uuids": ["plc-uuid-001", "plc-uuid-002"],
+        "program_id": "PGM_01"
+      },
+      {
+        "plc_uuids": ["plc-uuid-003"],
+        "program_id": "PGM_02"
+      }
+    ]
   }'
 ```
+
+#### Program 매핑 해제
+```bash
+curl -X PUT "http://localhost:8000/v1/plcs/mapping" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "items": [
+      {
+        "plc_uuids": ["plc-uuid-001"],
+        "program_id": ""
+      }
+    ]
+  }'
+```
+
+#### 복합 매핑 (매핑 + 해제)
+```bash
+curl -X PUT "http://localhost:8000/v1/plcs/mapping" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "items": [
+      {
+        "plc_uuids": ["plc-uuid-001", "plc-uuid-002"],
+        "program_id": "PGM_01"
+      },
+      {
+        "plc_uuids": ["plc-uuid-003"],
+        "program_id": ""
+      }
+    ]
+  }'
+```
+
+### 예외 상황
+
+- **PLC를 찾을 수 없는 경우**: 해당 PLC는 실패 처리되고 `errors` 배열에 오류 메시지가 추가됩니다
+- **PGM 프로그램을 찾을 수 없는 경우**: 해당 PLC는 실패 처리되고 `errors` 배열에 오류 메시지가 추가됩니다
+- **일부 실패**: 일부 PLC만 실패한 경우 `success=false`, `failed_count`에 실패 개수, `errors`에 오류 목록이 반환됩니다
+
+### 특징
+
+1. **다중 매핑 지원**: 여러 매핑 항목을 한 번에 처리할 수 있습니다
+2. **유연한 매핑**: 각 항목마다 서로 다른 Program ID를 매핑할 수 있습니다
+3. **매핑 해제**: 빈 문자열을 전달하면 자동으로 `null`로 변환되어 매핑이 해제됩니다
+4. **부분 실패 허용**: 일부 PLC만 실패해도 나머지는 정상 처리됩니다
 
 ---
 
