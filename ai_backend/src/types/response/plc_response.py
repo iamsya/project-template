@@ -220,7 +220,6 @@ class MasterDropdownItem(BaseModel):
     """드롭다운용 기본 항목"""
 
     id: str = Field(..., description="ID (Primary Key)")
-    code: str = Field(..., description="코드")
     name: str = Field(..., description="이름")
 
 
