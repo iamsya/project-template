@@ -397,7 +397,7 @@ class PLCCRUD:
         self,
         plc_ids: List[str],
         program_id: str,
-        mapping_user: str,
+        mapping_user: Optional[str] = None,
     ) -> Dict[str, int]:
         """
         여러 PLC에 Program 매핑 저장
@@ -405,7 +405,7 @@ class PLCCRUD:
         Args:
             plc_ids: 매핑할 PLC ID 리스트
             program_id: 매핑할 Program ID
-            mapping_user: 매핑 사용자
+            mapping_user: 매핑 사용자 (선택사항, None이면 업데이트 안 함)
 
         Returns:
             Dict: {
@@ -437,9 +437,9 @@ class PLCCRUD:
                     # Program 매핑 업데이트
                     plc.program_id = program_id
                     plc.mapping_dt = datetime.now()
-                    plc.mapping_user = mapping_user
+                    plc.mapping_user = mapping_user if mapping_user else "user"
                     plc.update_dt = datetime.now()
-                    plc.update_user = mapping_user
+                    plc.update_user = mapping_user if mapping_user else "user"
 
                     success_count += 1
 

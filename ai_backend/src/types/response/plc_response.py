@@ -111,14 +111,21 @@ class ProgramMappingListResponse(BaseModel):
     total_pages: int = Field(..., description="전체 페이지 수")
 
 
-class PLCMappingRequest(BaseModel):
-    """PLC-PGM 매핑 저장 요청"""
+class PLCMappingItem(BaseModel):
+    """PLC-PGM 매핑 항목"""
 
     plc_uuids: List[str] = Field(
         ..., description="매핑할 PLC UUID 리스트", min_items=1
     )
     program_id: str = Field(..., description="매핑할 PGM ID")
-    mapping_user: str = Field(..., description="매핑 사용자")
+
+
+class PLCMappingRequest(BaseModel):
+    """PLC-PGM 매핑 저장 요청"""
+
+    items: List[PLCMappingItem] = Field(
+        ..., description="PLC-PGM 매핑 항목 리스트", min_items=1
+    )
 
 
 class PLCMappingResponse(BaseModel):

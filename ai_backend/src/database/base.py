@@ -175,7 +175,21 @@ class Database:
                 from src.database.models import program_models  # noqa: F401
                 from src.database.models import template_models  # noqa: F401
                 from src.database.models import plc_models  # noqa: F401
+                
+                # 마스터 모델 import 및 클래스 참조로 등록 보장
                 from src.database.models import master_models  # noqa: F401
+                from src.database.models.master_models import (
+                    PlantMaster,
+                    ProcessMaster,
+                    LineMaster,
+                    DropdownMaster,
+                )
+                # 클래스를 참조하여 Base.metadata에 등록 보장
+                _ = PlantMaster
+                _ = ProcessMaster
+                _ = LineMaster
+                _ = DropdownMaster
+                
                 from src.database.models import knowledge_reference_models  # noqa: F401
                 # user_models, chat_models 등은 원래 있던 모델들
                 from src.database.models import user_models  # noqa: F401

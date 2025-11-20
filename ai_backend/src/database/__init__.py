@@ -27,6 +27,7 @@ __all__ = [
     "PlantMaster",
     "ProcessMaster",
     "LineMaster",
+    "DropdownMaster",
     "ProgramLLMDataChunk",
     "Template",
     "TemplateData",

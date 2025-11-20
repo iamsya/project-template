@@ -175,19 +175,30 @@ def get_plc_list(
     response_model=PLCMappingResponse,
     summary="PLC-PGM 매핑 저장",
     description="""
-    여러 PLC에 하나의 PGM 프로그램을 매핑합니다.
+    여러 PLC에 각각 다른 PGM 프로그램을 매핑합니다.
     
     **화면 용도:** PLC 관리 화면의 매핑 저장 기능
     
     **주요 기능:**
-    - 여러 PLC ID에 동일한 PGM 프로그램 매핑
+    - 여러 매핑 항목을 한 번에 처리
+    - 각 항목마다 여러 PLC에 동일한 PGM 프로그램 매핑 가능
     - 이전 매핑 정보를 `previous_program_id`에 저장 (히스토리 관리)
-    - 매핑 사용자 및 매핑 일시 기록
+    - 매핑 일시 기록
     
     **요청 파라미터:**
-    - `plc_uuids`: 매핑할 PLC UUID 리스트 (배열)
-    - `program_id`: 매핑할 PGM 프로그램 ID
-    - `mapping_user`: 매핑을 수행한 사용자 ID
+    - `items`: PLC-PGM 매핑 항목 리스트
+      - `plc_uuids`: 매핑할 PLC UUID 리스트 (배열)
+      - `program_id`: 매핑할 PGM 프로그램 ID
+    
+    **요청 예시:**
+    ```json
+    {
+      "items": [
+        {"plc_uuids": ["uuid1", "uuid2"], "program_id": "pgm1"},
+        {"plc_uuids": ["uuid3"], "program_id": "pgm2"}
+      ]
+    }
+    ```
     
     **응답:**
     - `success`: 전체 성공 여부
@@ -198,11 +209,11 @@ def get_plc_list(
     **처리 로직:**
     1. 각 PLC의 현재 `program_id`를 `previous_program_id`에 저장
     2. 새로운 `program_id`로 업데이트
-    3. `mapping_user`, `mapping_dt` 업데이트
+    3. `mapping_dt` 업데이트
     
     **예외 상황:**
     - PLC를 찾을 수 없는 경우: 해당 PLC는 실패 처리
-    - PGM 프로그램을 찾을 수 없는 경우: 전체 실패
+    - PGM 프로그램을 찾을 수 없는 경우: 해당 PLC는 실패 처리
     """,
 )
 def update_plc_program_mapping(
@@ -212,21 +223,35 @@ def update_plc_program_mapping(
     """
     PLC-PGM 매핑 저장
 
-    여러 PLC에 하나의 PGM을 매핑합니다.
+    여러 매핑 항목을 한 번에 처리합니다.
     """
     try:
         plc_crud = PLCCRUD(db)
-        result = plc_crud.update_plc_program_mapping(
-            plc_uuids=request.plc_uuids,
-            program_id=request.program_id,
-            mapping_user=request.mapping_user,
-        )
+        success_count = 0
+        failed_count = 0
+        errors = []
+
+        # 각 매핑 항목 처리
+        for item in request.items:
+            try:
+                result = plc_crud.update_plc_program_mapping(
+                    plc_ids=item.plc_uuids,
+                    program_id=item.program_id,
+                    mapping_user="user",  # 임시로 "user" 사용 (나중에 헤더 토큰으로 처리)
+                )
+                success_count += result["success_count"]
+                failed_count += result["failed_count"]
+                errors.extend(result["errors"])
+            except Exception as e:
+                failed_count += len(item.plc_uuids)
+                errors.append(f"매핑 항목 처리 실패: {str(e)}")
+                logger.warning(f"매핑 항목 처리 실패: {str(e)}")
 
         return PLCMappingResponse(
-            success=result["failed_count"] == 0,
-            mapped_count=result["success_count"],
-            failed_count=result["failed_count"],
-            errors=result["errors"],
+            success=failed_count == 0,
+            mapped_count=success_count,
+            failed_count=failed_count,
+            errors=errors,
         )
     except Exception as e:
         logger.error("PLC-PGM 매핑 저장 실패: %s", str(e))

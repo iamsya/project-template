@@ -1,6 +1,7 @@
 # _*_ coding: utf-8 _*_
 """Master Data API endpoints."""
 import logging
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
@@ -27,12 +28,12 @@ router = APIRouter(prefix="/masters", tags=["master-data"])
     - PLC-PGM 매핑 화면의 드롭다운
     
     **권한 기반 필터링:**
-    - `user_id`: 사용자 ID (필수)
-    - 사용자가 접근 가능한 Plant, Process, Line만 반환
-    - Process는 사용자 권한에 따라 필터링됩니다
-      - super 권한 그룹: 모든 활성 Process 반환
-      - plc 권한 그룹: 지정된 Process만 반환
-      - 권한이 없으면 Process 목록이 비어있음
+    - `user_id`: 사용자 ID (선택사항)
+      - 제공된 경우: 사용자 권한에 따라 접근 가능한 Process만 반환
+        - super 권한 그룹: 모든 활성 Process 반환
+        - plc 권한 그룹: 지정된 Process만 반환
+        - 권한이 없으면 Process 목록이 비어있음
+      - 제공되지 않은 경우: 모든 활성 Process 반환 (권한 필터링 없음)
     - 계층 구조 포함 (processesByPlant, linesByProcess)
     
     **응답 구조:**
@@ -57,37 +58,41 @@ router = APIRouter(prefix="/masters", tags=["master-data"])
     ```
     
     **프론트엔드 사용 흐름:**
-    1. API 호출: `GET /v1/masters?user_id=user001`
+    1. API 호출: `GET /v1/masters?user_id=user001` (권한 필터링) 또는 `GET /v1/masters` (전체 조회)
     2. Plant 드롭다운: `response.plants` 사용
     3. Plant 선택 시: `response.processesByPlant[selectedPlantId]` 사용
     4. Process 선택 시: `response.linesByProcess[selectedProcessId]` 사용
     
     **사용 예시:**
     ```
-    GET /v1/masters?user_id=user001
+    GET /v1/masters?user_id=user001  # 권한 기반 필터링
+    GET /v1/masters                   # 전체 조회 (권한 필터링 없음)
     ```
     """,
 )
 def get_masters_for_dropdown(
-    user_id: str = Query(
-        ..., description="사용자 ID (권한 기반 필터링용)", example="user001"
+    user_id: Optional[str] = Query(
+        None, description="사용자 ID (권한 기반 필터링용, 선택사항)", example="user001"
     ),
     db: Session = Depends(get_db),
 ):
     """
     권한 기반 마스터 데이터 조회 (드롭다운용)
     
-    사용자 권한에 따라 접근 가능한 공정만 포함하여 반환합니다.
+    user_id가 제공된 경우 사용자 권한에 따라 접근 가능한 공정만 포함하여 반환합니다.
+    user_id가 제공되지 않은 경우 모든 활성 공정을 반환합니다.
     """
     try:
         # 사용자 권한 기반 접근 가능한 공정 조회
-        program_crud = ProgramCRUD(db)
-        accessible_processes = program_crud.get_accessible_processes(user_id)
-        accessible_process_ids = (
-            [p.process_id for p in accessible_processes]
-            if accessible_processes
-            else None
-        )
+        accessible_process_ids = None
+        if user_id:
+            program_crud = ProgramCRUD(db)
+            accessible_processes = program_crud.get_accessible_processes(user_id)
+            accessible_process_ids = (
+                [p.process_id for p in accessible_processes]
+                if accessible_processes
+                else None
+            )
 
         # 권한 필터링된 마스터 데이터 조회
         master_crud = MasterHierarchyCRUD(db)
