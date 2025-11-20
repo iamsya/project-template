@@ -54,12 +54,15 @@ class PLCBasicInfo(BaseModel):
 class PLCListItem(BaseModel):
     """PLC 목록 항목 (매핑 화면용)"""
 
-    id: str = Field(..., description="PLC ID (Primary Key)")
+    plc_uuid: str = Field(..., description="PLC UUID (Primary Key)")
     plc_id: str = Field(..., description="PLC 식별자")
     plc_name: str = Field(..., description="PLC 이름")
     plant: Optional[str] = Field(None, description="Plant")
+    plant_id: Optional[str] = Field(None, description="Plant ID")
     process: Optional[str] = Field(None, description="공정")
+    process_id: Optional[str] = Field(None, description="Process ID")
     line: Optional[str] = Field(None, description="Line")
+    line_id: Optional[str] = Field(None, description="Line ID")
     unit: Optional[str] = Field(None, description="호기")
     program_id: Optional[str] = Field(
         None, description="매핑된 PGM ID"
@@ -268,12 +271,12 @@ class MasterDropdownResponse(BaseModel):
     processesByPlant: Dict[str, List[MasterDropdownItem]] = Field(
         ...,
         description="Plant ID를 키로 하는 Process 목록 맵 (두 번째 드롭다운)",
-        example={"plant_001": [{"id": "process_001", "code": "PRC1", "name": "Process 1"}]},
+        example={"plant_001": [{"id": "process_001", "name": "Process 1"}]},
     )
     linesByProcess: Dict[str, List[MasterDropdownItem]] = Field(
         ...,
         description="Process ID를 키로 하는 Line 목록 맵 (세 번째 드롭다운)",
-        example={"process_001": [{"id": "line_001", "code": "LN1", "name": "Line 1"}]},
+        example={"process_001": [{"id": "line_001", "name": "Line 1"}]},
     )
 
 

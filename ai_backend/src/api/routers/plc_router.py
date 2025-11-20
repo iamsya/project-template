@@ -134,7 +134,7 @@ def get_plc_list(
 
             items.append(
                 PLCListItem(
-                    id=plc.plc_uuid,
+                    plc_uuid=plc.plc_uuid,
                     plc_id=plc.plc_id,
                     plc_name=plc.plc_name,
                     plant=hierarchy.get("plant", {}).get("name")
