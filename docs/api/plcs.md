@@ -249,15 +249,18 @@ GET /v1/plcs
 {
   "items": [
     {
-      "id": "plc_uuid_001",
+      "plc_uuid": "plc_uuid_001",
       "plc_id": "M1CFB01000",
       "plc_name": "01_01_CELL_FABRICATOR",
       "plant": "KY1",
+      "plant_id": "KY1",
       "process": "모듈",
+      "process_id": "process_001",
       "line": "1라인",
+      "line_id": "line_001",
       "unit": "1",
       "program_id": "PGM_01",
-      "mapping_user": "정윤석",
+      "mapping_user": "user",
       "mapping_dt": "2025-10-22T13:00:00"
     }
   ],
@@ -267,6 +270,110 @@ GET /v1/plcs
   "total_pages": 10
 }
 ```
+
+### 응답 필드 설명
+
+<table>
+<thead>
+<tr>
+<th>필드</th>
+<th>타입</th>
+<th>설명</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>items</code></td>
+<td>array</td>
+<td>PLC 목록</td>
+</tr>
+<tr>
+<td><code>items[].plc_uuid</code></td>
+<td>string</td>
+<td>PLC UUID (Primary Key)</td>
+</tr>
+<tr>
+<td><code>items[].plc_id</code></td>
+<td>string</td>
+<td>PLC 식별자</td>
+</tr>
+<tr>
+<td><code>items[].plc_name</code></td>
+<td>string</td>
+<td>PLC 이름</td>
+</tr>
+<tr>
+<td><code>items[].plant</code></td>
+<td>string</td>
+<td>Plant 이름</td>
+</tr>
+<tr>
+<td><code>items[].plant_id</code></td>
+<td>string</td>
+<td>Plant ID</td>
+</tr>
+<tr>
+<td><code>items[].process</code></td>
+<td>string</td>
+<td>공정 이름</td>
+</tr>
+<tr>
+<td><code>items[].process_id</code></td>
+<td>string</td>
+<td>공정 ID</td>
+</tr>
+<tr>
+<td><code>items[].line</code></td>
+<td>string</td>
+<td>Line 이름</td>
+</tr>
+<tr>
+<td><code>items[].line_id</code></td>
+<td>string</td>
+<td>Line ID</td>
+</tr>
+<tr>
+<td><code>items[].unit</code></td>
+<td>string</td>
+<td>호기</td>
+</tr>
+<tr>
+<td><code>items[].program_id</code></td>
+<td>string</td>
+<td>매핑된 PGM ID (매핑되지 않은 경우 null)</td>
+</tr>
+<tr>
+<td><code>items[].mapping_user</code></td>
+<td>string</td>
+<td>매핑 등록자</td>
+</tr>
+<tr>
+<td><code>items[].mapping_dt</code></td>
+<td>datetime</td>
+<td>매핑 일시</td>
+</tr>
+<tr>
+<td><code>total_count</code></td>
+<td>integer</td>
+<td>전체 개수</td>
+</tr>
+<tr>
+<td><code>page</code></td>
+<td>integer</td>
+<td>현재 페이지</td>
+</tr>
+<tr>
+<td><code>page_size</code></td>
+<td>integer</td>
+<td>페이지당 항목 수</td>
+</tr>
+<tr>
+<td><code>total_pages</code></td>
+<td>integer</td>
+<td>전체 페이지 수</td>
+</tr>
+</tbody>
+</table>
 
 ### 페이지네이션 비활성화 (모든 데이터 조회)
 

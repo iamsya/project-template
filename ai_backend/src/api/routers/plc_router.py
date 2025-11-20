@@ -140,12 +140,15 @@ def get_plc_list(
                     plant=hierarchy.get("plant", {}).get("name")
                     if hierarchy
                     else None,
+                    plant_id=plc.plant_id,
                     process=hierarchy.get("process", {}).get("name")
                     if hierarchy
                     else None,
+                    process_id=plc.process_id,
                     line=hierarchy.get("line", {}).get("name")
                     if hierarchy
                     else None,
+                    line_id=plc.line_id,
                     unit=plc.unit,
                     program_id=plc.program_id,
                     mapping_user=plc.mapping_user,
