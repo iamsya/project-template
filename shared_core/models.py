@@ -84,9 +84,9 @@ class Document(Base):
     original_filename = Column('ORIGINAL_FILENAME', String(255), nullable=False)
     
     # 파일 정보
-    file_key = Column('FILE_KEY', String(255), nullable=False)
-    file_size = Column('FILE_SIZE', Integer, nullable=False)
-    file_type = Column('FILE_TYPE', String(100), nullable=False)  # MIME 타입
+    file_key = Column('FILE_KEY', String(255), nullable=True)
+    file_size = Column('FILE_SIZE', Integer, nullable=True)
+    file_type = Column('FILE_TYPE', String(100), nullable=True)  # MIME 타입
     file_extension = Column('FILE_EXTENSION', String(10), nullable=False)
     upload_path = Column('UPLOAD_PATH', String(500), nullable=False)
     file_hash = Column('FILE_HASH', String(64), nullable=True)  # 중복 방지

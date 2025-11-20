@@ -51,13 +51,11 @@ class KnowledgeReference(Base):
     
     # 레포 및 데이터소스 정보
     repo_id = Column(
-        'REPO_ID', String(255), nullable=False, index=True
+        'REPO_ID', String(255), nullable=True, index=True
     )
     datasource_id = Column(
-        'DATASOURCE_ID', String(255), nullable=False, index=True
+        'DATASOURCE_ID', String(255), nullable=True, index=True
     )
-    
-    
 
     # 설명 및 메타데이터
     description = Column('DESCRIPTION', Text, nullable=True)
