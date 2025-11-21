@@ -395,7 +395,7 @@ class PLCCRUD:
 
     def update_plc_program_mapping(
         self,
-        plc_ids: List[str],
+        plc_uuids: List[str],
         program_id: str,
         mapping_user: Optional[str] = None,
     ) -> Dict[str, int]:
@@ -403,7 +403,7 @@ class PLCCRUD:
         여러 PLC에 Program 매핑 저장
 
         Args:
-            plc_ids: 매핑할 PLC ID 리스트
+            plc_uuids: 매핑할 PLC UUID 리스트
             program_id: 매핑할 Program ID
             mapping_user: 매핑 사용자 (선택사항, None이면 업데이트 안 함)
 
@@ -419,12 +419,12 @@ class PLCCRUD:
             failed_count = 0
             errors = []
 
-            for plc_id in plc_ids:
+            for plc_uuid in plc_uuids:
                 try:
-                    plc = self.get_plc(plc_id)
+                    plc = self.get_plc_by_uuid(plc_uuid)
                     if not plc:
                         failed_count += 1
-                        errors.append(f"PLC를 찾을 수 없습니다: {plc_id}")
+                        errors.append(f"PLC를 찾을 수 없습니다: {plc_uuid}")
                         continue
 
                     # 빈 문자열이면 NULL로 처리
@@ -624,7 +624,7 @@ class PLCCRUD:
             logger.error(f"PLC 삭제 실패: {str(e)}")
             raise HandledException(ResponseCode.DATABASE_QUERY_ERROR, e=e)
 
-    def delete_plcs(self, plc_uuids: List[str], delete_user: str) -> int:
+    def delete_plcs(self, plc_uuids: List[str], delete_user: str = "user") -> int:
         """
         PLC 일괄 삭제 (소프트 삭제)
         
@@ -633,7 +633,7 @@ class PLCCRUD:
         
         Args:
             plc_uuids: PLC UUID 리스트
-            delete_user: 삭제 사용자
+            delete_user: 삭제 사용자 (기본값: 'user')
             
         Returns:
             int: 삭제된 PLC 개수

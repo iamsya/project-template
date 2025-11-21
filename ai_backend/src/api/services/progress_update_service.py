@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from src.config.simple_settings import settings
 from src.database.models.program_models import Program
-from shared_core.models import Document
+from src.database.models.document_models import Document
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +33,7 @@ class ProgressUpdateService:
                 "embedded": int,  # status=Document.STATUS_EMBEDDED인 파일 수
             }
         """
-        from shared_core.models import Document
+        from src.database.models.document_models import Document
 
         # 업로드 단계 전체 파일 수: 항상 3개 고정 (ladder_logic, comment, template)
         total_upload = 3
@@ -219,16 +219,12 @@ class ProgressUpdateService:
         try:
             # 진행 중인 Program 조회
             try:
-                active_programs = (
-                    self.db.query(Program)
-                    .filter(
-                        Program.status.in_(
-                            ["uploading", "processing", "embedding"]
-                        )
+                    active_programs = (
+                        self.db.query(Program)
+                        .filter(Program.status == "indexing")
+                        .filter(Program.is_used.is_(True))
+                        .all()
                     )
-                    .filter(Program.is_used.is_(True))
-                    .all()
-                )
             except Exception as db_error:
                 # 테이블이 아직 생성되지 않은 경우 (앱 시작 직후)
                 error_str = str(db_error)
@@ -341,7 +337,7 @@ class ProgressUpdateService:
                 "errors": List[str]
             }
         """
-        from shared_core.models import Document
+        from src.database.models.document_models import Document
         from src.database.models.knowledge_reference_models import (
             KnowledgeReference,
         )
@@ -580,7 +576,7 @@ class ProgressUpdateService:
         Returns:
             int: 진행률 퍼센트 (0-100), None: 계산 불가
         """
-        if program.status not in ["uploading", "processing", "embedding"]:
+        if program.status not in ["preprocessing", "indexing"]:
             return None
 
         # 통계 가져오기
@@ -592,28 +588,18 @@ class ProgressUpdateService:
             return None
 
         # 단계별 진행률 계산
-        if program.status == "uploading":
-            # 업로드 중: 전체 파일 수는 항상 3개
-            total_upload = stats.get("total_upload", 3)
-            uploaded = stats.get("uploaded", 0)
-            if total_upload > 0:
-                return round((uploaded / total_upload) * 30)
-            return 0
+        # preprocessing은 진행률 없음 (None 반환)
+        if program.status == "preprocessing":
+            return None
 
-        elif program.status == "processing":
-            # 처리 중: 전처리 후 전체 파일 수 사용
-            total_processed = stats.get("total_processed", 0)
-            processed = stats.get("processed", 0)
-            if total_processed > 0:
-                return 31 + round((processed / total_processed) * 30)
-            return 31
-
-        elif program.status == "embedding":
-            # 임베딩 중: 전처리 후 전체 파일 수 사용
-            total_processed = stats.get("total_processed", 0)
+        elif program.status == "indexing":
+            # 인덱싱 진행률: 인덱싱 완료된 파일 수 / 전체 파일 수
+            total_files = metadata.get(
+                "total_expected", stats.get("total_processed", 0)
+            )
             embedded = stats.get("embedded", 0)
-            if total_processed > 0:
-                return 61 + round((embedded / total_processed) * 39)
-            return 61
+            if total_files > 0:
+                return round((embedded / total_files) * 100)
+            return 0
 
         return None

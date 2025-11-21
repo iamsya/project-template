@@ -238,7 +238,7 @@ def update_plc_program_mapping(
         for item in request.items:
             try:
                 result = plc_crud.update_plc_program_mapping(
-                    plc_ids=item.plc_uuids,
+                    plc_uuids=item.plc_uuids,
                     program_id=item.program_id,
                     mapping_user="user",  # 임시로 "user" 사용 (나중에 헤더 토큰으로 처리)
                 )
@@ -388,16 +388,16 @@ def delete_plcs(
     try:
         plc_crud = PLCCRUD(db)
         
-        # 권한 체크 (API 직접 호출 시)
-        if not plc_crud.check_plc_management_permission(request.delete_user):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="PLC 삭제 권한이 없습니다.",
-            )
+        # # 권한 체크 (API 직접 호출 시)
+        # if not plc_crud.check_plc_management_permission(request.delete_user):
+        #     raise HTTPException(
+        #         status_code=status.HTTP_403_FORBIDDEN,
+        #         detail="PLC 삭제 권한이 없습니다.",
+        #     )
         
         # PLC 일괄 삭제
         deleted_count = plc_crud.delete_plcs(
-            plc_uuids=request.plc_uuids, delete_user=request.delete_user
+            plc_uuids=request.plc_uuids, delete_user="" #임시
         )
         
         return PLCDeleteResponse(

@@ -7,7 +7,7 @@ import httpx
 from sqlalchemy.orm import Session
 
 from src.config import settings
-from shared_core.models import Document
+from src.database.models.document_models import Document
 
 logger = logging.getLogger(__name__)
 
@@ -104,7 +104,7 @@ class KnowledgeStatusService:
             from src.database.models.knowledge_reference_models import (
                 KnowledgeReference,
             )
-            from shared_core.models import Document
+            from src.database.models.document_models import Document
 
             # Program과 연결된 Document를 통해 KnowledgeReference 조회
             # Document가 program_id와 knowledge_reference_id를 모두 가지고 있음

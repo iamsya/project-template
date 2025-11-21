@@ -81,14 +81,14 @@ class Document(Base):
     # 기본 정보
     document_id = Column('DOCUMENT_ID', String(50), primary_key=True)
     document_name = Column('DOCUMENT_NAME', String(255), nullable=False)
-    original_filename = Column('ORIGINAL_FILENAME', String(255), nullable=False)
+    original_filename = Column('ORIGINAL_FILENAME', String(255), nullable=True)
     
     # 파일 정보
     file_key = Column('FILE_KEY', String(255), nullable=True)
     file_size = Column('FILE_SIZE', Integer, nullable=True)
     file_type = Column('FILE_TYPE', String(100), nullable=True)  # MIME 타입
     file_extension = Column('FILE_EXTENSION', String(10), nullable=False)
-    upload_path = Column('UPLOAD_PATH', String(500), nullable=False)
+    upload_path = Column('UPLOAD_PATH', String(500), nullable=True)
     file_hash = Column('FILE_HASH', String(64), nullable=True)  # 중복 방지
     
     # 사용자 정보
@@ -160,7 +160,9 @@ class Document(Base):
     is_deleted = Column('IS_DELETED', Boolean, nullable=False, server_default=false())
 
     # Program 관련 필드
-    program_id = Column('PROGRAM_ID', String(50), ForeignKey('PROGRAMS.PROGRAM_ID'), nullable=True, index=True)
+    # Foreign Key 제약조건은 데이터베이스 레벨에서 수동으로 생성
+    # (다른 Base의 테이블을 참조하므로 SQLAlchemy가 자동으로 생성하지 못함)
+    program_id = Column('PROGRAM_ID', String(50), nullable=True, index=True)
     source_document_id = Column('SOURCE_DOCUMENT_ID', String(50), ForeignKey('DOCUMENTS.DOCUMENT_ID'), nullable=True, index=True)
     # Knowledge Reference 관련 필드
     knowledge_reference_id = Column('KNOWLEDGE_REFERENCE_ID', String(50), ForeignKey('KNOWLEDGE_REFERENCES.REFERENCE_ID'), nullable=True, index=True)

@@ -14,9 +14,7 @@ S3 업로드/다운로드 통합 서비스 사용 가이드입니다.
 
 ```bash
 # S3 버킷 이름 (필수)
-# S3_BUCKET_NAME 또는 AWS_S3_BUCKET 중 하나 설정
 S3_BUCKET_NAME=my-s3-bucket
-# AWS_S3_BUCKET=my-s3-bucket  # S3_BUCKET_NAME 대신 사용 가능
 
 # AWS 리전 (기본값: ap-northeast-2)
 AWS_REGION=ap-northeast-2
@@ -33,8 +31,7 @@ AWS_REGION=ap-northeast-2
 
 `src/config/simple_settings.py`에 S3 설정이 자동으로 포함됩니다:
 
-- `s3_bucket_name`: S3 버킷 이름
-- `aws_s3_bucket`: AWS_S3_BUCKET 환경변수 (대체 옵션)
+- `s3_bucket_name`: S3 버킷 이름 (S3_BUCKET_NAME 환경변수)
 - `aws_region`: AWS 리전 (기본값: ap-northeast-2)
 - `aws_access_key_id`: AWS Access Key ID (선택사항)
 - `aws_secret_access_key`: AWS Secret Access Key (선택사항)

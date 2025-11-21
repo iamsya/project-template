@@ -166,11 +166,11 @@ class Settings(BaseSettings):
     # S3 Configuration
     # ==========================================
     # S3 버킷 이름
-    # - 환경변수: S3_BUCKET_NAME 또는 AWS_S3_BUCKET
+    # - 환경변수: S3_BUCKET_NAME
     # - 개발: 로컬 개발 시 비워둘 수 있음 (S3 기능 비활성화)
     # - 프로덕션: 실제 S3 버킷 이름
     s3_bucket_name: str = Field(default="", env="S3_BUCKET_NAME")
-    aws_s3_bucket: str = Field(default="", env="AWS_S3_BUCKET")  # AWS_S3_BUCKET도 지원
+    aws_s3_bucket: str = Field(default="", env="AWS_S3_BUCKET")  # 사용하지 않음 (호환성 유지)
     
     # AWS 리전
     # - 기본값: ap-northeast-2 (서울)
@@ -257,8 +257,8 @@ class Settings(BaseSettings):
         return self.upload_max_size / (1024 * 1024)
     
     def get_s3_bucket_name(self) -> str:
-        """S3 버킷 이름 반환 (S3_BUCKET_NAME 또는 AWS_S3_BUCKET)"""
-        return self.s3_bucket_name or self.aws_s3_bucket
+        """S3 버킷 이름 반환 (S3_BUCKET_NAME 환경변수 사용)"""
+        return self.s3_bucket_name
     
     # Database config dict
     def get_database_config(self) -> dict:

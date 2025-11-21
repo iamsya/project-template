@@ -52,7 +52,7 @@ multipart/form-data
 <td>PLC ladder logic 파일들이 포함된 ZIP 압축 파일</td>
 </tr>
 <tr>
-<td><code>classification_xlsx</code></td>
+<td><code>template_xlsx</code></td>
 <td>File</td>
 <td><strong>예</strong></td>
 <td>템플릿 분류체계 데이터 XLSX 파일</td>
@@ -95,18 +95,18 @@ multipart/form-data
 1. **유효성 검사** (동기): 파일 형식, 내용 검증
 2. **즉시 응답 반환**: 유효성 검사 결과 반환
 3. **백그라운드 처리** (비동기):
-   - S3에 파일 업로드 및 ZIP 압축 해제
+   - S3에 파일 업로드 (ladder_zip, template_xlsx, comment_csv)
    - 템플릿 및 템플릿 데이터 생성
-   - 데이터 전처리 및 Document 생성
+   - 데이터 전처리 및 Document 생성 (ZIP 파일에서 직접 처리)
    - Vector DB 인덱싱 요청
 
 ### 파일 형식 요구사항
 
 #### `ladder_zip` (ZIP 파일)
 - Logic 파일 (Program CSV 파일)을 ZIP으로 압축
-- 압축 해제 후 각 로직 파일이 분리됨
+- ZIP 파일에서 직접 전처리 수행 (압축 해제 없이 처리)
 
-#### `classification_xlsx` (XLSX 파일)
+#### `template_xlsx` (XLSX 파일)
 - 컬럼: `FOLDER_ID`, `FOLDER_NAME`, `SUB_FOLDER_NAME`, `LOGIC_ID`, `LOGIC_NAME`
 - 로직 파일명과 매칭되어 템플릿 데이터 생성
 
@@ -123,7 +123,7 @@ multipart/form-data
   "data": {
     "program_id": "PGM_000001",
     "program_title": "공정1 PLC 프로그램",
-    "status": "uploading",
+    "status": "preprocessing",
     ...
   },
   "validation_result": {
@@ -157,7 +157,7 @@ multipart/form-data
 ```bash
 curl -X POST "http://localhost:8000/v1/programs/register" \
   -F "ladder_zip=@ladder_files.zip" \
-  -F "classification_xlsx=@classification.xlsx" \
+  -F "template_xlsx=@template.xlsx" \
   -F "comment_csv=@comment.csv" \
   -F "program_title=공정1 PLC 프로그램" \
   -F "process_id=process_001" \
@@ -265,12 +265,10 @@ GET /v1/programs
 ### 등록 상태 (`status`)
 
 - `preparing`: 준비 중
-- `uploading`: 업로드 중
-- `processing`: 처리 중
-- `embedding`: 임베딩 중
-- `completed`: 성공
-- `failed`: 실패
-- `indexing_failed`: 인덱싱 실패
+- `preprocessing`: 전처리 중
+- `indexing`: 업로드 중
+- `completed`: 등록 완료
+- `failed`: 등록 실패
 
 ### 권한 기반 필터링
 
@@ -293,11 +291,11 @@ GET /v1/programs
       "ladder_file_count": 645,
       "comment_file_count": 1,
       "status": "completed",
-      "status_display": "완료",
+      "status_display": "등록 완료",
       "processing_time": "10 min",
       "create_user": "정윤석",
       "create_dt": "2025-10-22T13:00:00"
-    }
+    },
   ],
   "total_count": 50,
   "page": 1,
@@ -305,6 +303,22 @@ GET /v1/programs
   "total_pages": 5
 }
 ```
+
+### 상태 표시 (`status_display`)
+
+`status_display` 필드는 화면에 표시할 상태 문자열입니다:
+
+- **진행 중인 상태**:
+  - `"전처리 중"`: `preprocessing` (진행률 없음)
+  - `"업로드 중(85%)"`: `indexing` (인덱싱 완료된 파일 수 / 전체 파일 수, 예: 10개 중 8개 완료 시 80%)
+- **완료/실패 상태**: 진행률 없이 상태만 표시됩니다
+  - `"준비 중"`: `preparing`
+  - `"등록 완료"`: `completed`
+  - `"등록 실패"`: `failed`
+
+**참고**: 
+- `status` 필드는 원본 상태 값(`"preparing"`, `"preprocessing"`, `"indexing"` 등)이며, 필터링 및 정렬에 사용됩니다.
+- `indexing` 상태일 때 진행률은 인덱싱 완료된 파일 수를 전체 파일 수로 나눈 값입니다 (예: 10개 중 1개 완료 시 10%).
 
 ### 페이지네이션 비활성화 (모든 데이터 조회)
 

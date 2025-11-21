@@ -7,7 +7,7 @@ import re
 import tempfile
 import zipfile
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import UploadFile
 from src.config import settings
@@ -258,7 +258,7 @@ class S3Service:
             Dict[str, str]: 업로드된 파일들의 S3 경로 정보
                 {
                     'ladder_zip_path': 's3://...',
-                    'unzipped_base_path': 'programs/{program_id}/unzipped/',
+                    'unzipped_base_path': '{s3_program_prefix}/{program_id}/unzipped/',
                     'unzipped_files': [...],
                     'template_xlsx_path': 's3://...',
                     'comment_csv_path': 's3://...'
@@ -317,6 +317,54 @@ class S3Service:
                 program_id,
                 str(e),
             )
+            raise
+
+    def list_files(self, prefix: str) -> List[Dict[str, Any]]:
+        """
+        S3 prefix 하위의 파일 목록 조회
+        
+        Args:
+            prefix: S3 prefix (예: "programs/{program_id}/")
+            
+        Returns:
+            List[Dict]: 파일 정보 목록
+                [
+                    {
+                        'key': 'programs/{program_id}/file.zip',
+                        'filename': 'file.zip',
+                        'size': 12345,
+                        'last_modified': '2024-01-01T00:00:00Z'
+                    },
+                    ...
+                ]
+        """
+        try:
+            if not self.s3_client or not self.s3_bucket:
+                raise ValueError("S3 클라이언트가 초기화되지 않았습니다.")
+            
+            files = []
+            paginator = self.s3_client.get_paginator("list_objects_v2")
+            pages = paginator.paginate(Bucket=self.s3_bucket, Prefix=prefix)
+            
+            for page in pages:
+                if "Contents" in page:
+                    for obj in page["Contents"]:
+                        key = obj["Key"]
+                        # 디렉토리가 아닌 파일만 추가
+                        if not key.endswith("/"):
+                            filename = key.split("/")[-1]
+                            files.append({
+                                "key": key,
+                                "filename": filename,
+                                "size": obj.get("Size", 0),
+                                "last_modified": obj.get("LastModified").isoformat() if obj.get("LastModified") else None,
+                            })
+            
+            logger.info(f"S3 파일 목록 조회 완료: prefix={prefix}, count={len(files)}")
+            return files
+            
+        except Exception as e:
+            logger.error(f"S3 파일 목록 조회 실패: prefix={prefix}, error={str(e)}")
             raise
 
     # ==================== 다운로드 기능 ====================
@@ -459,7 +507,7 @@ class S3Service:
             if not db_session:
                 raise ValueError(f"{file_type}은 데이터베이스 세션이 필요합니다.")
 
-            from shared_core.models import Document
+            from src.database.models.document_models import Document
 
             # file_type을 document_type으로 매핑
             document_type_map = {
@@ -552,7 +600,7 @@ class S3Service:
             Exception: 다운로드 실패 시
         """
         try:
-            from shared_core.models import Document
+            from src.database.models.document_models import Document
 
             # Document ID로 직접 조회
             document = (

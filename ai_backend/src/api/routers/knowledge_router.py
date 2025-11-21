@@ -95,7 +95,7 @@ def download_knowledge_file(
             )
         
         # 3. Document 조회 (knowledge_reference_id로 연결된 Document)
-        from shared_core.models import Document
+        from src.database.models.document_models import Document
         
         document = (
             db.query(Document)

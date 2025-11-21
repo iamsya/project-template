@@ -24,7 +24,10 @@ from src.core.dependencies import (
     get_db,
     get_s3_download_service,
     get_knowledge_status_service,
+    get_s3_service,
 )
+from src.api.services.s3_service import S3Service
+from src.config import settings
 from src.api.services.knowledge_status_service import KnowledgeStatusService
 from src.database.crud.program_crud import ProgramCRUD
 from src.types.response.program_response import (
@@ -306,12 +309,11 @@ async def register_program(
     - `process_id`: 공정 ID로 필터링 (드롭다운 선택)
     - `status`: 등록 상태로 필터링
       - `preparing`: 준비 중
-      - `uploading`: 업로드 중
-      - `processing`: 처리 중
-      - `embedding`: 임베딩 중
-      - `completed`: 성공
-      - `failed`: 실패
-      - `indexing_failed`: 인덱싱 실패
+      - `preparing`: 준비 중
+      - `preprocessing`: 전처리 중
+      - `indexing`: 업로드 중
+      - `completed`: 등록 완료
+      - `failed`: 등록 실패
     - `create_user`: 작성자로 필터링
     
     **권한 기반 필터링:**
@@ -359,7 +361,7 @@ def get_program_list(
     program_name: Optional[str] = Query(None, description="제목으로 검색", example="공정1"),
     process_id: Optional[str] = Query(None, description="공정 ID로 필터링 (드롭다운 선택)", example="process_001"),
     status_filter: Optional[str] = Query(
-        None, description="등록 상태로 필터링 (preparing, uploading, processing, embedding, completed, failed, indexing_failed)", alias="status", example="completed"
+        None, description="등록 상태로 필터링 (preparing, preprocessing, indexing, completed, failed)", alias="status", example="completed"
     ),
     create_user: Optional[str] = Query(None, description="작성자로 필터링", example="user001"),
     user_id: Optional[str] = Query(None, description="사용자 ID (권한 기반 필터링용, 선택사항)", example="user001"),
@@ -440,20 +442,18 @@ def get_program_list(
             # 상태 표시명 매핑
             status_display_map = {
                 "preparing": "준비 중",
-                "uploading": "업로드 중",
-                "processing": "처리 중",
-                "embedding": "임베딩 중",
-                "completed": "성공",
-                "failed": "실패",
-                "indexing_failed": "인덱싱 실패",
+                "preprocessing": "전처리 중",
+                "indexing": "업로드 중",
+                "completed": "등록 완료",
+                "failed": "등록 실패",
             }
             status_display = status_display_map.get(
                 program.status, program.status
             )
 
-            # 진행률 계산 (업로드 중, 처리 중, 임베딩 중)
-            # metadata_json에 저장된 document_stats 사용
-            if program.status in ["uploading", "processing", "embedding"]:
+            # 진행률 계산 (indexing만 진행률 표시)
+            # preprocessing은 진행률 없이 "전처리 중"만 표시
+            if program.status == "indexing":
                 from src.api.services.progress_update_service import (
                     ProgressUpdateService,
                 )
@@ -467,37 +467,17 @@ def get_program_list(
                         program.program_id
                     )
 
-                if program.status == "uploading":
-                    # 업로드 중: 전체 파일 수는 항상 3개 (ladder_logic, comment, template)
-                    total_files = stats.get("total_upload", 3)
-                    uploaded = stats.get("uploaded", 0)
-                    if total_files > 0:
-                        progress = round((uploaded / total_files) * 30)
-                        status_display = f"업로드 중({progress}%)"
-                    else:
-                        status_display = "업로드 중(0%)"
-                elif program.status == "processing":
-                    # 처리 중: metadata의 total_expected 우선, 없으면 total_processed
-                    total_files = metadata.get(
-                        "total_expected", stats.get("total_processed", 0)
-                    )
-                    processed = stats.get("processed", 0)
-                    if total_files > 0:
-                        progress = 31 + round((processed / total_files) * 30)
-                        status_display = f"처리 중({progress}%)"
-                    else:
-                        status_display = "처리 중(31%)"
-                elif program.status == "embedding":
-                    # 임베딩 중: metadata의 total_expected 우선, 없으면 total_processed
-                    total_files = metadata.get(
-                        "total_expected", stats.get("total_processed", 0)
-                    )
-                    embedded = stats.get("embedded", 0)
-                    if total_files > 0:
-                        progress = 61 + round((embedded / total_files) * 39)
-                        status_display = f"임베딩 중({progress}%)"
-                    else:
-                        status_display = "임베딩 중(61%)"
+                # 인덱싱 진행률: 인덱싱 완료된 파일 수 / 전체 파일 수
+                total_files = metadata.get(
+                    "total_expected", stats.get("total_processed", 0)
+                )
+                embedded = stats.get("embedded", 0)
+                
+                if total_files > 0:
+                    progress = round((embedded / total_files) * 100)
+                    status_display = f"업로드 중({progress}%)"
+                else:
+                    status_display = "업로드 중(0%)"
 
             # 공정명 조회 (Program.process_id 사용)
             process_name = process_name_map.get(program.process_id) if program.process_id else None
@@ -684,7 +664,7 @@ async def get_knowledge_status(
         from src.database.models.knowledge_reference_models import (
             KnowledgeReference,
         )
-        from shared_core.models import Document
+        from src.database.models.document_models import Document
 
         # Program과 연결된 Document를 통해 KnowledgeReference 조회
         documents_with_ref = (
@@ -820,6 +800,59 @@ async def delete_programs(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"프로그램 삭제 중 오류가 발생했습니다: {str(e)}",
+        ) from e
+
+
+@router.get(
+    "/{program_id}/files",
+    summary="프로그램 파일 목록 조회",
+    description="""
+    S3에 저장된 특정 프로그램의 파일 목록을 조회합니다.
+    
+    **화면 용도:** 프로그램 상세 화면에서 파일 목록 확인
+    
+    **응답 데이터:**
+    - 파일명, 크기, 수정일시 등 파일 정보 목록
+    
+    **예시:**
+    - `GET /v1/programs/pgm_process_001_2501011200/files`
+    """,
+)
+async def list_program_files(
+    program_id: str,
+    s3_service: S3Service = Depends(get_s3_service),
+):
+    """
+    프로그램 파일 목록 조회 API
+    
+    S3의 programs/{program_id}/ 하위에 있는 모든 파일 목록을 반환합니다.
+    """
+    try:
+        # S3 프로그램 경로 prefix 가져오기
+        program_prefix = settings.s3_program_prefix.rstrip("/")
+        s3_prefix = f"{program_prefix}/{program_id}/"
+        
+        # S3에서 파일 목록 조회
+        files = s3_service.list_files(prefix=s3_prefix)
+        
+        return {
+            "program_id": program_id,
+            "prefix": s3_prefix,
+            "file_count": len(files),
+            "files": files,
+        }
+        
+    except ValueError as e:
+        logger.error(f"프로그램 파일 목록 조회 실패: program_id={program_id}, error={str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        ) from e
+    except Exception as e:
+        logger.error(f"프로그램 파일 목록 조회 실패: program_id={program_id}, error={str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"파일 목록 조회 중 오류가 발생했습니다: {str(e)}",
         ) from e
 
 

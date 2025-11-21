@@ -112,9 +112,13 @@ def get_user_service(
     return UserService(db=db)
 
 
-def get_program_service(db: Session = Depends(get_db)) -> ProgramService:
+def get_program_service(
+    db: Session = Depends(get_db),
+) -> ProgramService:
     """프로그램 관리 서비스 의존성 주입"""
-    return ProgramService(db=db)
+    # S3Service는 내부에서 생성
+    s3_service = get_s3_service()
+    return ProgramService(db=db, s3_service=s3_service)
 
 
 def get_s3_download_service() -> S3DownloadService:

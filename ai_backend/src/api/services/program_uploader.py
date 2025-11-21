@@ -1,16 +1,11 @@
 # _*_ coding: utf-8 _*_
 """Program upload module for S3 upload and file processing."""
-import io
 import logging
-import os
-import tempfile
-import zipfile
 from datetime import datetime
-from pathlib import Path
 from typing import Dict
 
-from fastapi import UploadFile
-from shared_core.models import Document
+from src.database.models.document_models import Document
+from src.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -18,159 +13,12 @@ logger = logging.getLogger(__name__)
 class ProgramUploader:
     """프로그램 파일 S3 업로드 및 처리 클래스"""
 
-    def __init__(self, s3_client=None, s3_bucket: str = None):
+    def __init__(self):
         """
-        Args:
-            s3_client: S3 클라이언트 (boto3 등)
-            s3_bucket: S3 버킷 이름
+        ProgramUploader 초기화
+        S3 관련 작업은 S3Service를 사용합니다.
         """
-        self.s3_client = s3_client
-        self.s3_bucket = s3_bucket
-        # TODO: S3 클라이언트 초기화 로직 추가
 
-    async def upload_and_unzip(
-        self,
-        ladder_zip: UploadFile,
-        template_xlsx: UploadFile,
-        comment_csv: UploadFile,
-        program_id: str,
-        user_id: str,
-    ) -> Dict[str, str]:
-        """
-        파일들을 S3에 업로드하고 ZIP 파일을 압축 해제
-
-        Returns:
-            Dict[str, str]: 업로드된 파일들의 S3 경로 정보
-                {
-                    'ladder_zip_path': 's3://...',
-                    'unzipped_base_path': 's3://...',
-                    'template_xlsx_path': 's3://...',
-                    'comment_csv_path': 's3://...'
-                }
-        """
-        try:
-            # 임시 디렉토리 생성
-            with tempfile.TemporaryDirectory() as temp_dir:
-                temp_path = Path(temp_dir)
-
-                # 1. ZIP 파일 S3 업로드
-                ladder_zip.file.seek(0)
-                ladder_zip_path = await self._upload_to_s3(
-                    file=ladder_zip,
-                    s3_key=f"programs/{program_id}/ladder_logic.zip",
-                    content_type="application/zip",
-                )
-
-                # 2. ZIP 파일 압축 해제
-                ladder_zip.file.seek(0)
-                unzipped_files = await self._unzip_to_s3(
-                    zip_file=ladder_zip,
-                    s3_prefix=f"programs/{program_id}/unzipped/",
-                    temp_dir=temp_path,
-                )
-
-                # 3. XLSX 파일 S3 업로드
-                template_xlsx.file.seek(0)
-                template_xlsx_path = await self._upload_to_s3(
-                    file=template_xlsx,
-                    s3_key=f"programs/{program_id}/template.xlsx",
-                    content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                )
-
-                # 4. CSV 파일 S3 업로드
-                comment_csv.file.seek(0)
-                comment_csv_path = await self._upload_to_s3(
-                    file=comment_csv,
-                    s3_key=f"programs/{program_id}/comment.csv",
-                    content_type="text/csv",
-                )
-
-                return {
-                    "ladder_zip_path": ladder_zip_path,
-                    "unzipped_base_path": f"programs/{program_id}/unzipped/",
-                    "unzipped_files": unzipped_files,
-                    "template_xlsx_path": template_xlsx_path,
-                    "comment_csv_path": comment_csv_path,
-                }
-
-        except Exception as e:
-            logger.error(f"S3 업로드 및 압축 해제 중 오류: {str(e)}")
-            raise
-
-    async def _upload_to_s3(
-        self, file: UploadFile, s3_key: str, content_type: str
-    ) -> str:
-        """
-        파일을 S3에 업로드
-
-        Returns:
-            str: S3 경로 (s3://bucket/key 형식)
-        """
-        try:
-            file.file.seek(0)
-            file_content = file.file.read()
-            file.file.seek(0)
-
-            # TODO: S3 업로드 로직 구현
-            # 예시:
-            # self.s3_client.put_object(
-            #     Bucket=self.s3_bucket,
-            #     Key=s3_key,
-            #     Body=file_content,
-            #     ContentType=content_type
-            # )
-
-            logger.info(f"S3 업로드 완료: {s3_key}")
-            return f"s3://{self.s3_bucket}/{s3_key}"
-
-        except Exception as e:
-            logger.error(f"S3 업로드 실패: {str(e)}")
-            raise
-
-    async def _unzip_to_s3(
-        self, zip_file: UploadFile, s3_prefix: str, temp_dir: Path
-    ) -> list:
-        """
-        ZIP 파일을 압축 해제하여 S3에 업로드
-
-        Returns:
-            list: 업로드된 파일 목록
-        """
-        try:
-            zip_file.file.seek(0)
-            zip_content = zip_file.file.read()
-            zip_file.file.seek(0)
-
-            uploaded_files = []
-
-            # 임시 디렉토리에 압축 해제
-            with zipfile.ZipFile(io.BytesIO(zip_content), "r") as zip_ref:
-                zip_ref.extractall(temp_dir)
-
-                # 압축 해제된 파일들을 S3에 업로드
-                for root, dirs, files in os.walk(temp_dir):
-                    for file_name in files:
-                        local_file_path = Path(root) / file_name
-                        relative_path = local_file_path.relative_to(temp_dir)
-                        s3_key = f"{s3_prefix}{relative_path.as_posix()}"
-
-                        # TODO: 각 파일을 S3에 업로드
-                        # with open(local_file_path, 'rb') as f:
-                        #     self.s3_client.put_object(
-                        #         Bucket=self.s3_bucket,
-                        #         Key=s3_key,
-                        #         Body=f.read()
-                        #     )
-
-                        uploaded_files.append(s3_key)
-                        logger.debug(f"압축 해제 파일 S3 업로드: {s3_key}")
-
-            logger.info(f"ZIP 압축 해제 완료: {len(uploaded_files)}개 파일")
-            return uploaded_files
-
-        except Exception as e:
-            logger.error(f"ZIP 압축 해제 실패: {str(e)}")
-            raise
 
     async def preprocess_and_create_json(
         self,
@@ -255,8 +103,11 @@ class ProgramUploader:
                     # 전처리 시작 시 status 업데이트:
                     #   document_crud.update_document(document_id, status="preprocessing")
 
+                    # S3 프로그램 경로 prefix 가져오기
+                    program_prefix = settings.s3_program_prefix.rstrip("/")
+                    
                     json_filename = f"processed_{program_id}_{idx}.json"
-                    json_s3_key = f"programs/{program_id}/processed/{json_filename}"
+                    json_s3_key = f"{program_prefix}/{program_id}/processed/{json_filename}"
 
                     # TODO: 전처리 결과를 JSON으로 변환하여 json_content 생성
                     json_content = ""  # 전처리 로직 구현 후 채워넣기
@@ -400,21 +251,21 @@ class ProgramUploader:
     async def _upload_json_to_s3(self, json_content: str, s3_key: str) -> str:
         """
         JSON 파일을 S3에 업로드
+        
+        주의: 현재는 TODO 상태로 실제 업로드는 수행하지 않습니다.
+        S3 업로드가 필요한 경우 S3Service를 사용하세요.
 
         Returns:
             str: S3 경로 (s3://bucket/key 형식)
         """
         try:
-            # TODO: S3 업로드 로직 구현
-            # self.s3_client.put_object(
-            #     Bucket=self.s3_bucket,
-            #     Key=s3_key,
-            #     Body=json_content.encode('utf-8'),
-            #     ContentType='application/json'
-            # )
-
+            # TODO: S3 업로드 로직 구현 필요
+            # S3Service를 사용하여 업로드하도록 변경 필요
+            
+            # 임시로 경로만 반환 (실제 업로드는 하지 않음)
+            s3_bucket = settings.s3_bucket_name
             logger.info(f"JSON 파일 S3 업로드 완료: {s3_key}")
-            return f"s3://{self.s3_bucket}/{s3_key}"
+            return f"s3://{s3_bucket}/{s3_key}"
 
         except Exception as e:
             logger.error(f"JSON 파일 S3 업로드 실패: {str(e)}")

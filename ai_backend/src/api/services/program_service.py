@@ -7,9 +7,11 @@ from typing import Dict, List, Optional
 
 from fastapi import UploadFile
 from sqlalchemy.orm import Session
-from shared_core.models import Document
+from src.database.models.document_models import Document
 from src.api.services.program_uploader import ProgramUploader
 from src.api.services.program_validator import ProgramValidator
+from src.api.services.s3_service import S3Service
+from src.config import settings
 from src.types.response.exceptions import HandledException
 from src.types.response.response_code import ResponseCode
 from src.utils.uuid_gen import gen, gen_program_id, gen_template_id
@@ -20,15 +22,17 @@ logger = logging.getLogger(__name__)
 class ProgramService:
     """프로그램 관리 서비스"""
 
-    def __init__(self, db: Session, uploader: ProgramUploader = None):
+    def __init__(self, db: Session, uploader: ProgramUploader = None, s3_service: S3Service = None):
         """
         Args:
             db: 데이터베이스 세션
             uploader: ProgramUploader 인스턴스
+            s3_service: S3Service 인스턴스
         """
         self.db = db
         self.validator = ProgramValidator()
         self.uploader = uploader or ProgramUploader()
+        self.s3_service = s3_service
         from src.database.crud.program_crud import ProgramCRUD
 
         self.program_crud = ProgramCRUD(db)
@@ -220,7 +224,7 @@ class ProgramService:
             create_user=user_id,
             description=program_description,
             process_id=process_id,
-            status=Program.STATUS_PROCESSING,
+            status=Program.STATUS_PREPROCESSING,
             metadata_json=None,
         )
         self.db.commit()
@@ -517,7 +521,72 @@ class ProgramService:
                 program_id=program_id, total_expected=total_expected
             )
 
-            # 5. S3 업로드 및 전처리 시작
+            # 5. S3에 파일 업로드 (단위 함수 재사용)
+            logger.info(f"S3 파일 업로드 시작: program_id={program_id}")
+            s3_paths = {}
+            
+            # ZIP 파일 업로드
+            ladder_zip_result = await self._upload_file_to_s3(
+                file=ladder_zip,
+                program_id=program_id,
+            )
+            s3_paths["ladder_zip_path"] = ladder_zip_result["s3_path"]
+            s3_paths["ladder_zip_filename"] = ladder_zip_result["filename"]
+            
+            # XLSX 파일 업로드
+            template_xlsx_result = await self._upload_file_to_s3(
+                file=template_xlsx,
+                program_id=program_id,
+            )
+            s3_paths["template_xlsx_path"] = template_xlsx_result["s3_path"]
+            s3_paths["template_xlsx_filename"] = template_xlsx_result["filename"]
+            
+            # CSV 파일 업로드
+            comment_csv_result = await self._upload_file_to_s3(
+                file=comment_csv,
+                program_id=program_id,
+            )
+            s3_paths["comment_csv_path"] = comment_csv_result["s3_path"]
+            s3_paths["comment_csv_filename"] = comment_csv_result["filename"]
+            
+            logger.info(f"S3 파일 업로드 완료: program_id={program_id}")
+
+            # 6. Document에 S3 경로 업데이트
+            logger.info(f"Document S3 경로 업데이트 시작: program_id={program_id}")
+            from src.database.crud.document_crud import DocumentCRUD
+            document_crud = DocumentCRUD(self.db)
+
+            # S3 프로그램 경로 prefix 가져오기
+            program_prefix = settings.s3_program_prefix.rstrip("/")
+            
+            # ladder_document 업데이트
+            if document_ids.get("ladder_document_id") and s3_paths.get("ladder_zip_path"):
+                document_crud.update_document(
+                    document_id=document_ids["ladder_document_id"],
+                    file_key=f"{program_prefix}/{program_id}/{s3_paths['ladder_zip_filename']}",
+                    upload_path=s3_paths.get("ladder_zip_path"),
+                )
+
+            # comment_document 업데이트
+            if document_ids.get("comment_document_id") and s3_paths.get("comment_csv_path"):
+                document_crud.update_document(
+                    document_id=document_ids["comment_document_id"],
+                    file_key=f"{program_prefix}/{program_id}/{s3_paths['comment_csv_filename']}",
+                    upload_path=s3_paths.get("comment_csv_path"),
+                )
+
+            # template_document 업데이트
+            if document_ids.get("template_document_id") and s3_paths.get("template_xlsx_path"):
+                document_crud.update_document(
+                    document_id=document_ids["template_document_id"],
+                    file_key=f"{program_prefix}/{program_id}/{s3_paths['template_xlsx_filename']}",
+                    upload_path=s3_paths.get("template_xlsx_path"),
+                )
+
+            self.db.commit()
+            logger.info(f"Document S3 경로 업데이트 완료: program_id={program_id}")
+
+            # 7. 전처리 및 Vector DB 인덱싱 시작 (기존 로직 유지)
             await self._process_program_async(
                     program_id=program_id,
                     program_title=program_title,
@@ -525,10 +594,11 @@ class ProgramService:
                     ladder_zip=ladder_zip,
                     template_xlsx=template_xlsx,
                     comment_csv=comment_csv,
-                ladder_document_id=document_ids["ladder_document_id"],
-                comment_document_id=document_ids["comment_document_id"],
-                template_document_id=document_ids["template_document_id"],
+                ladder_document_id=document_ids.get("ladder_document_id"),
+                comment_document_id=document_ids.get("comment_document_id"),
+                template_document_id=document_ids.get("template_document_id"),
                 template_data_list=template_data_list,
+                s3_paths=s3_paths,
             )
 
         except Exception as e:
@@ -544,6 +614,69 @@ class ProgramService:
             )
             self.db.commit()
 
+    async def _upload_file_to_s3(
+        self,
+        file: UploadFile,
+        program_id: str,
+        filename: Optional[str] = None,
+    ) -> Dict[str, str]:
+        """
+        파일을 S3에 업로드하는 단위 함수 (재사용 가능)
+        
+        Args:
+            file: 업로드할 파일
+            program_id: 프로그램 ID
+            filename: 파일명 (없으면 원본 파일명 사용)
+            
+        Returns:
+            Dict: {
+                's3_path': 's3://bucket/key',
+                's3_key': 'programs/{program_id}/filename',
+                'filename': 'filename'
+            }
+        """
+        if not self.s3_service:
+            raise HandledException(
+                ResponseCode.DATABASE_QUERY_ERROR,
+                msg="S3 서비스가 초기화되지 않았습니다.",
+            )
+        
+        # S3 프로그램 경로 prefix 가져오기
+        program_prefix = settings.s3_program_prefix.rstrip("/")
+        
+        # 파일명 결정
+        original_filename = filename or file.filename
+        if not original_filename:
+            raise ValueError("파일명을 확인할 수 없습니다.")
+        
+        # S3 키 생성
+        s3_key = f"{program_prefix}/{program_id}/{original_filename}"
+        
+        # Content-Type 결정
+        content_type = file.content_type
+        if not content_type:
+            if original_filename.endswith('.zip'):
+                content_type = "application/zip"
+            elif original_filename.endswith('.xlsx'):
+                content_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            elif original_filename.endswith('.csv'):
+                content_type = "text/csv"
+            else:
+                content_type = "application/octet-stream"
+        
+        # S3 업로드
+        s3_path = await self.s3_service.upload_file(
+            file=file,
+            s3_key=s3_key,
+            content_type=content_type,
+        )
+        
+        return {
+            "s3_path": s3_path,
+            "s3_key": s3_key,
+            "filename": original_filename,
+        }
+
     def _build_success_response(
         self,
         program_id: str,
@@ -555,7 +688,7 @@ class ProgramService:
         return {
             "program_id": program_id,
             "program_title": program_title,
-            "status": "processing",
+            "status": "preprocessing",
             "is_valid": True,
             "errors": [],
             "warnings": warnings,
@@ -575,62 +708,18 @@ class ProgramService:
         comment_document_id: str,
         template_document_id: str,
         template_data_list: list,
+        s3_paths: Dict[str, str],
     ):
         """
-        비동기로 프로그램 처리 (S3 업로드, DB 저장, Vector DB 인덱싱)
+        비동기로 프로그램 처리 (전처리, Vector DB 인덱싱)
+        S3 업로드는 이미 완료된 상태
         """
         try:
             logger.info(f"비동기 프로그램 처리 시작: program_id={program_id}")
 
-            # 1. S3에 파일 업로드 및 ZIP 압축 해제 (비동기)
-            logger.info(f"S3 업로드 시작: program_id={program_id}")
-            s3_paths = await self.uploader.upload_and_unzip(
-                ladder_zip=ladder_zip,
-                template_xlsx=template_xlsx,
-                comment_csv=comment_csv,
-                program_id=program_id,
-                user_id=user_id,
-            )
-            logger.info(f"S3 업로드 완료: program_id={program_id}")
-
-            # 2. Document에 S3 경로 업데이트 (비동기)
-            logger.info(f"Document S3 경로 업데이트 시작: program_id={program_id}")
-            from src.database.crud.document_crud import DocumentCRUD
-            document_crud = DocumentCRUD(self.db)
-
-            # ladder_document 업데이트 (원본 파일명 사용)
-            if ladder_document_id and s3_paths.get("ladder_zip_path"):
-                ladder_zip_filename = s3_paths.get("ladder_zip_filename", "ladder_logic.zip")
-                document_crud.update_document(
-                    document_id=ladder_document_id,
-                    file_key=f"programs/{program_id}/{ladder_zip_filename}",
-                    upload_path=s3_paths.get("ladder_zip_path"),
-                )
-
-            # comment_document 업데이트 (원본 파일명 사용)
-            if comment_document_id and s3_paths.get("comment_csv_path"):
-                comment_csv_filename = s3_paths.get("comment_csv_filename", "comment.csv")
-                document_crud.update_document(
-                    document_id=comment_document_id,
-                    file_key=f"programs/{program_id}/{comment_csv_filename}",
-                    upload_path=s3_paths.get("comment_csv_path"),
-                )
-
-            # template_document 업데이트 (원본 파일명 사용)
-            if template_document_id and s3_paths.get("template_xlsx_path"):
-                template_xlsx_filename = s3_paths.get("template_xlsx_filename", "template.xlsx")
-                document_crud.update_document(
-                    document_id=template_document_id,
-                    file_key=f"programs/{program_id}/{template_xlsx_filename}",
-                    upload_path=s3_paths.get("template_xlsx_path"),
-                )
-
-                self.db.commit()
-            logger.info(f"Document S3 경로 업데이트 완료: program_id={program_id}")
-
-            # 3. 전처리: ZIP 압축 해제 파일들로 JSON 생성, S3 업로드 및 Document 저장
+            # 1. 전처리: ZIP 파일에서 JSON 생성, S3 업로드 및 Document 저장
             logger.info(f"전처리 시작: program_id={program_id}")
-            unzipped_files = s3_paths.get("unzipped_files", [])
+            # unzip 제거: ZIP 파일을 직접 사용하여 전처리 수행
 
             # CRUD 인스턴스 생성
             from src.database.crud.document_crud import DocumentCRUD
@@ -646,12 +735,13 @@ class ProgramService:
                 td["logic_id"]: td for td in template_data_list
             }
 
-            # 전처리 수행 (각 파일마다 즉시 Document 저장)
+            # 전처리 수행 (ZIP 파일에서 직접 처리)
+            # unzipped_files 대신 ladder_zip 파일을 직접 사용
             preprocess_result = await self.uploader.preprocess_and_create_json(
                 program_id=program_id,
                 program_title=program_title,
                 user_id=user_id,
-                unzipped_files=unzipped_files,
+                unzipped_files=[],  # unzip 제거로 빈 리스트 전달 (ZIP 파일 직접 처리)
                 template_xlsx_path=s3_paths.get("template_xlsx_path"),
                 comment_csv_path=s3_paths.get("comment_csv_path"),
                 ladder_document_id=ladder_document_id,
@@ -683,7 +773,7 @@ class ProgramService:
 
             # 실패 정보 요약을 Program.metadata_json에 저장 (통계용)
             processing_metadata = {
-                "total_expected": len(unzipped_files),
+                "total_expected": len(template_data_list),  # template_data_list 기준으로 변경
                 "total_successful_documents": len(created_documents),
                 "has_partial_failure": has_partial_failure,
                 "preprocessing_summary": preprocess_summary,
@@ -721,6 +811,11 @@ class ProgramService:
                 doc_id=program_id,  # program_id를 doc_id로 사용
                 job_type="vector_indexing",
                 total_steps=1,
+            )
+            
+            # 프로그램 상태를 indexing으로 변경
+            self.program_crud.update_program_status(
+                program_id=program_id, status=Program.STATUS_INDEXING
             )
             self.db.commit()
             logger.info(f"Vector DB 인덱싱 작업 생성: job_id={job_id}")
@@ -762,7 +857,7 @@ class ProgramService:
 
                     # 프로그램 상태 업데이트
                     self.program_crud.update_program_status(
-                        program_id=program_id, status=Program.STATUS_INDEXING_FAILED
+                        program_id=program_id, status=Program.STATUS_FAILED
                     )
                     self.db.commit()
                     logger.warning(f"Vector DB 인덱싱 실패: program_id={program_id}")
@@ -838,7 +933,7 @@ class ProgramService:
 
             # 관련 파일 정보 조회 (팝업에서 다운로드 링크 생성용)
             # 원본 파일만 조회 (ZIP, comment, template)
-            from shared_core.models import Document
+            from src.database.models.document_models import Document
 
             files = []
             file_types = ["ladder_logic_zip", "comment", "template"]
@@ -1265,60 +1360,36 @@ class ProgramService:
     async def _delete_s3_files(self, program_id: str, program):
         """S3 파일 삭제"""
         try:
-            # metadata_json에서 S3 경로 정보 추출
-            metadata = program.metadata_json or {}
-            s3_paths = metadata.get("s3_paths", {})
-
-            if not s3_paths and not self.uploader.s3_client:
-                logger.warning(
-                    "S3 클라이언트가 없거나 경로 정보가 없습니다."
-                )
+            if not self.s3_service:
+                logger.warning("S3 서비스가 초기화되지 않아 파일 삭제를 건너뜁니다.")
                 return
 
-            # S3 클라이언트가 있는 경우
-            if self.uploader.s3_client and self.uploader.s3_bucket:
-                # programs/{program_id}/ 디렉토리 전체 삭제
-                prefix = f"programs/{program_id}/"
+            # S3 프로그램 경로 prefix 가져오기
+            program_prefix = settings.s3_program_prefix.rstrip("/")
+            # {program_prefix}/{program_id}/ 디렉토리 전체 삭제
+            prefix = f"{program_prefix}/{program_id}/"
 
-                try:
-                    # S3에서 해당 prefix의 모든 객체 삭제
-                    paginator = self.uploader.s3_client.get_paginator(
-                        "list_objects_v2"
+            try:
+                # S3Service의 delete_files_by_prefix 사용
+                deleted_count = await self.s3_service.delete_files_by_prefix(prefix=prefix)
+                
+                if deleted_count > 0:
+                    logger.info(
+                        f"S3 파일 삭제 완료: program_id={program_id}, "
+                        f"deleted_count={deleted_count}"
                     )
-                    pages = paginator.paginate(
-                        Bucket=self.uploader.s3_bucket, Prefix=prefix
+                else:
+                    logger.info(
+                        f"S3에 삭제할 파일이 없습니다: program_id={program_id}, "
+                        f"prefix={prefix}"
                     )
 
-                    objects_to_delete = []
-                    for page in pages:
-                        if "Contents" in page:
-                            for obj in page["Contents"]:
-                                objects_to_delete.append({"Key": obj["Key"]})
-
-                    if objects_to_delete:
-                        # 1000개씩 나누어 삭제 (S3 제한)
-                        for i in range(0, len(objects_to_delete), 1000):
-                            chunk = objects_to_delete[i:i + 1000]
-                            self.uploader.s3_client.delete_objects(
-                                Bucket=self.uploader.s3_bucket,
-                                Delete={"Objects": chunk},
-                            )
-                        logger.info(
-                            f"S3 파일 삭제 완료: {len(objects_to_delete)}개 파일"
-                        )
-                    else:
-                        logger.info(f"S3에 삭제할 파일이 없습니다: {prefix}")
-
-                except Exception as e:
-                    logger.error(f"S3 파일 삭제 중 오류: {str(e)}")
-                    raise
-            else:
-                logger.warning(
-                    "S3 클라이언트가 초기화되지 않아 파일 삭제를 건너뜁니다."
-                )
+            except Exception as e:
+                logger.error(f"S3 파일 삭제 중 오류: program_id={program_id}, error={str(e)}")
+                raise
 
         except Exception as e:
-            logger.error(f"S3 파일 삭제 실패: {str(e)}")
+            logger.error(f"S3 파일 삭제 실패: program_id={program_id}, error={str(e)}")
             raise
 
     async def _delete_documents_and_knowledge(self, program_id: str) -> Dict:
@@ -1493,7 +1564,7 @@ class ProgramService:
             from src.database.models.knowledge_reference_models import (
                 KnowledgeReference,
             )
-            from shared_core.models import Document
+            from src.database.models.document_models import Document
 
             # Program과 연결된 Document를 통해 KnowledgeReference 조회
             documents_with_ref = (

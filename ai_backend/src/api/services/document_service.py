@@ -10,7 +10,7 @@ from fastapi import UploadFile
 from sqlalchemy.orm import Session
 
 # 공통 모듈 사용
-from shared_core import Document
+from src.database.models.document_models import Document
 from shared_core import DocumentService as BaseDocumentService, ProcessingJobService
 
 logger = logging.getLogger(__name__)

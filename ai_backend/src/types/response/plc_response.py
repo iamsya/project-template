@@ -347,7 +347,6 @@ class PLCDeleteRequest(BaseModel):
     plc_uuids: List[str] = Field(
         ..., description="삭제할 PLC UUID 리스트", min_items=1
     )
-    delete_user: str = Field(..., description="삭제 사용자")
 
 
 class PLCDeleteResponse(BaseModel):

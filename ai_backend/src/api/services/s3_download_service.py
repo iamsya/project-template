@@ -157,7 +157,7 @@ class S3DownloadService:
                     f"{file_type}은 데이터베이스 세션이 필요합니다."
                 )
 
-            from shared_core.models import Document
+            from src.database.models.document_models import Document
 
             # file_type을 document_type으로 매핑
             document_type_map = {
@@ -247,7 +247,7 @@ class S3DownloadService:
             Tuple[bytes, str, str]: (파일 내용, 파일명, Content-Type)
         """
         try:
-            from shared_core.models import Document
+            from src.database.models.document_models import Document
 
             # Document ID로 직접 조회
             document = (

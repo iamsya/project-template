@@ -88,12 +88,10 @@ class Program(Base):
 
     # 상태 상수
     STATUS_PREPARING = "preparing"
-    STATUS_UPLOADING = "uploading"
-    STATUS_PROCESSING = "processing"
-    STATUS_EMBEDDING = "embedding"
+    STATUS_PREPROCESSING = "preprocessing"
+    STATUS_INDEXING = "indexing"
     STATUS_COMPLETED = "completed"
     STATUS_FAILED = "failed"
-    STATUS_INDEXING_FAILED = "indexing_failed"
 
     def __repr__(self):
         return (
