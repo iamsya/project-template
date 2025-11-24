@@ -474,11 +474,84 @@ role == 'system_admin'?
 
 ## 8. 예시 데이터
 
-### 8.1 전체 예시 데이터 구조
+### 8.1 시스템 관리자 그룹 생성
 
-다음은 실제 사용 시나리오를 반영한 예시 데이터입니다.
+```sql
+INSERT INTO PERMISSION_GROUPS 
+    (GROUP_ID, GROUP_NAME, ROLE, DESCRIPTION, CREATE_USER)
+VALUES 
+    (
+        'group_system_admin',
+        '시스템 관리자',
+        'system_admin',
+        '시스템 관리자 그룹 - 사용자 관리 및 모든 공정 접근 가능',
+        'admin'
+    );
+```
 
-#### 8.1.1 사용자 데이터 (USERS 테이블)
+### 8.2 통합 관리자 그룹 생성
+
+```sql
+INSERT INTO PERMISSION_GROUPS 
+    (GROUP_ID, GROUP_NAME, ROLE, DESCRIPTION, CREATE_USER)
+VALUES 
+    (
+        'group_integrated_admin',
+        '통합 관리자',
+        'integrated_admin',
+        '통합 관리자 그룹 - PLC 모든 공정 접근 가능',
+        'admin'
+    );
+
+-- 모든 공정에 대한 권한 추가 (선택사항)
+INSERT INTO GROUP_PROCESS_PERMISSIONS 
+    (PERMISSION_ID, GROUP_ID, PROCESS_ID, CREATE_USER)
+SELECT 
+    'perm_' || GROUP_ID || '_' || PROCESS_ID,
+    'group_integrated_admin',
+    PROCESS_ID,
+    'admin'
+FROM PROCESS_MASTER
+WHERE IS_ACTIVE = true;
+```
+
+### 8.3 공정 관리자 그룹 생성
+
+```sql
+INSERT INTO PERMISSION_GROUPS 
+    (GROUP_ID, GROUP_NAME, ROLE, DESCRIPTION, CREATE_USER)
+VALUES 
+    (
+        'group_process_manager_001',
+        '모듈 공정 담당자',
+        'process_manager',
+        '모듈 공정 관리자 그룹',
+        'admin'
+    );
+
+-- 특정 공정에 대한 권한 추가
+INSERT INTO GROUP_PROCESS_PERMISSIONS 
+    (PERMISSION_ID, GROUP_ID, PROCESS_ID, CREATE_USER)
+VALUES 
+    ('perm_001', 'group_process_manager_001', 'prc_module', 'admin');
+```
+
+### 8.4 사용자를 그룹에 추가
+
+```sql
+INSERT INTO USER_GROUP_MAPPINGS 
+    (MAPPING_ID, USER_ID, GROUP_ID, CREATE_USER)
+VALUES 
+    ('mapping_001', 'user_001', 'group_system_admin', 'admin');
+```
+
+---
+
+## 8.5 전체 예시 데이터 시나리오
+
+다음은 실제 사용 시나리오를 반영한 완전한 예시 데이터입니다.
+
+### 8.5.1 사용자 데이터 (USERS 테이블)
 
 ```sql
 -- 사용자 1: 시스템 관리자
@@ -502,7 +575,7 @@ INSERT INTO USERS (USER_ID, EMPLOYEE_ID, NAME, IS_ACTIVE, IS_DELETED)
 VALUES ('user_process_manager_003', 'SO10005', '정전극', true, false);
 ```
 
-#### 8.1.2 공정 데이터 (PROCESS_MASTER 테이블)
+### 8.5.2 공정 데이터 (PROCESS_MASTER 테이블)
 
 ```sql
 -- 공정 마스터 데이터 (예시)
@@ -515,7 +588,7 @@ VALUES
     ('prc_assembly', '조립', true, 'admin');
 ```
 
-#### 8.1.3 권한 그룹 데이터 (PERMISSION_GROUPS 테이블)
+### 8.5.3 권한 그룹 데이터 (PERMISSION_GROUPS 테이블)
 
 ```sql
 -- 1. 시스템 관리자 그룹
@@ -579,7 +652,7 @@ VALUES
     );
 ```
 
-#### 8.1.4 그룹별 공정 권한 데이터 (GROUP_PROCESS_PERMISSIONS 테이블)
+### 8.5.4 그룹별 공정 권한 데이터 (GROUP_PROCESS_PERMISSIONS 테이블)
 
 ```sql
 -- 통합 관리자: 모든 공정 접근 가능 (모든 공정 추가)
@@ -614,7 +687,7 @@ VALUES
 -- 시스템 관리자는 GROUP_PROCESS_PERMISSIONS에 데이터가 없어도 모든 공정 접근 가능
 ```
 
-#### 8.1.5 사용자-그룹 매핑 데이터 (USER_GROUP_MAPPINGS 테이블)
+### 8.5.5 사용자-그룹 매핑 데이터 (USER_GROUP_MAPPINGS 테이블)
 
 ```sql
 -- 사용자 1 (김관리) → 시스템 관리자 그룹
@@ -648,9 +721,9 @@ VALUES
     ('mapping_005', 'user_process_manager_003', 'grp_electrode_assembly_manager', 'admin');
 ```
 
-### 8.2 예시 데이터 조회 결과
+### 8.5.6 예시 데이터 조회 결과
 
-#### 8.2.1 그룹 목록 조회 (사용자 수 포함)
+#### 그룹 목록 조회 (사용자 수 포함)
 
 ```sql
 SELECT 
@@ -678,7 +751,7 @@ ORDER BY pg.CREATE_DT DESC;
 | grp_hwaseong_manager | 화성 공정 담당자 | process_manager | 1 | 2023-11-06 |
 | grp_electrode_assembly_manager | 전극 및 조립 공정 담당자 | process_manager | 1 | 2023-11-05 |
 
-#### 8.2.2 그룹 상세 조회 (공정 목록 포함)
+#### 그룹 상세 조회 (공정 목록 포함)
 
 ```sql
 -- 그룹 ID: grp_electrode_assembly_manager
@@ -706,7 +779,7 @@ WHERE pg.GROUP_ID = 'grp_electrode_assembly_manager'
 | grp_electrode_assembly_manager | 전극 및 조립 공정 담당자 | process_manager | prc_electrode | 전극 |
 | grp_electrode_assembly_manager | 전극 및 조립 공정 담당자 | process_manager | prc_assembly | 조립 |
 
-#### 8.2.3 그룹 사용자 목록 조회
+#### 그룹 사용자 목록 조회
 
 ```sql
 -- 그룹 ID: grp_module_manager
@@ -729,7 +802,7 @@ WHERE ugm.GROUP_ID = 'grp_module_manager'
 |---------|-------------|------|-----------|
 | user_process_manager_001 | SO10003 | 박모듈 | 2023-11-05 10:00:00 |
 
-#### 8.2.4 사용자의 접근 가능한 공정 조회
+#### 사용자의 접근 가능한 공정 조회
 
 ```sql
 -- 사용자 ID: user_process_manager_003 (정전극)
@@ -767,101 +840,560 @@ WHERE ugm.USER_ID = 'user_process_manager_003'
 | prc_electrode | 전극 |
 | prc_assembly | 조립 |
 
-### 8.3 권한 시나리오 예시
-
-#### 시나리오 1: 시스템 관리자 (user_sys_admin)
-
-- **속한 그룹**: grp_system_admin (role: system_admin)
-- **접근 가능한 기능**:
-  - ✅ 사용자 관리 (사용자 추가/수정/삭제)
-  - ✅ 기준정보 관리 (Plant, Process, Line 마스터 관리)
-  - ✅ 모든 공정의 PLC/Program 조회 및 관리
-- **접근 가능한 공정**: 모든 공정 (prc_module, prc_hwaseong, prc_automation_logistics, prc_electrode, prc_assembly)
-
-#### 시나리오 2: 통합 관리자 (user_integrated_admin)
-
-- **속한 그룹**: grp_integrated_admin (role: integrated_admin)
-- **접근 가능한 기능**:
-  - ❌ 사용자 관리 (접근 불가)
-  - ❌ 기준정보 관리 (접근 불가)
-  - ✅ 모든 공정의 PLC/Program 조회 및 관리
-- **접근 가능한 공정**: 모든 공정 (GROUP_PROCESS_PERMISSIONS에 모든 공정이 있음)
-
-#### 시나리오 3: 공정 관리자 - 모듈 (user_process_manager_001)
-
-- **속한 그룹**: grp_module_manager (role: process_manager)
-- **접근 가능한 기능**:
-  - ❌ 사용자 관리 (접근 불가)
-  - ❌ 기준정보 관리 (접근 불가)
-  - ✅ 모듈 공정의 PLC/Program만 조회 및 관리
-- **접근 가능한 공정**: prc_module만
-
-#### 시나리오 4: 공정 관리자 - 전극 및 조립 (user_process_manager_003)
-
-- **속한 그룹**: grp_electrode_assembly_manager (role: process_manager)
-- **접근 가능한 기능**:
-  - ❌ 사용자 관리 (접근 불가)
-  - ❌ 기준정보 관리 (접근 불가)
-  - ✅ 전극, 조립 공정의 PLC/Program만 조회 및 관리
-- **접근 가능한 공정**: prc_electrode, prc_assembly
-
 ---
 
-## 9. 권한 체크 구현 가이드
+## 9. REST API에서 권한 체크 구현 예시
 
-### 9.1 API 엔드포인트에서 권한 체크
+### 9.1 사용자 관리 API - 시스템 관리자만 접근 가능
 
 ```python
-from functools import wraps
-from fastapi import HTTPException, status
+# ai_backend/src/api/routers/user_router.py
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy.orm import Session
+from src.database.base import get_db
+from src.database.models.permission_group_models import PermissionGroup
+from src.database.models.user_models import User
+from src.database.crud.user_crud import UserCRUD
 
-def require_role(allowed_roles: List[str]):
-    """특정 role만 접근 가능한 API 데코레이터"""
-    def decorator(func):
-        @wraps(func)
-        async def wrapper(*args, **kwargs):
-            user_id = kwargs.get('user_id') or get_current_user_id()
-            user_roles = get_user_roles(user_id)
-            
-            if not any(role in allowed_roles for role in user_roles):
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="접근 권한이 없습니다."
-                )
-            return await func(*args, **kwargs)
-        return wrapper
-    return decorator
+router = APIRouter(tags=["user-management"])
 
-# 사용 예시
-@router.get("/users")
-@require_role([PermissionGroup.ROLE_SYSTEM_ADMIN])
-async def get_users():
-    """시스템 관리자만 접근 가능"""
-    pass
+
+def check_user_management_permission(user_id: str, db: Session) -> bool:
+    """
+    사용자 관리 접근 권한 확인
+    시스템 관리자(role='system_admin')만 접근 가능
+    """
+    from sqlalchemy import and_
+    
+    # 사용자가 속한 활성 그룹 조회
+    groups = (
+        db.query(PermissionGroup)
+        .join(UserGroupMapping, PermissionGroup.group_id == UserGroupMapping.group_id)
+        .filter(
+            and_(
+                UserGroupMapping.user_id == user_id,
+                UserGroupMapping.is_active == True,
+                PermissionGroup.is_active == True,
+                PermissionGroup.is_deleted == False
+            )
+        )
+        .all()
+    )
+    
+    # 시스템 관리자 role이 있는지 확인
+    return any(group.role == PermissionGroup.ROLE_SYSTEM_ADMIN for group in groups)
+
+
+@router.get("/users", summary="사용자 목록 조회")
+def get_users(
+    user_id: str = Query(..., description="사용자 ID (권한 검증용)", example="user_sys_admin"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(10, ge=1, le=100),
+    db: Session = Depends(get_db),
+):
+    """
+    사용자 목록 조회 API
+    
+    **권한 요구사항:**
+    - 시스템 관리자(role='system_admin')만 접근 가능
+    """
+    # 권한 체크
+    if not check_user_management_permission(user_id, db):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="사용자 관리 기능에 접근할 권한이 없습니다. 시스템 관리자만 접근 가능합니다."
+        )
+    
+    # 사용자 목록 조회
+    user_crud = UserCRUD(db)
+    users = user_crud.get_all_users(page=page, page_size=page_size)
+    
+    return {
+        "status": "success",
+        "data": users,
+        "page": page,
+        "page_size": page_size
+    }
+
+
+@router.post("/users", summary="사용자 생성")
+def create_user(
+    employee_id: str,
+    name: str,
+    user_id: str = Query(..., description="요청한 사용자 ID (권한 검증용)", example="user_sys_admin"),
+    db: Session = Depends(get_db),
+):
+    """
+    사용자 생성 API
+    
+    **권한 요구사항:**
+    - 시스템 관리자(role='system_admin')만 접근 가능
+    """
+    # 권한 체크
+    if not check_user_management_permission(user_id, db):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="사용자 생성 권한이 없습니다. 시스템 관리자만 접근 가능합니다."
+        )
+    
+    # 사용자 생성
+    user_crud = UserCRUD(db)
+    new_user = user_crud.create_user(
+        user_id=f"user_{employee_id}",
+        employee_id=employee_id,
+        name=name
+    )
+    
+    return {
+        "status": "success",
+        "message": "사용자가 생성되었습니다.",
+        "data": {
+            "user_id": new_user.user_id,
+            "employee_id": new_user.employee_id,
+            "name": new_user.name
+        }
+    }
 ```
 
-### 9.2 공정 접근 권한 체크
+### 9.2 기준정보 관리 API - 시스템 관리자만 접근 가능
 
 ```python
-def check_process_access(user_id: str, process_id: str) -> bool:
-    """공정 접근 권한 확인"""
-    groups = get_user_active_groups(user_id)
+# ai_backend/src/api/routers/master_router.py
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy.orm import Session
+from src.database.base import get_db
+from src.database.models.permission_group_models import PermissionGroup
+from src.database.models.master_models import ProcessMaster
+
+router = APIRouter(tags=["master-management"])
+
+
+def check_master_management_permission(user_id: str, db: Session) -> bool:
+    """
+    기준정보 관리 접근 권한 확인
+    시스템 관리자(role='system_admin')만 접근 가능
+    """
+    from sqlalchemy import and_
+    from src.database.models.permission_group_models import UserGroupMapping
+    
+    groups = (
+        db.query(PermissionGroup)
+        .join(UserGroupMapping, PermissionGroup.group_id == UserGroupMapping.group_id)
+        .filter(
+            and_(
+                UserGroupMapping.user_id == user_id,
+                UserGroupMapping.is_active == True,
+                PermissionGroup.is_active == True,
+                PermissionGroup.is_deleted == False
+            )
+        )
+        .all()
+    )
+    
+    return any(group.role == PermissionGroup.ROLE_SYSTEM_ADMIN for group in groups)
+
+
+@router.post("/processes", summary="공정 생성")
+def create_process(
+    process_id: str,
+    process_name: str,
+    user_id: str = Query(..., description="요청한 사용자 ID (권한 검증용)", example="user_sys_admin"),
+    db: Session = Depends(get_db),
+):
+    """
+    공정 생성 API
+    
+    **권한 요구사항:**
+    - 시스템 관리자(role='system_admin')만 접근 가능
+    """
+    # 권한 체크
+    if not check_master_management_permission(user_id, db):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="기준정보 관리 권한이 없습니다. 시스템 관리자만 접근 가능합니다."
+        )
+    
+    # 공정 생성 로직
+    new_process = ProcessMaster(
+        process_id=process_id,
+        process_name=process_name,
+        is_active=True,
+        create_user=user_id
+    )
+    db.add(new_process)
+    db.commit()
+    
+    return {
+        "status": "success",
+        "message": "공정이 생성되었습니다.",
+        "data": {
+            "process_id": new_process.process_id,
+            "process_name": new_process.process_name
+        }
+    }
+```
+
+### 9.3 프로그램 목록 조회 API - 공정 접근 권한 체크
+
+```python
+# ai_backend/src/api/routers/program_router.py
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy.orm import Session
+from sqlalchemy import and_, or_
+from src.database.base import get_db
+from src.database.models.permission_group_models import (
+    PermissionGroup,
+    UserGroupMapping,
+    GroupProcessPermission
+)
+from src.database.models.program_models import Program
+
+router = APIRouter(tags=["program-management"])
+
+
+def get_user_accessible_processes(user_id: str, db: Session) -> list:
+    """
+    사용자가 접근 가능한 공정 ID 목록 조회
+    
+    Returns:
+        list: 접근 가능한 공정 ID 목록 (빈 리스트면 모든 공정 접근 가능)
+    """
+    # 사용자가 속한 활성 그룹 조회
+    groups = (
+        db.query(PermissionGroup)
+        .join(UserGroupMapping, PermissionGroup.group_id == UserGroupMapping.group_id)
+        .filter(
+            and_(
+                UserGroupMapping.user_id == user_id,
+                UserGroupMapping.is_active == True,
+                PermissionGroup.is_active == True,
+                PermissionGroup.is_deleted == False
+            )
+        )
+        .all()
+    )
+    
+    accessible_processes = set()
+    has_system_admin = False
+    has_integrated_admin = False
     
     for group in groups:
+        # 시스템 관리자: 모든 공정 접근 가능
         if group.role == PermissionGroup.ROLE_SYSTEM_ADMIN:
-            return True  # 시스템 관리자는 모든 공정 접근 가능
+            has_system_admin = True
+            # 모든 활성 공정 조회
+            all_processes = db.query(ProcessMaster).filter(
+                ProcessMaster.is_active == True
+            ).all()
+            accessible_processes.update([p.process_id for p in all_processes])
+            continue
         
+        # 통합 관리자: PLC 모든 공정 접근 가능
         if group.role == PermissionGroup.ROLE_INTEGRATED_ADMIN:
-            # 통합 관리자는 모든 공정 접근 가능 (또는 GROUP_PROCESS_PERMISSIONS 확인)
+            has_integrated_admin = True
+            # GROUP_PROCESS_PERMISSIONS 확인
+            process_permissions = (
+                db.query(GroupProcessPermission)
+                .filter(
+                    and_(
+                        GroupProcessPermission.group_id == group.group_id,
+                        GroupProcessPermission.is_active == True
+                    )
+                )
+                .all()
+            )
+            if not process_permissions:  # 비어있으면 모든 공정 접근 가능
+                all_processes = db.query(ProcessMaster).filter(
+                    ProcessMaster.is_active == True
+                ).all()
+                accessible_processes.update([p.process_id for p in all_processes])
+            else:
+                accessible_processes.update([pp.process_id for pp in process_permissions])
+            continue
+        
+        # 공정 관리자: GROUP_PROCESS_PERMISSIONS에 있는 공정만 접근 가능
+        if group.role == PermissionGroup.ROLE_PROCESS_MANAGER:
+            process_permissions = (
+                db.query(GroupProcessPermission)
+                .filter(
+                    and_(
+                        GroupProcessPermission.group_id == group.group_id,
+                        GroupProcessPermission.is_active == True
+                    )
+                )
+                .all()
+            )
+            accessible_processes.update([pp.process_id for pp in process_permissions])
+    
+    # 시스템 관리자나 통합 관리자가 있으면 빈 리스트 반환 (모든 공정 접근 가능)
+    if has_system_admin or (has_integrated_admin and not accessible_processes):
+        return []
+    
+    return list(accessible_processes)
+
+
+@router.get("/programs", summary="프로그램 목록 조회")
+def get_program_list(
+    user_id: Optional[str] = Query(None, description="사용자 ID (권한 기반 필터링용)", example="user_process_manager_003"),
+    process_id: Optional[str] = Query(None, description="공정 ID로 필터링", example="prc_electrode"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(10, ge=1, le=100),
+    db: Session = Depends(get_db),
+):
+    """
+    프로그램 목록 조회 API
+    
+    **권한 기반 필터링:**
+    - user_id가 제공된 경우: 사용자의 권한 그룹에 따라 접근 가능한 공정의 프로그램만 조회
+      - 시스템 관리자: 모든 공정의 프로그램 조회 가능
+      - 통합 관리자: PLC 모든 공정의 프로그램 조회 가능
+      - 공정 관리자: 지정된 공정의 프로그램만 조회 가능
+    - user_id가 없는 경우: 모든 프로그램 조회 (권한 필터링 없음)
+    """
+    query = db.query(Program).filter(Program.is_deleted == False)
+    
+    # 권한 기반 필터링
+    if user_id:
+        accessible_processes = get_user_accessible_processes(user_id, db)
+        
+        if accessible_processes:  # 빈 리스트가 아니면 특정 공정만 필터링
+            query = query.filter(Program.process_id.in_(accessible_processes))
+        # 빈 리스트면 모든 공정 접근 가능하므로 필터링 없음
+    
+    # 공정 ID 필터링 (추가 필터)
+    if process_id:
+        query = query.filter(Program.process_id == process_id)
+    
+    # 페이지네이션
+    total = query.count()
+    programs = query.order_by(Program.create_dt.desc()).offset((page - 1) * page_size).limit(page_size).all()
+    
+    return {
+        "status": "success",
+        "data": [
+            {
+                "program_id": p.program_id,
+                "program_name": p.program_name,
+                "process_id": p.process_id,
+                "status": p.status
+            }
+            for p in programs
+        ],
+        "total": total,
+        "page": page,
+        "page_size": page_size
+    }
+```
+
+### 9.4 공정 접근 권한 체크 유틸리티 함수
+
+```python
+# ai_backend/src/utils/permission_utils.py
+from typing import List, Optional
+from sqlalchemy.orm import Session
+from sqlalchemy import and_
+from src.database.models.permission_group_models import (
+    PermissionGroup,
+    UserGroupMapping,
+    GroupProcessPermission
+)
+from src.database.models.master_models import ProcessMaster
+
+
+def check_process_access(user_id: str, process_id: str, db: Session) -> bool:
+    """
+    사용자가 특정 공정에 접근할 수 있는지 확인
+    
+    Args:
+        user_id: 사용자 ID
+        process_id: 공정 ID
+        db: 데이터베이스 세션
+        
+    Returns:
+        bool: True면 해당 공정 접근 가능
+    """
+    # 사용자가 속한 활성 그룹 조회
+    groups = (
+        db.query(PermissionGroup)
+        .join(UserGroupMapping, PermissionGroup.group_id == UserGroupMapping.group_id)
+        .filter(
+            and_(
+                UserGroupMapping.user_id == user_id,
+                UserGroupMapping.is_active == True,
+                PermissionGroup.is_active == True,
+                PermissionGroup.is_deleted == False
+            )
+        )
+        .all()
+    )
+    
+    for group in groups:
+        # 시스템 관리자: 모든 공정 접근 가능
+        if group.role == PermissionGroup.ROLE_SYSTEM_ADMIN:
             return True
         
+        # 통합 관리자: PLC 모든 공정 접근 가능
+        if group.role == PermissionGroup.ROLE_INTEGRATED_ADMIN:
+            # GROUP_PROCESS_PERMISSIONS 확인
+            process_permissions = (
+                db.query(GroupProcessPermission)
+                .filter(
+                    and_(
+                        GroupProcessPermission.group_id == group.group_id,
+                        GroupProcessPermission.is_active == True
+                    )
+                )
+                .all()
+            )
+            # 비어있으면 모든 공정 접근 가능
+            if not process_permissions:
+                return True
+            # 또는 해당 공정이 포함되어 있으면 접근 가능
+            if any(pp.process_id == process_id for pp in process_permissions):
+                return True
+        
+        # 공정 관리자: GROUP_PROCESS_PERMISSIONS에 해당 공정이 있으면 접근 가능
         if group.role == PermissionGroup.ROLE_PROCESS_MANAGER:
-            # 공정 관리자는 GROUP_PROCESS_PERMISSIONS 확인
-            permissions = get_group_process_permissions(group.group_id)
-            if any(p.process_id == process_id for p in permissions):
+            process_permissions = (
+                db.query(GroupProcessPermission)
+                .filter(
+                    and_(
+                        GroupProcessPermission.group_id == group.group_id,
+                        GroupProcessPermission.process_id == process_id,
+                        GroupProcessPermission.is_active == True
+                    )
+                )
+                .first()
+            )
+            if process_permissions:
                 return True
     
     return False
+
+
+def get_user_roles(user_id: str, db: Session) -> List[str]:
+    """
+    사용자의 role 목록 조회
+    
+    Args:
+        user_id: 사용자 ID
+        db: 데이터베이스 세션
+        
+    Returns:
+        List[str]: role 목록 (예: ['system_admin', 'process_manager'])
+    """
+    groups = (
+        db.query(PermissionGroup)
+        .join(UserGroupMapping, PermissionGroup.group_id == UserGroupMapping.group_id)
+        .filter(
+            and_(
+                UserGroupMapping.user_id == user_id,
+                UserGroupMapping.is_active == True,
+                PermissionGroup.is_active == True,
+                PermissionGroup.is_deleted == False
+            )
+        )
+        .all()
+    )
+    
+    return list(set([group.role for group in groups]))
+```
+
+### 9.5 API 사용 예시
+
+#### 예시 1: 시스템 관리자가 사용자 목록 조회
+
+```bash
+# 요청
+GET /v1/users?user_id=user_sys_admin&page=1&page_size=10
+
+# 응답 (성공)
+{
+    "status": "success",
+    "data": [
+        {
+            "user_id": "user_sys_admin",
+            "employee_id": "SO10001",
+            "name": "김관리"
+        },
+        ...
+    ],
+    "page": 1,
+    "page_size": 10
+}
+```
+
+#### 예시 2: 공정 관리자가 사용자 목록 조회 시도 (권한 없음)
+
+```bash
+# 요청
+GET /v1/users?user_id=user_process_manager_001&page=1&page_size=10
+
+# 응답 (실패)
+{
+    "detail": "사용자 관리 기능에 접근할 권한이 없습니다. 시스템 관리자만 접근 가능합니다."
+}
+# HTTP Status: 403 Forbidden
+```
+
+#### 예시 3: 공정 관리자가 프로그램 목록 조회 (자신의 공정만 조회)
+
+```bash
+# 요청 (user_process_manager_003은 전극, 조립 공정만 접근 가능)
+GET /v1/programs?user_id=user_process_manager_003&page=1&page_size=10
+
+# 응답
+{
+    "status": "success",
+    "data": [
+        {
+            "program_id": "pgm_electrode_001",
+            "program_name": "전극 공정 프로그램1",
+            "process_id": "prc_electrode",
+            "status": "completed"
+        },
+        {
+            "program_id": "pgm_assembly_001",
+            "program_name": "조립 공정 프로그램1",
+            "process_id": "prc_assembly",
+            "status": "completed"
+        }
+        // 모듈, 화성 공정의 프로그램은 조회되지 않음
+    ],
+    "total": 2,
+    "page": 1,
+    "page_size": 10
+}
+```
+
+#### 예시 4: 시스템 관리자가 프로그램 목록 조회 (모든 공정 조회)
+
+```bash
+# 요청
+GET /v1/programs?user_id=user_sys_admin&page=1&page_size=10
+
+# 응답
+{
+    "status": "success",
+    "data": [
+        {
+            "program_id": "pgm_module_001",
+            "program_name": "모듈 공정 프로그램1",
+            "process_id": "prc_module",
+            "status": "completed"
+        },
+        {
+            "program_id": "pgm_electrode_001",
+            "program_name": "전극 공정 프로그램1",
+            "process_id": "prc_electrode",
+            "status": "completed"
+        }
+        // 모든 공정의 프로그램이 조회됨
+    ],
+    "total": 10,
+    "page": 1,
+    "page_size": 10
+}
 ```
 
 ---
