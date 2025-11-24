@@ -18,12 +18,11 @@ from .database import (
     get_db_session,
     initialize_database,
 )
-from .models import DocumentChunk, ProcessingJob
-# from .models import Document, DocumentChunk, ProcessingJob
+from .models import Document, DocumentChunk, ProcessingJob
 from .services import DocumentChunkService, DocumentService, ProcessingJobService
 
 __all__ = [
-    # "Document",
+    "Document",
     "DocumentChunk",
     "ProcessingJob",
     "DocumentCRUD",

@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 class DocumentCRUD:
     """Document 관련 CRUD 작업을 처리하는 클래스"""
-    
+
     def __init__(self, db: Session):
         self.db = db
     
@@ -36,7 +36,7 @@ class DocumentCRUD:
         is_public: bool = False,
         status: str = 'processing',
         error_message: str = None,
-        # 새로운 optional 필드들
+        새로운 optional 필드들
         file_hash: str = None,
         total_pages: int = None,
         processed_pages: int = None,
@@ -50,10 +50,10 @@ class DocumentCRUD:
         processed_at: datetime = None,
         permissions: List[str] = None,
         document_type: str = 'common',
-        # Program 관련 필드
+        Program 관련 필드
         program_id: str = None,
         source_document_id: str = None,
-        # Knowledge Reference 관련 필드
+        Knowledge Reference 관련 필드
         knowledge_reference_id: str = None,
     ) -> Document:
         """문서 생성"""
@@ -71,7 +71,7 @@ class DocumentCRUD:
                 status=status,
                 error_message=error_message,
                 is_public=is_public,
-                # 새로운 optional 필드들
+                새로운 optional 필드들
                 file_hash=file_hash,
                 total_pages=total_pages,
                 processed_pages=processed_pages,
@@ -85,10 +85,10 @@ class DocumentCRUD:
                 processed_at=processed_at,
                 permissions=permissions,
                 document_type=document_type,
-                # Program 관련 필드
+                Program 관련 필드
                 program_id=program_id,
                 source_document_id=source_document_id,
-                # Knowledge Reference 관련 필드
+                Knowledge Reference 관련 필드
                 knowledge_reference_id=knowledge_reference_id,
                 create_dt=datetime.now()
             )
@@ -178,7 +178,7 @@ class DocumentCRUD:
         try:
             document = self.get_document(document_id)
             if document:
-                # 허용된 필드들만 업데이트
+                허용된 필드들만 업데이트
                 allowed_fields = {
                     'total_pages', 'processed_pages', 'milvus_collection_name', 
                     'vector_count', 'language', 'author', 'subject', 
@@ -321,7 +321,7 @@ class DocumentCRUD:
     def update_document_type(self, document_id: str, document_type: str) -> bool:
         """문서 타입 업데이트"""
         try:
-            # 유효한 타입 검증
+            유효한 타입 검증
             if document_type not in Document.VALID_DOCUMENT_TYPES:
                 raise ValueError(f"유효하지 않은 문서 타입: {document_type}. 허용된 타입: {Document.VALID_DOCUMENT_TYPES}")
             
@@ -348,10 +348,10 @@ class DocumentCRUD:
                 Document.is_deleted == False
             ).group_by(Document.document_type).all()
             
-            # 기본 타입들로 초기화
+            기본 타입들로 초기화
             stats = {'common': 0, 'type1': 0, 'type2': 0}
             
-            # 실제 데이터로 업데이트
+            실제 데이터로 업데이트
             for doc_type, count in results:
                 if doc_type in stats:
                     stats[doc_type] = count

@@ -205,6 +205,7 @@ class Database:
                 )
             
             # shared_core 모델들을 import하여 metadata에 포함
+            # 단, DOCUMENTS 테이블은 ai_backend의 Document 모델로 생성하므로 제외
             from shared_core.models import Base as SharedBase
             
             # 두 Base의 metadata를 합쳐서 한 번에 생성
@@ -214,7 +215,12 @@ class Database:
                 # 두 metadata를 합쳐서 생성
                 # SQLAlchemy는 자동으로 의존성 순서를 파악하여 올바른 순서로 테이블 생성
                 # SharedBase의 모든 테이블을 Base metadata에 추가
+                # 단, DOCUMENTS 테이블은 ai_backend의 Document 모델로 생성하므로 제외
                 for table_name, table in SharedBase.metadata.tables.items():
+                    # DOCUMENTS 테이블은 ai_backend의 Document 모델로 생성하므로 건너뛰기
+                    if table_name == "DOCUMENTS":
+                        logger.debug("DOCUMENTS 테이블은 ai_backend의 Document 모델로 생성하므로 건너뜁니다.")
+                        continue
                     # 테이블이 이미 Base에 있으면 건너뛰기
                     if table_name not in Base.metadata.tables:
                         # 테이블을 복사하여 Base metadata에 추가
@@ -262,6 +268,9 @@ class Database:
                         "기존 테이블 목록: %s",
                         ", ".join(existing_tables),
                     )
+                
+                # DOCUMENTS 테이블의 Foreign Key 제약조건 생성
+                self._create_document_foreign_keys(schema_identifier)
             except Exception as e:
                 # PostgreSQL 타입 중복 오류는 무시 (이미 존재하는 타입)
                 # 이는 이전 테이블 생성 실패 시 타입만 남아있는 경우 발생할 수 있음
@@ -276,6 +285,116 @@ class Database:
             error_msg = _safe_str(e)
             logger.error("❌ 테이블 생성 실패: %s", error_msg)
             raise
+
+    def _create_document_foreign_keys(self, schema: str):
+        """
+        DOCUMENTS 테이블의 Foreign Key 제약조건 생성
+        
+        Args:
+            schema: 데이터베이스 스키마 이름
+        """
+        logger.info("DOCUMENTS 테이블 Foreign Key 제약조건 생성 시작")
+        
+        with self._engine.connect() as conn:
+            try:
+                # 기존 제약조건 삭제 (IF EXISTS로 안전하게 처리)
+                constraints_to_drop = [
+                    'fk_documents_program_id',
+                    'fk_documents_source_document_id',
+                    'fk_documents_knowledge_reference_id',
+                ]
+                
+                for constraint_name in constraints_to_drop:
+                    try:
+                        conn.execute(
+                            text(
+                                f'ALTER TABLE "{schema}".DOCUMENTS '
+                                f'DROP CONSTRAINT IF EXISTS {constraint_name}'
+                            )
+                        )
+                        conn.commit()
+                    except Exception as e:
+                        error_str = _safe_str(e)
+                        logger.debug(
+                            f"제약조건 삭제 시도 (이미 없을 수 있음): {constraint_name} - {error_str}"
+                        )
+                        conn.rollback()
+                
+                # DOCUMENTS 테이블 존재 여부 확인
+                inspector = inspect(self._engine)
+                if 'DOCUMENTS' not in inspector.get_table_names(schema=schema):
+                    logger.warning("DOCUMENTS 테이블이 존재하지 않아 FK 제약조건 생성을 건너뜁니다.")
+                    return
+                
+                # PROGRAM_ID Foreign Key 추가
+                try:
+                    conn.execute(
+                        text(
+                            f'ALTER TABLE "{schema}".DOCUMENTS '
+                            f'ADD CONSTRAINT fk_documents_program_id '
+                            f'FOREIGN KEY (PROGRAM_ID) '
+                            f'REFERENCES "{schema}".PROGRAMS(PROGRAM_ID) '
+                            f'ON DELETE SET NULL ON UPDATE CASCADE'
+                        )
+                    )
+                    conn.commit()
+                    logger.info("✓ fk_documents_program_id 제약조건 생성 완료")
+                except Exception as e:
+                    error_str = _safe_str(e)
+                    if "already exists" in error_str.lower() or "duplicate" in error_str.lower():
+                        logger.debug("fk_documents_program_id 제약조건이 이미 존재합니다.")
+                    else:
+                        logger.warning(f"fk_documents_program_id 제약조건 생성 실패: {error_str}")
+                    conn.rollback()
+                
+                # SOURCE_DOCUMENT_ID Foreign Key 추가
+                try:
+                    conn.execute(
+                        text(
+                            f'ALTER TABLE "{schema}".DOCUMENTS '
+                            f'ADD CONSTRAINT fk_documents_source_document_id '
+                            f'FOREIGN KEY (SOURCE_DOCUMENT_ID) '
+                            f'REFERENCES "{schema}".DOCUMENTS(DOCUMENT_ID) '
+                            f'ON DELETE SET NULL ON UPDATE CASCADE'
+                        )
+                    )
+                    conn.commit()
+                    logger.info("✓ fk_documents_source_document_id 제약조건 생성 완료")
+                except Exception as e:
+                    error_str = _safe_str(e)
+                    if "already exists" in error_str.lower() or "duplicate" in error_str.lower():
+                        logger.debug("fk_documents_source_document_id 제약조건이 이미 존재합니다.")
+                    else:
+                        logger.warning(f"fk_documents_source_document_id 제약조건 생성 실패: {error_str}")
+                    conn.rollback()
+                
+                # KNOWLEDGE_REFERENCE_ID Foreign Key 추가
+                try:
+                    conn.execute(
+                        text(
+                            f'ALTER TABLE "{schema}".DOCUMENTS '
+                            f'ADD CONSTRAINT fk_documents_knowledge_reference_id '
+                            f'FOREIGN KEY (KNOWLEDGE_REFERENCE_ID) '
+                            f'REFERENCES "{schema}".KNOWLEDGE_REFERENCES(REFERENCE_ID) '
+                            f'ON DELETE SET NULL ON UPDATE CASCADE'
+                        )
+                    )
+                    conn.commit()
+                    logger.info("✓ fk_documents_knowledge_reference_id 제약조건 생성 완료")
+                except Exception as e:
+                    error_str = _safe_str(e)
+                    if "already exists" in error_str.lower() or "duplicate" in error_str.lower():
+                        logger.debug("fk_documents_knowledge_reference_id 제약조건이 이미 존재합니다.")
+                    else:
+                        logger.warning(f"fk_documents_knowledge_reference_id 제약조건 생성 실패: {error_str}")
+                    conn.rollback()
+                
+                logger.info("DOCUMENTS 테이블 Foreign Key 제약조건 생성 완료")
+                
+            except Exception as e:
+                error_str = _safe_str(e)
+                logger.warning(f"Foreign Key 제약조건 생성 중 오류 발생 (무시하고 계속): {error_str}")
+                conn.rollback()
 
     @contextmanager
     def session(self):
