@@ -290,7 +290,7 @@ DocumentMetadata = Document
 
 __all__ = [
     "Document",
-    "DocumentChunk",
+    "DocumentChunk", 
     "ProcessingJob",
     "DocumentMetadata",
 ]
