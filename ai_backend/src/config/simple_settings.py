@@ -177,10 +177,30 @@ class Settings(BaseSettings):
     # - 환경변수: AWS_REGION
     aws_region: str = Field(default="ap-northeast-2", env="AWS_REGION")
     
-    # AWS 자격 증명 (선택사항)
-    # - 환경변수에서 자동으로 찾음 (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY)
-    # - 또는 ~/.aws/credentials 파일 사용
-    # - 또는 IAM 역할 사용 (EC2, ECS, Lambda 등)
+    # S3 Endpoint URL (선택사항)
+    # - AWS S3 사용 시: 비워두면 region_name 기반으로 자동 결정
+    # - NCP Storage, MinIO 등 S3 호환 스토리지 사용 시: endpoint URL 지정
+    #   예: https://kr.object.ncloudstorage.com (NCP Storage)
+    #   예: http://minio:9000 (MinIO)
+    # - 환경변수: S3_ENDPOINT_URL
+    s3_endpoint_url: str = Field(default="", env="S3_ENDPOINT_URL")
+    
+    # S3 Addressing Style (선택사항)
+    # - "auto": boto3가 자동 결정 (기본값)
+    # - "path": path-style addressing 사용 (예: https://endpoint.com/bucket/key)
+    # - "virtual": virtual-hosted-style 사용 (예: https://bucket.endpoint.com/key)
+    # - NCP Storage 등 일부 S3 호환 스토리지는 path-style을 요구할 수 있음
+    # - 환경변수: S3_ADDRESSING_STYLE
+    s3_addressing_style: str = Field(default="auto", env="S3_ADDRESSING_STYLE")
+    
+    # AWS/S3 자격 증명 (선택사항)
+    # - NCP Storage, MinIO 등 S3 호환 스토리지 사용 시: 명시적으로 설정 필요
+    # - AWS S3 사용 시: 명시적으로 설정하거나 자동으로 찾음
+    #   자동 찾기 순서:
+    #   1. 환경 변수 (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY)
+    #   2. AWS 자격 증명 파일 (~/.aws/credentials)
+    #   3. IAM 역할 (EC2, ECS, Lambda 등)
+    # - 환경변수: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
     aws_access_key_id: str = Field(default="", env="AWS_ACCESS_KEY_ID")
     aws_secret_access_key: str = Field(default="", env="AWS_SECRET_ACCESS_KEY")
     

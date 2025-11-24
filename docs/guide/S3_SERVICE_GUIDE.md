@@ -12,6 +12,8 @@ S3 업로드/다운로드 통합 서비스 사용 가이드입니다.
 
 `.env` 파일에 다음 설정을 추가하세요:
 
+#### AWS S3 사용 시
+
 ```bash
 # S3 버킷 이름 (필수)
 S3_BUCKET_NAME=my-s3-bucket
@@ -27,14 +29,62 @@ AWS_REGION=ap-northeast-2
 # AWS_SECRET_ACCESS_KEY=your-secret-access-key
 ```
 
+#### NCP Storage 사용 시 (폐쇄망 환경)
+
+```bash
+# S3 버킷 이름 (필수)
+S3_BUCKET_NAME=my-ncp-bucket
+
+# NCP Storage Endpoint URL (필수)
+# 예: https://kr.object.ncloudstorage.com
+S3_ENDPOINT_URL=https://kr.object.ncloudstorage.com
+
+# NCP Storage Access Key (필수)
+AWS_ACCESS_KEY_ID=your-ncp-access-key
+
+# NCP Storage Secret Key (필수)
+AWS_SECRET_ACCESS_KEY=your-ncp-secret-key
+
+# S3 Addressing Style (선택사항)
+# - "auto": boto3가 자동 결정 (기본값)
+# - "path": path-style addressing 사용 (NCP Storage에서 필요할 수 있음)
+# - "virtual": virtual-hosted-style 사용
+S3_ADDRESSING_STYLE=path
+
+# AWS_REGION은 NCP Storage에서 중요하지 않지만 boto3에서 필요하므로 설정
+AWS_REGION=ap-northeast-2
+```
+
+#### MinIO 등 S3 호환 스토리지 사용 시
+
+```bash
+# S3 버킷 이름 (필수)
+S3_BUCKET_NAME=my-minio-bucket
+
+# MinIO Endpoint URL (필수)
+# 예: http://minio:9000 또는 https://minio.example.com
+S3_ENDPOINT_URL=http://minio:9000
+
+# MinIO Access Key (필수)
+AWS_ACCESS_KEY_ID=minioadmin
+
+# MinIO Secret Key (필수)
+AWS_SECRET_ACCESS_KEY=minioadmin
+
+# AWS_REGION은 MinIO에서 중요하지 않지만 boto3에서 필요하므로 설정
+AWS_REGION=us-east-1
+```
+
 ### 설정 파일
 
 `src/config/simple_settings.py`에 S3 설정이 자동으로 포함됩니다:
 
 - `s3_bucket_name`: S3 버킷 이름 (S3_BUCKET_NAME 환경변수)
-- `aws_region`: AWS 리전 (기본값: ap-northeast-2)
-- `aws_access_key_id`: AWS Access Key ID (선택사항)
-- `aws_secret_access_key`: AWS Secret Access Key (선택사항)
+- `s3_endpoint_url`: S3 Endpoint URL (S3_ENDPOINT_URL 환경변수, NCP Storage/MinIO 등에서 사용)
+- `s3_addressing_style`: S3 Addressing Style (S3_ADDRESSING_STYLE 환경변수, 기본값: "auto")
+- `aws_region`: AWS 리전 (기본값: ap-northeast-2, AWS S3 사용 시 필요)
+- `aws_access_key_id`: Access Key ID (AWS_ACCESS_KEY_ID 환경변수, NCP Storage/MinIO에서 필수)
+- `aws_secret_access_key`: Secret Access Key (AWS_SECRET_ACCESS_KEY 환경변수, NCP Storage/MinIO에서 필수)
 
 ## 사용 방법
 

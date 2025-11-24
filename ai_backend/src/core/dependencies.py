@@ -131,14 +131,44 @@ def get_s3_download_service() -> S3DownloadService:
         try:
             import boto3
 
-            # AWS 자격 증명은 다음 순서로 자동으로 찾습니다:
+            # S3 클라이언트 생성 파라미터
+            client_kwargs = {
+                "service_name": "s3",
+            }
+            
+            # S3_ENDPOINT_URL이 설정되어 있으면 사용 (NCP Storage, MinIO 등 S3 호환 스토리지)
+            if settings.s3_endpoint_url:
+                client_kwargs["endpoint_url"] = settings.s3_endpoint_url
+                logger.info("S3 Endpoint URL 사용: %s", settings.s3_endpoint_url)
+            else:
+                # AWS S3 사용 시에만 region_name 필요
+                client_kwargs["region_name"] = settings.aws_region
+            
+            # 자격 증명 설정 (명시적으로 설정된 경우 우선 사용)
+            # NCP Storage, MinIO 등은 Access Key/Secret Key를 명시적으로 설정해야 함
+            if settings.aws_access_key_id and settings.aws_secret_access_key:
+                client_kwargs["aws_access_key_id"] = settings.aws_access_key_id
+                client_kwargs["aws_secret_access_key"] = settings.aws_secret_access_key
+                logger.info("S3 자격 증명을 환경변수에서 사용")
+            # 명시적으로 설정되지 않은 경우 boto3가 자동으로 찾음:
             # 1. 환경 변수 (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY)
             # 2. AWS 자격 증명 파일 (~/.aws/credentials)
             # 3. IAM 역할 (EC2, ECS, Lambda 등에서 실행 시)
-            s3_client = boto3.client(
-                "s3",
-                region_name=settings.aws_region,
-            )
+            
+            # S3 Addressing Style 설정 (NCP Storage 등 일부 S3 호환 스토리지에서 필요)
+            if settings.s3_addressing_style and settings.s3_addressing_style != "auto":
+                from botocore.client import Config
+                if settings.s3_addressing_style == "path":
+                    s3_config = Config(s3={"addressing_style": "path"})
+                    client_kwargs["config"] = s3_config
+                    logger.info("S3 Addressing Style: path")
+                elif settings.s3_addressing_style == "virtual":
+                    s3_config = Config(s3={"addressing_style": "virtual"})
+                    client_kwargs["config"] = s3_config
+                    logger.info("S3 Addressing Style: virtual")
+            
+            # S3 클라이언트 생성
+            s3_client = boto3.client(**client_kwargs)
             logger.info("S3 클라이언트 초기화 완료: bucket=%s", s3_bucket)
         except Exception as e:
             logger.warning(
@@ -165,14 +195,44 @@ def get_s3_service() -> S3Service:
         try:
             import boto3
 
-            # AWS 자격 증명은 다음 순서로 자동으로 찾습니다:
+            # S3 클라이언트 생성 파라미터
+            client_kwargs = {
+                "service_name": "s3",
+            }
+            
+            # S3_ENDPOINT_URL이 설정되어 있으면 사용 (NCP Storage, MinIO 등 S3 호환 스토리지)
+            if settings.s3_endpoint_url:
+                client_kwargs["endpoint_url"] = settings.s3_endpoint_url
+                logger.info("S3 Endpoint URL 사용: %s", settings.s3_endpoint_url)
+            else:
+                # AWS S3 사용 시에만 region_name 필요
+                client_kwargs["region_name"] = settings.aws_region
+            
+            # 자격 증명 설정 (명시적으로 설정된 경우 우선 사용)
+            # NCP Storage, MinIO 등은 Access Key/Secret Key를 명시적으로 설정해야 함
+            if settings.aws_access_key_id and settings.aws_secret_access_key:
+                client_kwargs["aws_access_key_id"] = settings.aws_access_key_id
+                client_kwargs["aws_secret_access_key"] = settings.aws_secret_access_key
+                logger.info("S3 자격 증명을 환경변수에서 사용")
+            # 명시적으로 설정되지 않은 경우 boto3가 자동으로 찾음:
             # 1. 환경 변수 (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY)
             # 2. AWS 자격 증명 파일 (~/.aws/credentials)
             # 3. IAM 역할 (EC2, ECS, Lambda 등에서 실행 시)
-            s3_client = boto3.client(
-                "s3",
-                region_name=settings.aws_region,
-            )
+            
+            # S3 Addressing Style 설정 (NCP Storage 등 일부 S3 호환 스토리지에서 필요)
+            if settings.s3_addressing_style and settings.s3_addressing_style != "auto":
+                from botocore.client import Config
+                if settings.s3_addressing_style == "path":
+                    s3_config = Config(s3={"addressing_style": "path"})
+                    client_kwargs["config"] = s3_config
+                    logger.info("S3 Addressing Style: path")
+                elif settings.s3_addressing_style == "virtual":
+                    s3_config = Config(s3={"addressing_style": "virtual"})
+                    client_kwargs["config"] = s3_config
+                    logger.info("S3 Addressing Style: virtual")
+            
+            # S3 클라이언트 생성
+            s3_client = boto3.client(**client_kwargs)
             logger.info("S3 서비스 클라이언트 초기화 완료: bucket=%s", s3_bucket)
         except Exception as e:
             logger.warning(
