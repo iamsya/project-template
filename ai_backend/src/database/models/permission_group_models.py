@@ -44,7 +44,7 @@ class PermissionGroup(Base):
         "GROUP_NAME",
         String(100),
         nullable=False,
-        comment="권한 그룹명 (예: super 관리자, plc 관리자 등)"
+        comment="권한 그룹명 (예: 시스템 관리자, 통합 관리자, 공정 관리자 등)"
     )
     description = Column(
         "DESCRIPTION",
@@ -52,6 +52,34 @@ class PermissionGroup(Base):
         nullable=True,
         comment="권한 그룹 설명"
     )
+    
+    # Role 권한 (단수 선택)
+    # 시스템 관리자: 사용자 관리 + 모든 공정 접근 권한
+    # 통합 관리자: PLC 모든 공정 접근 가능
+    # 공정 관리자: 선택한 공정만 접근 가능
+    role = Column(
+        "ROLE",
+        String(50),
+        nullable=False,
+        index=True,
+        comment=(
+            "Role 권한 타입: "
+            "system_admin (시스템 관리자), "
+            "integrated_admin (통합 관리자), "
+            "process_manager (공정 관리자)"
+        )
+    )
+    
+    # Role 상수
+    ROLE_SYSTEM_ADMIN = "system_admin"
+    ROLE_INTEGRATED_ADMIN = "integrated_admin"
+    ROLE_PROCESS_MANAGER = "process_manager"
+    
+    VALID_ROLES = [
+        ROLE_SYSTEM_ADMIN,
+        ROLE_INTEGRATED_ADMIN,
+        ROLE_PROCESS_MANAGER,
+    ]
 
     # 메뉴 접근 권한 (JSON)
     # 프론트엔드에서 이 값을 받아서 해당 메뉴들을 보여주거나 숨김
@@ -133,6 +161,11 @@ class PermissionGroup(Base):
             "idx_permission_group_active_deleted",
             "IS_ACTIVE",
             "IS_DELETED"
+        ),
+        # role 단일 인덱스 (role별 그룹 조회 최적화)
+        Index(
+            "idx_permission_group_role",
+            "ROLE"
         ),
     )
 

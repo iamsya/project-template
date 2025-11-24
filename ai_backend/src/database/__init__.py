@@ -13,6 +13,7 @@ from .models.master_models import *
 from .models.plc_models import *
 from .models.template_models import *
 from .models.knowledge_reference_models import *
+from .models.permission_group_models import *
 
 __all__ = [
     "Base",
@@ -32,4 +33,7 @@ __all__ = [
     "Template",
     "TemplateData",
     "KnowledgeReference",
+    "PermissionGroup",
+    "GroupProcessPermission",
+    "UserGroupMapping",
 ]
