@@ -86,7 +86,6 @@ DOCUMENTS
   - `ladder_logic_zip`: 원본 ZIP 파일 (ladder logic 파일들)
   - `ladder_logic_json`: 전처리된 JSON 파일 (ZIP에서 압축 해제 후 전처리)
   - `comment`: PLC Ladder Comment 파일 (CSV)
-  - `template`: Logic 분류 체계 파일 (XLSX)
 - **Knowledge Reference 파일:**
   - `manual`: 미쯔비시 매뉴얼
   - `glossary`: 용어집
@@ -108,7 +107,7 @@ DOCUMENTS
 
 **주의:**
 - `status`는 전처리 및 임베딩 대상 파일만 사용
-- 다른 파일(`ladder_logic_zip`, `comment`, `template`)은 `status=None`
+- 다른 파일(`ladder_logic_zip`, `comment`)은 `status=None`
 
 **관계:**
 - `program_id`: 프로그램에 속한 문서
@@ -117,53 +116,7 @@ DOCUMENTS
 
 ---
 
-### 3. TEMPLATES (템플릿 테이블)
-
-프로그램의 템플릿 분류 체계를 관리합니다.
-
-```sql
-TEMPLATES
-├── TEMPLATE_ID (PK, String(50))         -- 템플릿 고유 ID
-├── DOCUMENT_ID (FK → DOCUMENTS.DOCUMENT_ID, nullable=False, index=True)  -- 분류체계 XLSX 파일
-├── PROGRAM_ID (FK → PROGRAMS.PROGRAM_ID, nullable=True, index=True)
-├── METADATA_JSON (JSON)                -- 메타데이터
-├── CREATED_AT (DateTime)               -- 생성 일시
-└── CREATED_BY (String(50))              -- 생성자
-```
-
-**관계:**
-- `document_id`: 분류체계 XLSX 파일 (`document_type="template"`)
-- `program_id`: 속한 프로그램
-
----
-
-### 4. TEMPLATE_DATA (템플릿 데이터 테이블)
-
-템플릿의 각 로직 파일 정보를 관리합니다.
-
-```sql
-TEMPLATE_DATA
-├── TEMPLATE_DATA_ID (PK, String(50))   -- 템플릿 데이터 고유 ID
-├── TEMPLATE_ID (FK → TEMPLATES.TEMPLATE_ID, nullable=False, index=True)
-├── FOLDER_ID (String(100), nullable=True, index=True)      -- 폴더 ID
-├── FOLDER_NAME (String(200), nullable=True)                 -- 폴더명
-├── SUB_FOLDER_NAME (String(200), nullable=True)             -- 하위 폴더명
-├── LOGIC_ID (String(100), nullable=False, index=True)       -- 로직 ID (파일명)
-├── LOGIC_NAME (String(200), nullable=False)                 -- 로직명
-├── DOCUMENT_ID (FK → DOCUMENTS.DOCUMENT_ID, nullable=True, index=True)  -- 전처리된 JSON 파일
-├── ROW_INDEX (Integer, nullable=False) -- 엑셀 행 인덱스
-├── METADATA_JSON (JSON)                -- 메타데이터
-└── CREATED_AT (DateTime)               -- 생성 일시
-```
-
-**관계:**
-- `template_id`: 속한 템플릿
-- `document_id`: 전처리된 JSON 파일 (`document_type="ladder_logic_json"`)
-  - 전처리 완료 후 각 로직 파일에 해당하는 JSON Document와 연결
-
----
-
-### 5. PROCESSING_FAILURES (처리 실패 정보)
+### 3. PROCESSING_FAILURES (처리 실패 정보)
 
 프로그램 처리 중 발생한 실패 정보를 관리합니다.
 
@@ -205,7 +158,7 @@ PROCESSING_FAILURES
 
 ---
 
-### 6. PROGRAM_LLM_DATA_CHUNKS (프로그램 LLM 데이터 청크)
+### 4. PROGRAM_LLM_DATA_CHUNKS (프로그램 LLM 데이터 청크)
 
 프로그램의 LLM 데이터 청크를 관리합니다.
 
@@ -247,16 +200,7 @@ PROGRAMS (1)
     │       │   ├── "ladder_logic_zip" (원본 ZIP)
     │       │   ├── "ladder_logic_json" (전처리된 JSON) ──→ source_document_id ──→ DOCUMENTS (ladder_logic_zip)
     │       │   ├── "comment" (CSV)
-    │       │   └── "template" (XLSX)
     │       └── source_document_id (FK → DOCUMENTS.DOCUMENT_ID)
-    │
-    ├──→ TEMPLATES (1)
-    │       ├── program_id (FK)
-    │       ├── document_id (FK → DOCUMENTS) ──→ template 파일
-    │       │
-    │       └──→ TEMPLATE_DATA (N)
-    │               ├── template_id (FK)
-    │               └── document_id (FK → DOCUMENTS) ──→ ladder_logic_json 파일
     │
     ├──→ PROCESSING_FAILURES (N)
     │       ├── source_type = "program"
@@ -308,17 +252,6 @@ PROGRAMS (1)
 }
 ```
 
-### 4. Template 파일 (template)
-```python
-{
-    "program_id": "program_001",
-    "document_type": "template",
-    "file_extension": "xlsx",
-    "file_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    "source_document_id": None
-}
-```
-
 ---
 
 ## 데이터 흐름
@@ -328,7 +261,6 @@ PROGRAMS (1)
 1. **등록 단계 (동기)**
    - `ladder_logic_zip` Document 생성 (상태: processing)
    - `comment` Document 생성 (상태: processing)
-   - `template` Document 생성 (상태: processing)
 
 2. **S3 업로드 후 (비동기)**
    - 각 Document의 `file_key`, `upload_path` 업데이트
@@ -341,7 +273,6 @@ PROGRAMS (1)
      - `ladder_logic_json` Document 생성
        - `source_document_id` = 원본 ZIP Document ID
        - `document_type` = "ladder_logic_json"
-     - `TEMPLATE_DATA.document_id` 업데이트 (해당 JSON Document ID)
 
 4. **임베딩 단계 (비동기)**
    - 각 `ladder_logic_json` Document에 대해:
@@ -356,7 +287,7 @@ PROGRAMS (1)
 ```sql
 SELECT * FROM DOCUMENTS
 WHERE program_id = 'program_001'
-  AND document_type IN ('ladder_logic_zip', 'comment', 'template')
+  AND document_type IN ('ladder_logic_zip', 'comment')
   AND is_deleted = false;
 ```
 
@@ -376,18 +307,7 @@ WHERE source_document_id = 'doc_zip_001'
   AND is_deleted = false;
 ```
 
-### 4. TemplateData와 연결된 JSON 파일 조회
-```sql
-SELECT td.*, d.*
-FROM TEMPLATE_DATA td
-JOIN DOCUMENTS d ON td.document_id = d.document_id
-WHERE td.template_id IN (
-    SELECT template_id FROM TEMPLATES WHERE program_id = 'program_001'
-)
-AND d.program_file_type = 'ladder_logic_json';
-```
-
-### 5. 프로그램의 실패 정보 조회
+### 4. 프로그램의 실패 정보 조회
 ```sql
 SELECT * FROM PROCESSING_FAILURES
 WHERE source_type = 'program'
@@ -418,7 +338,6 @@ WHERE source_type = 'program'
 4. **기타 테이블**
    - `PROCESSING_FAILURES`: 유지 (이력 관리)
    - `PROGRAM_LLM_DATA_CHUNKS`: 삭제 또는 유지 (정책에 따라)
-   - `TEMPLATE_DATA`, `TEMPLATES`: 유지 (참조 무결성)
 
 ### 전처리 및 임베딩 상태 관리
 
@@ -457,39 +376,17 @@ WHERE source_type = 'program'
 
 ```python
 from src.database.crud.document_crud import DocumentCRUD
-from shared_core.models import Document
+from src.database.models.document_models import Document
 from src.utils.uuid_gen import gen
 
 # CRUD 인스턴스 생성
 document_crud = DocumentCRUD(db)
 
-# Document 생성
-document_id = gen()
-document_crud.create_document(
-    document_id=document_id,
-    document_name="프로그램명_template",
-    original_filename="template.xlsx",
-    file_key="programs/program_001/template.xlsx",
-    file_size=1024,
-    file_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    file_extension="xlsx",
-    user_id="user001",
-    upload_path="s3://bucket/programs/program_001/template.xlsx",
-    status=None,  # template 파일은 status 사용 안 함
-    document_type=Document.TYPE_TEMPLATE,  # 상수 사용
-    program_id="program_001",
-    metadata_json={
-        "program_id": "program_001",
-        "program_title": "프로그램명",
-    },
-)
-```
-
-#### 2. JSON 파일 생성 (전처리 완료 상태)
+#### 1. JSON 파일 생성 (전처리 완료 상태)
 
 ```python
 from src.database.crud.document_crud import DocumentCRUD
-from shared_core.models import Document
+from src.database.models.document_models import Document
 from src.utils.uuid_gen import gen
 
 document_crud = DocumentCRUD(db)
@@ -527,7 +424,7 @@ document_crud.create_document(
 
 ```python
 from src.database.crud.document_crud import DocumentCRUD
-from shared_core.models import Document
+from src.database.models.document_models import Document
 
 # CRUD 인스턴스 생성
 document_crud = DocumentCRUD(db)
@@ -578,7 +475,7 @@ def update_document_status(
 
 ```python
 from src.api.services.document_service import DocumentService
-from shared_core.models import Document
+from src.database.models.document_models import Document
 
 # 서비스 인스턴스 생성
 document_service = DocumentService(db)
@@ -627,7 +524,7 @@ def update_document_processing_status(
 
 ```python
 from src.database.crud.document_crud import DocumentCRUD
-from shared_core.models import Document
+from src.database.models.document_models import Document
 
 document_crud = DocumentCRUD(db)
 
@@ -646,7 +543,7 @@ success = document_crud.update_document(
 모든 status 값은 `Document` 모델의 상수를 사용하는 것을 권장합니다:
 
 ```python
-from shared_core.models import Document
+from src.database.models.document_models import Document
 
 # Status 상수
 Document.STATUS_PREPROCESSED  # 전처리 완료 (JSON 파일 전용)
@@ -659,7 +556,6 @@ Document.STATUS_COMPLETED     # 완료 (Knowledge Reference 파일 전용)
 Document.TYPE_LADDER_LOGIC_ZIP   # 원본 ZIP 파일
 Document.TYPE_LADDER_LOGIC_JSON  # 전처리된 JSON 파일
 Document.TYPE_COMMENT            # 코멘트 CSV 파일
-Document.TYPE_TEMPLATE           # 템플릿 XLSX 파일
 Document.TYPE_MANUAL             # 매뉴얼 파일
 Document.TYPE_GLOSSARY           # 용어집 파일
 Document.TYPE_PLC                # PLC 레포 파일
@@ -671,7 +567,7 @@ Document.TYPE_PLC                # PLC 레포 파일
 
 ```python
 from src.database.crud.document_crud import DocumentCRUD
-from shared_core.models import Document
+from src.database.models.document_models import Document
 
 document_crud = DocumentCRUD(db)
 
@@ -698,7 +594,7 @@ document_crud.create_document(
 
 ```python
 from src.database.crud.document_crud import DocumentCRUD
-from shared_core.models import Document
+from src.database.models.document_models import Document
 
 document_crud = DocumentCRUD(db)
 
@@ -713,7 +609,7 @@ document_crud.update_document_status(
 
 ```python
 from src.database.crud.document_crud import DocumentCRUD
-from shared_core.models import Document
+from src.database.models.document_models import Document
 
 document_crud = DocumentCRUD(db)
 
@@ -730,7 +626,7 @@ document_crud.update_document(
 
 ```python
 from src.database.crud.document_crud import DocumentCRUD
-from shared_core.models import Document
+from src.database.models.document_models import Document
 
 document_crud = DocumentCRUD(db)
 
@@ -771,7 +667,7 @@ document_crud.update_document_status(
 ### 주의사항
 
 1. **Status는 전처리 및 임베딩 대상 파일만 사용**
-   - `ladder_logic_zip`, `comment`, `template` 파일은 `status=None`
+   - `ladder_logic_zip`, `comment` 파일은 `status=None`
    - `ladder_logic_json` 및 Knowledge Reference 파일만 status 사용
 
 2. **상수 사용 권장**

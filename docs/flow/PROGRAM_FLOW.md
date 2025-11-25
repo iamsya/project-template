@@ -302,7 +302,7 @@
 │   └─ [DocumentCRUD] create_document()
 │       ├─ 각 업로드 파일마다 Document 생성
 │       ├─ program_id, program_file_type 설정
-│       └─ ladder_logic, comment, template 파일 저장
+│       └─ ladder_logic, comment 파일 저장
 │
 ├─ Step 3: 전처리 및 JSON 생성
 │   │

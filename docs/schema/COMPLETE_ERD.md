@@ -164,30 +164,6 @@ erDiagram
         string UPDATED_BY "수정자"
     }
     
-    %% ============ Template 관련 테이블 ============
-    TEMPLATES {
-        string TEMPLATE_ID PK "템플릿 ID"
-        string DOCUMENT_ID FK "문서 ID (템플릿 파일)"
-        string PROGRAM_ID FK "프로그램 ID (선택)"
-        json METADATA_JSON "메타데이터"
-        datetime CREATED_AT "생성일시"
-        string CREATED_BY "생성자"
-    }
-    
-    TEMPLATE_DATA {
-        string TEMPLATE_DATA_ID PK "템플릿 데이터 ID"
-        string TEMPLATE_ID FK "템플릿 ID"
-        string FOLDER_ID "폴더 ID"
-        string FOLDER_NAME "폴더명"
-        string SUB_FOLDER_NAME "하위 폴더명"
-        string LOGIC_ID "로직 ID (예: 1100.csv)"
-        string LOGIC_NAME "로직명"
-        string DOCUMENT_ID FK "문서 ID (전처리된 JSON 파일)"
-        integer ROW_INDEX "행 순서"
-        json METADATA_JSON "메타데이터"
-        datetime CREATED_AT "생성일시"
-    }
-    
     %% ============ 기준정보 마스터 테이블 ============
     PLANT_MASTER {
         string PLANT_ID PK "공장 ID"
@@ -303,7 +279,6 @@ erDiagram
     PROGRAMS ||--o{ PROCESSING_JOBS : "has (1:N)"
     PROGRAMS ||--o{ PROCESSING_FAILURES : "has (1:N)"
     PROGRAMS ||--o{ PROGRAM_LLM_DATA_CHUNKS : "has (1:N)"
-    PROGRAMS ||--o| TEMPLATES : "has (0:1)"
     PROGRAMS ||--|| PLC : "mapped_to (1:1, unique)"
     
     %% Document 중심 관계
@@ -311,11 +286,6 @@ erDiagram
     DOCUMENTS ||--o{ PROCESSING_JOBS : "processed_by (1:N)"
     DOCUMENTS }o--|| DOCUMENTS : "source_document_id (자기 참조, ZIP → JSON)"
     DOCUMENTS }o--|| KNOWLEDGE_REFERENCES : "belongs_to (N:1)"
-    
-    %% Template 관계
-    TEMPLATES }o--|| DOCUMENTS : "references (N:1, 템플릿 파일)"
-    TEMPLATES ||--o{ TEMPLATE_DATA : "has (1:N)"
-    TEMPLATE_DATA }o--|| DOCUMENTS : "references (N:1, 전처리된 JSON)"
     
     %% 기준정보 마스터 관계 (독립적)
     %% PLANT_MASTER, PROCESS_MASTER, LINE_MASTER는 서로 독립적
@@ -345,7 +315,7 @@ erDiagram
 #### DOCUMENTS
 - **역할**: 모든 문서의 메타정보 관리 (Program 파일, 전처리 JSON, 매뉴얼/용어집 파일 등)
 - **주요 필드**: `document_id`, `program_id`, `program_file_type`, `knowledge_reference_id`, `source_document_id`
-- **프로그램 파일 타입**: `ladder_logic`, `comment`, `template`, `processed_json`
+- **프로그램 파일 타입**: `ladder_logic`, `comment`, `processed_json`
 
 #### DOCUMENT_CHUNKS
 - **역할**: 문서의 청크 정보 (벡터화 대상)
@@ -372,18 +342,7 @@ erDiagram
 - **참조 타입**: `manual` (미쯔비시 매뉴얼), `glossary` (용어집), `plc` (PLC 레포)
 - **용도**: 기준정보 조회 화면의 마스터 테이블
 
-### 3. Template 관련 테이블
-
-#### TEMPLATES
-- **역할**: 템플릿 마스터 (Classification XLSX 파일 메타정보)
-- **주요 필드**: `template_id`, `document_id`, `program_id`
-
-#### TEMPLATE_DATA
-- **역할**: 템플릿 상세 데이터 (템플릿 내 각 행의 데이터)
-- **주요 필드**: `template_data_id`, `template_id`, `logic_id`, `logic_name`, `document_id`
-- **관계**: `logic_id` (예: "1100.csv") → `document_id` (전처리된 "1100.json")
-
-### 4. 기준정보 마스터 테이블
+### 3. 기준정보 마스터 테이블
 
 #### PLANT_MASTER
 - **역할**: 공장 기준정보 마스터
@@ -450,7 +409,6 @@ erDiagram
 - `PROGRAMS` 1:N `PROCESSING_JOBS` (처리 작업들)
 - `PROGRAMS` 1:N `PROCESSING_FAILURES` (실패 정보들)
 - `PROGRAMS` 1:N `PROGRAM_LLM_DATA_CHUNKS` (LLM 데이터 청크들)
-- `PROGRAMS` 0:1 `TEMPLATES` (템플릿)
 - `PROGRAMS` 1:1 `PLC` (PLC 매핑, unique)
 
 ### Document 중심 관계
@@ -458,11 +416,6 @@ erDiagram
 - `DOCUMENTS` 1:N `PROCESSING_JOBS` (처리 작업들)
 - `DOCUMENTS` N:1 `DOCUMENTS` (자기 참조: ZIP → JSON)
 - `DOCUMENTS` N:1 `KNOWLEDGE_REFERENCES` (Knowledge 참조)
-
-### Template 관계
-- `TEMPLATES` N:1 `DOCUMENTS` (템플릿 파일)
-- `TEMPLATES` 1:N `TEMPLATE_DATA` (템플릿 상세 데이터)
-- `TEMPLATE_DATA` N:1 `DOCUMENTS` (전처리된 JSON 파일)
 
 ### Chat 관계
 - `CHATS` 1:N `CHAT_MESSAGES` (채팅 메시지들)
@@ -725,16 +678,10 @@ PROGRAMS (1) ──→ (N) PROCESSING_JOBS
 PROGRAMS (1) ──→ (N) PROCESSING_FAILURES
 PROGRAMS (1) ──→ (N) PROGRAM_LLM_DATA_CHUNKS
 PROGRAMS (1) ──→ (1) PLC (unique)
-PROGRAMS (1) ──→ (0..1) TEMPLATES
-
 DOCUMENTS (1) ──→ (N) DOCUMENT_CHUNKS
 DOCUMENTS (1) ──→ (N) PROCESSING_JOBS
 DOCUMENTS (N) ──→ (1) DOCUMENTS (자기 참조: ZIP → JSON)
 DOCUMENTS (N) ──→ (1) KNOWLEDGE_REFERENCES
-
-TEMPLATES (1) ──→ (N) TEMPLATE_DATA
-TEMPLATES (N) ──→ (1) DOCUMENTS
-TEMPLATE_DATA (N) ──→ (1) DOCUMENTS
 
 PLANT_MASTER, PROCESS_MASTER, LINE_MASTER: 독립적인 마스터 테이블 (서로 종속 관계 없음)
 

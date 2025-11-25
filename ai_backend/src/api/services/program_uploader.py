@@ -31,9 +31,7 @@ class ProgramUploader:
         ladder_document_id: str,
         db_session,
         document_crud,
-        template_data_crud,
         failure_crud,
-        template_data_map: Dict[str, Dict],
         chunk_commit_size: int = 50,
     ) -> Dict[str, Dict]:
         """
@@ -41,7 +39,7 @@ class ProgramUploader:
 
         전략: 개별 처리 및 즉시 DB 반영
         - 각 파일을 개별적으로 처리
-        - 전처리 성공 시 즉시 Document 테이블에 저장 및 template_data 연결
+        - 전처리 성공 시 즉시 Document 테이블에 저장
         - 실패 시 즉시 ProcessingFailure 테이블에 저장
         - 청크 단위로 commit (성능 최적화)
 
@@ -55,9 +53,7 @@ class ProgramUploader:
             ladder_document_id: 원본 ZIP 파일의 Document ID (source_document_id로 사용)
             db_session: 데이터베이스 세션
             document_crud: DocumentCRUD 인스턴스
-            template_data_crud: TemplateDataCRUD 인스턴스
             failure_crud: ProcessingFailureCRUD 인스턴스
-            template_data_map: logic_id -> template_data 매핑 딕셔너리
             chunk_commit_size: 청크 commit 크기 (기본값: 50)
 
         Returns:
@@ -123,11 +119,6 @@ class ProgramUploader:
                         filename = os.path.basename(unzipped_file_path)
                         logic_id = filename
 
-                    # template_data 찾기
-                    template_data_id = None
-                    if logic_id and logic_id in template_data_map:
-                        template_data_id = template_data_map[logic_id]["template_data_id"]
-
                     # Document 생성 (전처리 및 임베딩 대상 파일)
                     # JSON 파일은 이미 전처리 완료 상태이므로 preprocessed로 시작
                     # status 흐름: STATUS_PREPROCESSED -> STATUS_EMBEDDING -> STATUS_EMBEDDED
@@ -143,7 +134,7 @@ class ProgramUploader:
                         user_id=user_id,
                         upload_path=json_s3_path,
                         status=Document.STATUS_PREPROCESSED,  # 전처리 완료 (임베딩 대기)
-                        document_type="ladder_logic_json",
+                        document_type=Document.TYPE_LADDER_LOGIC_JSON,
                         program_id=program_id,
                         source_document_id=ladder_document_id,
                         metadata_json={
@@ -156,13 +147,6 @@ class ProgramUploader:
                         },
                     )
 
-                    # template_data.document_id에 연결
-                    if template_data_id:
-                        template_data_crud.update_template_data(
-                            template_data_id=template_data_id,
-                            document_id=document_id,
-                        )
-
                     # TODO: 전처리 실패 시 status 업데이트
                     # 전처리 실패 시:
                     #   document_crud.update_document(document_id, status=Document.STATUS_FAILED, error_message="...")
@@ -173,7 +157,6 @@ class ProgramUploader:
                         "document_id": document_id,
                         "s3_path": json_s3_path,
                         "filename": json_filename,
-                        "template_data_id": template_data_id,
                     })
 
                     # 청크 단위 commit (성능 최적화)

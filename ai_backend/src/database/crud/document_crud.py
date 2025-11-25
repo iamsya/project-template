@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from src.types.response.exceptions import HandledException
 from src.types.response.response_code import ResponseCode
 from shared_core.crud import DocumentCRUD as SharedDocumentCRUD
-from shared_core.models import Document
+from src.database.models.document_models import Document
 
 logger = logging.getLogger(__name__)
 

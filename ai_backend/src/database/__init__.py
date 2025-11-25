@@ -11,7 +11,6 @@ from .models.document_models import *
 from .models.program_models import *
 from .models.master_models import *
 from .models.plc_models import *
-from .models.template_models import *
 from .models.knowledge_reference_models import *
 from .models.permission_group_models import *
 
@@ -30,8 +29,6 @@ __all__ = [
     "LineMaster",
     "DropdownMaster",
     "ProgramLLMDataChunk",
-    "Template",
-    "TemplateData",
     "KnowledgeReference",
     "PermissionGroup",
     "GroupProcessPermission",

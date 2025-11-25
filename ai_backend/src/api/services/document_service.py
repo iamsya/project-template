@@ -100,7 +100,7 @@ class DocumentService:
         user_id: str,
         is_public: bool = False,
         permissions: List[str] = None,
-        document_type: str = 'common',
+        document_type: str = Document.TYPE_COMMON,
         **additional_metadata
     ) -> Dict:
         """파일 내용으로부터 문서 생성"""
@@ -187,7 +187,7 @@ class DocumentService:
         user_id: str,
         is_public: bool = False,
         permissions: List[str] = None,
-        document_type: str = 'common'
+        document_type: str = Document.TYPE_COMMON
     ) -> Dict:
         """문서 업로드 (FastAPI UploadFile 전용)"""
         try:

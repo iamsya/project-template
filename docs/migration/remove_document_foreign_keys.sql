@@ -32,7 +32,6 @@ WHERE tc.constraint_type = 'FOREIGN KEY'
     AND (
         tc.table_name = 'DOCUMENTS'
         OR ccu.table_name = 'DOCUMENTS'
-        OR tc.table_name IN ('TEMPLATES', 'TEMPLATE_DATA')
     )
 ORDER BY tc.table_name, tc.constraint_name;
 */
@@ -72,47 +71,7 @@ WHERE tc.table_name = 'DOCUMENTS'
 -- ALTER TABLE DOCUMENTS DROP CONSTRAINT IF EXISTS documents_knowledge_reference_id_fkey;
 
 -- ============================================================================
--- 2단계: 다른 테이블에서 DOCUMENTS로 들어오는 Foreign Key 제약조건 제거
--- ============================================================================
-
--- TEMPLATES.DOCUMENT_ID → DOCUMENTS.DOCUMENT_ID
-ALTER TABLE TEMPLATES 
-DROP CONSTRAINT IF EXISTS templates_document_id_fkey;
-
--- PostgreSQL에서 자동 생성된 제약조건명 확인 후 제거
--- 아래 쿼리로 TEMPLATES 테이블의 DOCUMENTS 참조 FK 확인:
-/*
-SELECT constraint_name, column_name
-FROM information_schema.table_constraints tc
-JOIN information_schema.key_column_usage kcu
-    ON tc.constraint_name = kcu.constraint_name
-    AND tc.table_schema = kcu.table_schema
-WHERE tc.table_name = 'TEMPLATES'
-    AND tc.constraint_type = 'FOREIGN KEY'
-    AND kcu.column_name = 'DOCUMENT_ID'
-    AND tc.table_schema = current_schema();
-*/
-
--- TEMPLATE_DATA.DOCUMENT_ID → DOCUMENTS.DOCUMENT_ID
-ALTER TABLE TEMPLATE_DATA 
-DROP CONSTRAINT IF EXISTS template_data_document_id_fkey;
-
--- PostgreSQL에서 자동 생성된 제약조건명 확인 후 제거
--- 아래 쿼리로 TEMPLATE_DATA 테이블의 DOCUMENTS 참조 FK 확인:
-/*
-SELECT constraint_name, column_name
-FROM information_schema.table_constraints tc
-JOIN information_schema.key_column_usage kcu
-    ON tc.constraint_name = kcu.constraint_name
-    AND tc.table_schema = kcu.table_schema
-WHERE tc.table_name = 'TEMPLATE_DATA'
-    AND tc.constraint_type = 'FOREIGN KEY'
-    AND kcu.column_name = 'DOCUMENT_ID'
-    AND tc.table_schema = current_schema();
-*/
-
--- ============================================================================
--- 3단계: 모든 DOCUMENTS 관련 FK 제약조건 일괄 제거 (안전한 방법)
+-- 2단계: 모든 DOCUMENTS 관련 FK 제약조건 일괄 제거 (안전한 방법)
 -- ============================================================================
 
 -- 동적으로 모든 FK 제약조건 찾아서 제거하는 스크립트
@@ -132,46 +91,6 @@ BEGIN
     LOOP
         EXECUTE 'ALTER TABLE DOCUMENTS DROP CONSTRAINT IF EXISTS ' || quote_ident(r.constraint_name);
         RAISE NOTICE '제거됨: DOCUMENTS.%', r.constraint_name;
-    END LOOP;
-    
-    -- TEMPLATES 테이블에서 DOCUMENTS로 들어오는 FK 제거
-    FOR r IN
-        SELECT tc.constraint_name
-        FROM information_schema.table_constraints tc
-        JOIN information_schema.key_column_usage kcu
-            ON tc.constraint_name = kcu.constraint_name
-            AND tc.table_schema = kcu.table_schema
-        JOIN information_schema.constraint_column_usage ccu
-            ON ccu.constraint_name = tc.constraint_name
-            AND ccu.table_schema = tc.table_schema
-        WHERE tc.table_name = 'TEMPLATES'
-            AND tc.constraint_type = 'FOREIGN KEY'
-            AND kcu.column_name = 'DOCUMENT_ID'
-            AND ccu.table_name = 'DOCUMENTS'
-            AND tc.table_schema = current_schema()
-    LOOP
-        EXECUTE 'ALTER TABLE TEMPLATES DROP CONSTRAINT IF EXISTS ' || quote_ident(r.constraint_name);
-        RAISE NOTICE '제거됨: TEMPLATES.%', r.constraint_name;
-    END LOOP;
-    
-    -- TEMPLATE_DATA 테이블에서 DOCUMENTS로 들어오는 FK 제거
-    FOR r IN
-        SELECT tc.constraint_name
-        FROM information_schema.table_constraints tc
-        JOIN information_schema.key_column_usage kcu
-            ON tc.constraint_name = kcu.constraint_name
-            AND tc.table_schema = kcu.table_schema
-        JOIN information_schema.constraint_column_usage ccu
-            ON ccu.constraint_name = tc.constraint_name
-            AND ccu.table_schema = tc.table_schema
-        WHERE tc.table_name = 'TEMPLATE_DATA'
-            AND tc.constraint_type = 'FOREIGN KEY'
-            AND kcu.column_name = 'DOCUMENT_ID'
-            AND ccu.table_name = 'DOCUMENTS'
-            AND tc.table_schema = current_schema()
-    LOOP
-        EXECUTE 'ALTER TABLE TEMPLATE_DATA DROP CONSTRAINT IF EXISTS ' || quote_ident(r.constraint_name);
-        RAISE NOTICE '제거됨: TEMPLATE_DATA.%', r.constraint_name;
     END LOOP;
 END $$;
 
@@ -197,8 +116,6 @@ WHERE tc.constraint_type = 'FOREIGN KEY'
     AND (
         tc.table_name = 'DOCUMENTS'
         OR ccu.table_name = 'DOCUMENTS'
-        OR (tc.table_name IN ('TEMPLATES', 'TEMPLATE_DATA') 
-            AND kcu.column_name = 'DOCUMENT_ID')
     )
     AND tc.table_schema = current_schema()
 ORDER BY tc.table_name, tc.constraint_name;

@@ -173,7 +173,6 @@ class Database:
             try:
                 # 모든 모델 파일을 import하여 Base.metadata에 등록
                 from src.database.models import program_models  # noqa: F401
-                from src.database.models import template_models  # noqa: F401
                 from src.database.models import plc_models  # noqa: F401
                 
                 # 마스터 모델 import 및 클래스 참조로 등록 보장

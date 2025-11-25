@@ -14,7 +14,7 @@ from src.api.services.s3_service import S3Service
 from src.config import settings
 from src.types.response.exceptions import HandledException
 from src.types.response.response_code import ResponseCode
-from src.utils.uuid_gen import gen, gen_program_id, gen_template_id
+from src.utils.uuid_gen import gen, gen_program_id
 
 logger = logging.getLogger(__name__)
 
@@ -230,32 +230,25 @@ class ProgramService:
         self.db.commit()
         logger.info(f"프로그램 메타데이터 저장 완료: program_id={program_id}")
 
-    def _create_templates_and_data(
+    def _create_template_document(
         self,
         program_id: str,
         program_title: str,
         user_id: str,
         template_xlsx: UploadFile,
     ) -> Dict:
-        """템플릿 및 템플릿데이터 생성"""
-        logger.info(f"템플릿 및 템플릿데이터 생성 시작: program_id={program_id}")
-        from src.database.crud.template_crud import TemplateCRUD, TemplateDataCRUD
+        """템플릿 파일을 DOCUMENTS 테이블에만 저장"""
+        logger.info(f"템플릿 Document 생성 시작: program_id={program_id}")
         from src.database.crud.document_crud import DocumentCRUD
-        import pandas as pd
-        import io
 
-        template_crud = TemplateCRUD(self.db)
-        template_data_crud = TemplateDataCRUD(self.db)
         document_crud = DocumentCRUD(self.db)
 
         # template_xlsx 파일 읽기
-        # header=0: 첫 번째 행을 헤더로 사용 (헤더는 데이터로 저장되지 않음)
         template_xlsx.file.seek(0)
         xlsx_content = template_xlsx.file.read()
         template_xlsx.file.seek(0)
-        df = pd.read_excel(io.BytesIO(xlsx_content), header=0)
 
-        # 템플릿 Document 생성
+        # 템플릿 Document 생성 (DOCUMENTS 테이블에만 저장)
         template_document_id = gen()
         document_crud.create_document(
             document_id=template_document_id,
@@ -268,106 +261,23 @@ class ProgramService:
             user_id=user_id,
             upload_path=None,
             status=None,  # JSON 파일이 아니므로 status 사용 안 함
-            document_type="template",
+            document_type=Document.TYPE_TEMPLATE,
             program_id=program_id,
             metadata_json={
                 "program_id": program_id,
                 "program_title": program_title,
             },
-        )
-
-        # 템플릿 생성
-        # template_id 생성: tpl_{program_id}_{타임스탬프(10자리)}
-        template_id = gen_template_id(program_id)
-        template_crud.create_template(
-            template_id=template_id,
-            document_id=template_document_id,
-            created_by=user_id,
-            program_id=program_id,
-            metadata_json={
-                "program_id": program_id,
-                "program_title": program_title,
-            },
-        )
-
-        # 템플릿데이터 생성
-        template_data_list = self._create_template_data_rows(
-            df=df,
-            template_id=template_id,
-            program_id=program_id,
-            template_data_crud=template_data_crud,
         )
 
         self.db.commit()
-        total_expected = len(template_data_list)
         logger.info(
-            f"템플릿 및 템플릿데이터 생성 완료: program_id={program_id}, "
-            f"template_id={template_id}, template_data_count={total_expected}"
+            f"템플릿 Document 생성 완료: program_id={program_id}, "
+            f"template_document_id={template_document_id}"
         )
 
         return {
             "template_document_id": template_document_id,
-            "template_data_list": template_data_list,
-            "total_expected": total_expected,
         }
-
-    def _create_template_data_rows(
-        self,
-        df,
-        template_id: str,
-        program_id: str,
-        template_data_crud,
-    ) -> List[Dict]:
-        """
-        템플릿데이터 행 생성
-        
-        XLSX 파일의 첫 번째 행은 헤더(컬럼명)이고, 
-        두 번째 행부터가 실제 데이터입니다.
-        pandas의 iterrows()는 헤더를 제외한 데이터 행만 순회합니다.
-        """
-        template_data_list = []
-        # iterrows()는 헤더를 제외한 데이터 행만 순회 (헤더는 저장되지 않음)
-        for idx, row in df.iterrows():
-            template_data_id = gen()
-
-            # 엑셀 컬럼에서 직접 값 추출
-            logic_id = str(
-                row.get("LOGIC_ID", row.get("로직파일명", f"logic_{idx}"))
-            ).strip()
-            logic_name = str(
-                row.get("LOGIC_NAME", row.get("로직파일명", logic_id))
-            ).strip()
-            folder_id = str(row.get("FOLDER_ID", "")).strip() or None
-            folder_name = str(row.get("FOLDER_NAME", "")).strip() or None
-            sub_folder_name = str(row.get("SUB_FOLDER_NAME", "")).strip() or None
-
-            # 기존 형식 호환성
-            classification = str(row.get("분류", "")).strip()
-            template_name = str(row.get("템플릿명", "")).strip()
-
-            template_data_crud.create_template_data(
-                template_data_id=template_data_id,
-                template_id=template_id,
-                logic_id=logic_id,
-                logic_name=logic_name,
-                row_index=idx,
-                folder_id=folder_id,
-                folder_name=folder_name,
-                sub_folder_name=sub_folder_name,
-                document_id=None,
-                metadata_json={
-                    "program_id": program_id,
-                    "classification": classification if classification else None,
-                    "template_name": template_name if template_name else None,
-                },
-            )
-            template_data_list.append({
-                "template_data_id": template_data_id,
-                "logic_id": logic_id,
-                "logic_name": logic_name,
-            })
-
-        return template_data_list
 
     def _create_program_documents(
         self,
@@ -400,7 +310,7 @@ class ProgramService:
             user_id=user_id,
             upload_path=None,
             status=None,  # JSON 파일이 아니므로 status 사용 안 함
-            document_type="ladder_logic_zip",
+            document_type=Document.TYPE_LADDER_LOGIC_ZIP,
             program_id=program_id,
             metadata_json={
                 "program_id": program_id,
@@ -425,7 +335,7 @@ class ProgramService:
             user_id=user_id,
             upload_path=None,
             status=None,  # JSON 파일이 아니므로 status 사용 안 함
-            document_type="comment",
+            document_type=Document.TYPE_COMMENT,
             program_id=program_id,
             metadata_json={
                 "program_id": program_id,
@@ -448,22 +358,24 @@ class ProgramService:
         }
 
     def _update_program_metadata(
-        self, program_id: str, total_expected: int
+        self, program_id: str, total_expected: Optional[int] = None
     ):
         """Program.metadata_json 업데이트
 
         프로그램 등록 시점에 파일 개수 메타정보 저장
-        - total_expected: 전처리 예상 파일 수 (TemplateData 개수)
-        - ladder_file_count: Logic 파일 개수 (전체 파일 개수)
+        - total_expected: 전처리 예상 파일 수 (전처리 단계에서 계산됨)
         - comment_file_count: Comment 파일 개수 (항상 1개)
         """
+        metadata = {
+            "comment_file_count": 1,  # Comment 파일 개수 (항상 1개)
+        }
+        if total_expected is not None:
+            metadata["total_expected"] = total_expected
+            metadata["ladder_file_count"] = total_expected  # Logic 파일 개수
+        
         self.program_crud.update_program(
             program_id=program_id,
-            metadata_json={
-                "total_expected": total_expected,
-                "ladder_file_count": total_expected,  # Logic 파일 개수
-                "comment_file_count": 1,  # Comment 파일 개수 (항상 1개)
-            },
+            metadata_json=metadata,
         )
         self.db.commit()
 
@@ -495,16 +407,14 @@ class ProgramService:
                 process_id=process_id,
             )
 
-            # 2. 템플릿 및 템플릿데이터 생성
-            template_result = self._create_templates_and_data(
+            # 2. 템플릿 Document 생성 (DOCUMENTS 테이블에만 저장)
+            template_result = self._create_template_document(
                 program_id=program_id,
                 program_title=program_title,
                 user_id=user_id,
                 template_xlsx=template_xlsx,
             )
             template_document_id = template_result["template_document_id"]
-            template_data_list = template_result["template_data_list"]
-            total_expected = template_result["total_expected"]
 
             # 3. Document 생성 (ladder_logic, comment, template)
             document_ids = self._create_program_documents(
@@ -516,9 +426,10 @@ class ProgramService:
                 template_document_id=template_document_id,
             )
 
-            # 4. Program.metadata_json 업데이트
+            # 4. Program.metadata_json 업데이트 (초기값만 설정)
+            # total_expected는 전처리 단계에서 계산되어 업데이트됨
             self._update_program_metadata(
-                program_id=program_id, total_expected=total_expected
+                program_id=program_id
             )
 
             # 5. S3에 파일 업로드 (단위 함수 재사용)
@@ -597,7 +508,6 @@ class ProgramService:
                 ladder_document_id=document_ids.get("ladder_document_id"),
                 comment_document_id=document_ids.get("comment_document_id"),
                 template_document_id=document_ids.get("template_document_id"),
-                template_data_list=template_data_list,
                 s3_paths=s3_paths,
             )
 
@@ -707,7 +617,6 @@ class ProgramService:
         ladder_document_id: str,
         comment_document_id: str,
         template_document_id: str,
-        template_data_list: list,
         s3_paths: Dict[str, str],
     ):
         """
@@ -724,16 +633,9 @@ class ProgramService:
             # CRUD 인스턴스 생성
             from src.database.crud.document_crud import DocumentCRUD
             from src.database.crud.program_failure_crud import ProcessingFailureCRUD
-            from src.database.crud.template_crud import TemplateDataCRUD
 
             document_crud = DocumentCRUD(self.db)
             failure_crud = ProcessingFailureCRUD(self.db)
-            template_data_crud = TemplateDataCRUD(self.db)
-
-            # template_data_list를 logic_id로 매핑 (빠른 조회를 위해)
-            template_data_map = {
-                td["logic_id"]: td for td in template_data_list
-            }
 
             # 전처리 수행 (ZIP 파일에서 직접 처리)
             # unzipped_files 대신 ladder_zip 파일을 직접 사용
@@ -747,9 +649,7 @@ class ProgramService:
                 ladder_document_id=ladder_document_id,
                 db_session=self.db,
                 document_crud=document_crud,
-                template_data_crud=template_data_crud,
                 failure_crud=failure_crud,
-                template_data_map=template_data_map,
                 chunk_commit_size=50,
             )
 
@@ -773,7 +673,7 @@ class ProgramService:
 
             # 실패 정보 요약을 Program.metadata_json에 저장 (통계용)
             processing_metadata = {
-                "total_expected": len(template_data_list),  # template_data_list 기준으로 변경
+                "total_expected": preprocess_summary.get("total", 0),  # 전처리 결과 기준
                 "total_successful_documents": len(created_documents),
                 "has_partial_failure": has_partial_failure,
                 "preprocessing_summary": preprocess_summary,
@@ -936,7 +836,11 @@ class ProgramService:
             from src.database.models.document_models import Document
 
             files = []
-            file_types = ["ladder_logic_zip", "comment", "template"]
+            file_types = [
+                Document.TYPE_LADDER_LOGIC_ZIP,
+                Document.TYPE_COMMENT,
+                Document.TYPE_TEMPLATE,
+            ]
             documents = (
                 self.db.query(Document)
                 .filter(Document.program_id == program_id)
@@ -947,9 +851,9 @@ class ProgramService:
 
             # file_type을 download_file_type으로 매핑
             download_file_type_map = {
-                "template": "program_classification",
-                "ladder_logic_zip": "program_logic",
-                "comment": "program_comment",
+                Document.TYPE_TEMPLATE: "program_classification",
+                Document.TYPE_LADDER_LOGIC_ZIP: "program_logic",
+                Document.TYPE_COMMENT: "program_comment",
             }
 
             for doc in documents:
@@ -1112,7 +1016,7 @@ class ProgramService:
                             user_id=user_id,
                             upload_path=failure.s3_path,
                             status="processing",
-                            document_type="common",
+                            document_type=Document.TYPE_COMMON,
                             metadata_json={
                                 "program_id": program_id,
                                 "program_title": program.program_title,

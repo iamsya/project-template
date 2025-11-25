@@ -33,13 +33,15 @@ class ProgressUpdateService:
                 "embedded": int,  # status=Document.STATUS_EMBEDDED인 파일 수
             }
         """
-        from src.database.models.document_models import Document
-
         # 업로드 단계 전체 파일 수: 항상 3개 고정 (ladder_logic, comment, template)
         total_upload = 3
 
         # 업로드 완료: ladder_logic_zip, comment, template 3개 타입이 모두 존재하는지 확인
-        required_types = ["ladder_logic_zip", "comment", "template"]
+        required_types = [
+            Document.TYPE_LADDER_LOGIC_ZIP,
+            Document.TYPE_COMMENT,
+            Document.TYPE_TEMPLATE,
+        ]
         uploaded_count = 0
         for file_type in required_types:
             exists = (
@@ -52,31 +54,14 @@ class ProgressUpdateService:
             if exists:
                 uploaded_count += 1
 
-        # 전처리 후 전체 파일 수: template_data 테이블에서 program_id로 카운트
-        # Template과 TemplateData를 조인하여 program_id로 조회
-        from src.database.models.template_models import (
-            Template,
-            TemplateData,
-        )
-
+        # 전처리 후 전체 파일 수: DOCUMENTS 테이블에서 program_id로 카운트
         total_processed = (
-            self.db.query(TemplateData)
-            .join(
-                Template, TemplateData.template_id == Template.template_id
-            )
-            .filter(Template.program_id == program_id)
+            self.db.query(Document)
+            .filter(Document.program_id == program_id)
+            .filter(Document.document_type == Document.TYPE_LADDER_LOGIC_JSON)
+            .filter(Document.is_deleted.is_(False))
             .count()
         )
-
-        # TemplateData가 없으면 에러 발생 (fallback 제거)
-        if total_processed == 0:
-            logger.error(
-                "TemplateData가 없습니다: program_id=%s. "
-                "프로그램 등록이 제대로 완료되지 않았을 수 있습니다.",
-                program_id,
-            )
-            # 에러 로깅 후 0 반환 (시스템 중단 방지)
-            # 필요시 예외를 발생시킬 수도 있음
 
         # Program.metadata_json에 total_expected 동기화 (참고용)
         program = (
@@ -107,7 +92,7 @@ class ProgressUpdateService:
             self.db.query(Document)
             .filter(Document.program_id == program_id)
             .filter(Document.is_deleted.is_(False))
-            .filter(Document.document_type == "ladder_logic_json")
+            .filter(Document.document_type == Document.TYPE_LADDER_LOGIC_JSON)
             .filter(
                 Document.status.in_([
                     Document.STATUS_PREPROCESSED,
@@ -125,7 +110,7 @@ class ProgressUpdateService:
             .filter(Document.program_id == program_id)
             .filter(Document.is_deleted.is_(False))
             .filter(
-                (Document.document_type == "ladder_logic_json")
+                (Document.document_type == Document.TYPE_LADDER_LOGIC_JSON)
                 | (Document.knowledge_reference_id.isnot(None))
             )
             .filter(Document.status == Document.STATUS_EMBEDDED)
@@ -337,7 +322,6 @@ class ProgressUpdateService:
                 "errors": List[str]
             }
         """
-        from src.database.models.document_models import Document
         from src.database.models.knowledge_reference_models import (
             KnowledgeReference,
         )
@@ -445,7 +429,7 @@ class ProgressUpdateService:
 
                             # 임베딩 대상 파일인지 확인
                             is_embedding_target = (
-                                document.document_type == "ladder_logic_json"
+                                document.document_type == Document.TYPE_LADDER_LOGIC_JSON
                                 or document.knowledge_reference_id is not None
                             )
 
@@ -473,7 +457,7 @@ class ProgressUpdateService:
                             # 문서가 없으면 상태 업데이트
                             # 임베딩 대상 파일의 경우: 임베딩 중이었는데 문서가 없으면 실패
                             is_embedding_target = (
-                                document.document_type == "ladder_logic_json"
+                                document.document_type == Document.TYPE_LADDER_LOGIC_JSON
                                 or document.knowledge_reference_id is not None
                             )
                             if (

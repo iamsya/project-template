@@ -8,6 +8,7 @@ from typing import List, Optional
 
 from src.api.services.document_service import DocumentService
 from src.core.dependencies import get_document_service
+from src.database.models.document_models import Document
 from fastapi import APIRouter, Depends, File, Form, Query, UploadFile
 from fastapi.responses import StreamingResponse
 
@@ -21,7 +22,7 @@ def upload_document_request(
     user_id: str = Form(default="user"),
     is_public: bool = Form(default=False),
     permissions: Optional[str] = Form(default=None),  # JSON 문자열로 권한 리스트 전달
-    document_type: str = Form(default="common"),  # common, type1, type2
+    document_type: str = Form(default=Document.TYPE_COMMON),  # common, type1, type2
     document_service: DocumentService = Depends(get_document_service)
 ):
     """문서 업로드 요청"""
@@ -634,7 +635,11 @@ def get_document_type_stats(
         "data": {
             "type_statistics": stats,
             "total_documents": sum(stats.values()),
-            "available_types": ["common", "type1", "type2"]
+            "available_types": [
+                Document.TYPE_COMMON,
+                Document.TYPE_TYPE1,
+                Document.TYPE_TYPE2,
+            ]
         }
     }
 

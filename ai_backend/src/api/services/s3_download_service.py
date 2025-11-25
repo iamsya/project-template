@@ -160,10 +160,12 @@ class S3DownloadService:
             from src.database.models.document_models import Document
 
             # file_type을 document_type으로 매핑
+            from src.database.models.document_models import Document
+            
             document_type_map = {
-                "program_logic": "ladder_logic_zip",
-                "program_classification": "template",
-                "program_comment": "comment",
+                "program_logic": Document.TYPE_LADDER_LOGIC_ZIP,
+                "program_classification": Document.TYPE_TEMPLATE,
+                "program_comment": Document.TYPE_COMMENT,
             }
 
             document_type = document_type_map.get(file_type)

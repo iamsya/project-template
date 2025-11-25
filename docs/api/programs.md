@@ -52,12 +52,6 @@ multipart/form-data
 <td>PLC ladder logic 파일들이 포함된 ZIP 압축 파일</td>
 </tr>
 <tr>
-image.png<td><code>template_xlsx</code></td>
-<td>File</td>
-<td><strong>예</strong></td>
-<td>템플릿 분류체계 데이터 XLSX 파일</td>
-</tr>
-<tr>
 <td><code>comment_csv</code></td>
 <td>File</td>
 <td><strong>예</strong></td>
@@ -95,8 +89,7 @@ image.png<td><code>template_xlsx</code></td>
 1. **유효성 검사** (동기): 파일 형식, 내용 검증
 2. **즉시 응답 반환**: 유효성 검사 결과 반환
 3. **백그라운드 처리** (비동기):
-   - S3에 파일 업로드 (ladder_zip, template_xlsx, comment_csv)
-   - 템플릿 및 템플릿 데이터 생성
+   - S3에 파일 업로드 (ladder_zip, comment_csv)
    - 데이터 전처리 및 Document 생성 (ZIP 파일에서 직접 처리)
    - Vector DB 인덱싱 요청
 
@@ -105,10 +98,6 @@ image.png<td><code>template_xlsx</code></td>
 #### `ladder_zip` (ZIP 파일)
 - Logic 파일 (Program CSV 파일)을 ZIP으로 압축
 - ZIP 파일에서 직접 전처리 수행 (압축 해제 없이 처리)
-
-#### `template_xlsx` (XLSX 파일)
-- 컬럼: `FOLDER_ID`, `FOLDER_NAME`, `SUB_FOLDER_NAME`, `LOGIC_ID`, `LOGIC_NAME`
-- 로직 파일명과 매칭되어 템플릿 데이터 생성
 
 #### `comment_csv` (CSV 파일)
 - Ladder 로직의 device에 대한 코멘트 정보
@@ -157,7 +146,6 @@ image.png<td><code>template_xlsx</code></td>
 ```bash
 curl -X POST "http://localhost:8000/v1/programs/register" \
   -F "ladder_zip=@ladder_files.zip" \
-  -F "template_xlsx=@template.xlsx" \
   -F "comment_csv=@comment.csv" \
   -F "program_title=공정1 PLC 프로그램" \
   -F "process_id=process_001" \
@@ -720,8 +708,6 @@ GET /v1/programs/{program_id}/failures
       "failure_id": "fail_001",
       "failure_type": "preprocessing",
       "error_message": "파일 파싱 실패",
-      "source_type": "template_data",
-      "source_id": "template_data_001",
       "create_dt": "2025-10-22T13:00:00"
     }
   ],

@@ -29,7 +29,7 @@ class KnowledgeReference(Base):
     # 기준정보 종류
     # 주의: DOCUMENTS.document_type과는 다른 용도
     #       - reference_type: 기준정보(Knowledge Reference)의 종류
-    #         (manual, glossary, plc)
+    #         (manual, glossary, program)
     #       - document_type: 모든 Document의 일반 분류 (common, type1, type2)
     reference_type = Column(
         'REFERENCE_TYPE',
@@ -39,7 +39,7 @@ class KnowledgeReference(Base):
         comment=(
             "기준정보 종류: "
             "manual(매뉴얼), glossary(용어집), "
-            "plc(Ladder Logic - 프로그램 JSON 파일 벡터)"
+            "program(Ladder Logic - 프로그램 JSON 파일 벡터)"
         )
     )
     name = Column('NAME', String(255), nullable=False)
@@ -55,6 +55,11 @@ class KnowledgeReference(Base):
     )
     datasource_id = Column(
         'DATASOURCE_ID', String(255), nullable=True, index=True
+    )
+    # 프로그램 정보
+    program_id = Column(
+        'PROGRAM_ID', String(50), nullable=True, index=True,
+        comment="프로그램 ID (Program과 연결)"
     )
 
     # 설명 및 메타데이터
