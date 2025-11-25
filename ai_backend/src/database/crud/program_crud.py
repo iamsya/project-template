@@ -169,6 +169,12 @@ class ProgramCRUD:
         """
         사용자가 접근 가능한 공정 ID 목록 조회
         
+        여러 그룹에 속한 경우, 제일 넓은 권한이 적용됩니다:
+        - 시스템 관리자 또는 통합관리자 그룹이 하나라도 있으면
+          → 모든 공정 접근 가능 (None 반환)
+        - 공정 관리자 그룹만 있는 경우
+          → 모든 공정 관리자 그룹의 공정을 합집합으로 반환
+        
         Args:
             user_id: 사용자 ID (None이면 모든 공정 접근 가능)
             
@@ -176,6 +182,24 @@ class ProgramCRUD:
             Optional[List[str]]: 접근 가능한 process_id 목록
                 - None: 모든 공정 접근 가능 (super 권한)
                 - List[str]: 접근 가능한 process_id 목록
+                - []: 접근 불가 (일반 사용자)
+        
+        Examples:
+            # 예시 1: 시스템 관리자 그룹 1개
+            user_id = "user1"
+            groups = [group_system_admin]
+            → None (모든 공정 접근 가능)
+            
+            # 예시 2: 공정 관리자 그룹 2개
+            # (prc_module, prc_hwaseong) + (prc_electrode)
+            user_id = "user2"
+            groups = [group_process_manager_001, group_process_manager_002]
+            → ['prc_module', 'prc_hwaseong', 'prc_electrode'] (합집합)
+            
+            # 예시 3: 시스템 관리자 + 공정 관리자 그룹
+            user_id = "user3"
+            groups = [group_system_admin, group_process_manager_001]
+            → None (시스템 관리자 권한이 우선)
         """
         if not user_id:
             return None  # user_id가 없으면 모든 공정 접근 가능
@@ -186,49 +210,53 @@ class ProgramCRUD:
                 PermissionGroup,
                 UserGroupMapping,
             )
-            from src.database.models.master_models import ProcessMaster
             
-            # 1. 모든 공정에 접근 가능한 권한 그룹에 속한 경우 확인
-            # (GROUP_PROCESS_PERMISSIONS에 데이터가 없는 그룹은 모든 공정 접근 가능)
-            has_all_access = (
-                self.db.query(UserGroupMapping)
-                .join(PermissionGroup, UserGroupMapping.group_id == PermissionGroup.group_id)
-                .outerjoin(
-                    GroupProcessPermission,
-                    PermissionGroup.group_id == GroupProcessPermission.group_id
+            # 사용자가 속한 활성 그룹 조회
+            groups = (
+                self.db.query(PermissionGroup)
+                .join(
+                    UserGroupMapping,
+                    PermissionGroup.group_id == UserGroupMapping.group_id
                 )
                 .filter(UserGroupMapping.user_id == user_id)
                 .filter(UserGroupMapping.is_active.is_(True))
                 .filter(PermissionGroup.is_active.is_(True))
-                .filter(PermissionGroup.is_deleted.is_(False))
-                .filter(GroupProcessPermission.permission_id.is_(None))
-                .first()
-            )
-            
-            if has_all_access:
-                return None  # 모든 공정 접근 가능
-            
-            # 2. 지정된 공정만 접근 가능한 경우
-            accessible_processes = (
-                self.db.query(ProcessMaster.process_id)
-                .join(
-                    GroupProcessPermission,
-                    ProcessMaster.process_id == GroupProcessPermission.process_id
-                )
-                .join(
-                    UserGroupMapping,
-                    GroupProcessPermission.group_id == UserGroupMapping.group_id
-                )
-                .filter(UserGroupMapping.user_id == user_id)
-                .filter(UserGroupMapping.is_active.is_(True))
-                .filter(GroupProcessPermission.is_active.is_(True))
-                .filter(ProcessMaster.is_active.is_(True))
-                .distinct()
                 .all()
             )
             
-            process_ids = [p[0] for p in accessible_processes]
-            return process_ids if process_ids else []  # 빈 리스트면 접근 불가
+            if not groups:
+                # 일반 사용자: 그룹에 속하지 않음 → 접근 불가
+                return []
+            
+            # 1. 시스템 관리자 또는 통합 관리자: 모든 공정 접근 가능
+            # 여러 그룹 중 하나라도 system_admin 또는 integrated_admin이 있으면
+            # 제일 넓은 권한인 "모든 공정 접근"이 적용됨
+            for group in groups:
+                if group.role_id in [
+                    PermissionGroup.ROLE_SYSTEM_ADMIN,
+                    PermissionGroup.ROLE_INTEGRATED_ADMIN
+                ]:
+                    return None  # None = 모든 공정 접근 가능
+            
+            # 2. 공정 관리자: GROUP_PROCESSES에 지정된 공정만 접근 가능
+            # 여러 공정 관리자 그룹에 속한 경우,
+            # 모든 그룹의 공정을 합집합으로 반환
+            accessible_process_ids = set()
+            for group in groups:
+                if group.role_id == PermissionGroup.ROLE_PROCESS_MANAGER:
+                    process_permissions = (
+                        self.db.query(GroupProcessPermission)
+                        .filter(
+                            GroupProcessPermission.group_id == group.group_id
+                        )
+                        .filter(GroupProcessPermission.is_active.is_(True))
+                        .all()
+                    )
+                    accessible_process_ids.update(
+                        [pp.process_id for pp in process_permissions]
+                    )
+            
+            return list(accessible_process_ids) if accessible_process_ids else []
             
         except Exception as e:
             logger.error(f"접근 가능한 공정 조회 실패: {str(e)}")

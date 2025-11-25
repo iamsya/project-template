@@ -52,7 +52,7 @@ multipart/form-data
 <td>PLC ladder logic 파일들이 포함된 ZIP 압축 파일</td>
 </tr>
 <tr>
-<td><code>template_xlsx</code></td>
+image.png<td><code>template_xlsx</code></td>
 <td>File</td>
 <td><strong>예</strong></td>
 <td>템플릿 분류체계 데이터 XLSX 파일</td>

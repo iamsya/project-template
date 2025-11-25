@@ -23,8 +23,8 @@ logger = logging.getLogger(__name__)
 class DocumentService:
     """문서 관리 서비스 (ai_backend 전용)
     
-    ai_backend의 DocumentCRUD를 사용하여 Foreign Key 제약조건이 작동합니다.
-    shared_core 의존성 없이 독립적으로 구현되었습니다.
+    shared_core의 DocumentCRUD를 래핑한 DocumentCRUD를 사용합니다.
+    shared_core의 Document 모델을 사용하며, programs-document 외래키는 없습니다.
     """
     
     def __init__(self, db: Session, upload_base_path: str = None):

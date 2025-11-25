@@ -36,11 +36,11 @@ class Document(Base):
     TYPE_LADDER_LOGIC_JSON = 'ladder_logic_json'
     TYPE_COMMENT = 'comment'
     TYPE_TEMPLATE = 'template'
-    Knowledge Reference 파일 타입
+    # Knowledge Reference 파일 타입
     TYPE_MANUAL = 'manual'
     TYPE_GLOSSARY = 'glossary'
     TYPE_PLC = 'plc'
-    일반 문서 타입
+    # 일반 문서 타입
     TYPE_COMMON = 'common'
     TYPE_TYPE1 = 'type1'
     TYPE_TYPE2 = 'type2'
@@ -99,9 +99,10 @@ class Document(Base):
     # Program 파일: ladder_logic_zip, ladder_logic_json, comment, template
     # Knowledge Reference 파일: manual, glossary, plc
     # 일반 문서: common, type1, type2
+    # 가장 긴 값: 'ladder_logic_json' (17자), 여유있게 30자로 설정
     document_type = Column(
         'DOCUMENT_TYPE',
-        String(50),
+        String(30),
         nullable=True,
         index=True,
         comment=(
@@ -160,12 +161,12 @@ class Document(Base):
     is_deleted = Column('IS_DELETED', Boolean, nullable=False, server_default=false())
 
     # Program 관련 필드
-    # Foreign Key 제약조건은 데이터베이스 레벨에서 수동으로 생성
-    # (다른 Base의 테이블을 참조하므로 SQLAlchemy가 자동으로 생성하지 못함)
+    # Foreign Key 제약조건 없음 (비동기 파이프라인 특성상 FK 제약이 방해될 수 있음)
+    # Soft delete + 백엔드 검증 + 정기 검증 Job으로 정합성 관리
     program_id = Column('PROGRAM_ID', String(50), nullable=True, index=True)
-    source_document_id = Column('SOURCE_DOCUMENT_ID', String(50), nullable=True, index=True)  # ForeignKey('DOCUMENTS.DOCUMENT_ID') - DB 레벨에서 수동 생성
+    source_document_id = Column('SOURCE_DOCUMENT_ID', String(50), nullable=True, index=True)
     # Knowledge Reference 관련 필드
-    knowledge_reference_id = Column('KNOWLEDGE_REFERENCE_ID', String(50), nullable=True, index=True)  # ForeignKey('KNOWLEDGE_REFERENCES.REFERENCE_ID') - DB 레벨에서 수동 생성
+    knowledge_reference_id = Column('KNOWLEDGE_REFERENCE_ID', String(50), nullable=True, index=True)
     file_id = Column('FILE_ID', String(255), nullable=True)
 
     def __repr__(self):

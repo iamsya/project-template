@@ -269,8 +269,10 @@ class Database:
                         ", ".join(existing_tables),
                     )
                 
-                # DOCUMENTS 테이블의 Foreign Key 제약조건 생성
-                self._create_document_foreign_keys(schema_identifier)
+                # DOCUMENTS 테이블의 Foreign Key 제약조건 생성 (비활성화)
+                # FK를 사용하지 않기로 결정: 비동기 파이프라인 특성상 FK 제약이 방해될 수 있음
+                # Soft delete + 백엔드 검증 + 정기 검증 Job으로 정합성 관리
+                # self._create_document_foreign_keys(schema_identifier)
             except Exception as e:
                 # PostgreSQL 타입 중복 오류는 무시 (이미 존재하는 타입)
                 # 이는 이전 테이블 생성 실패 시 타입만 남아있는 경우 발생할 수 있음
@@ -288,11 +290,17 @@ class Database:
 
     def _create_document_foreign_keys(self, schema: str):
         """
-        DOCUMENTS 테이블의 Foreign Key 제약조건 생성
+        DOCUMENTS 테이블의 Foreign Key 제약조건 생성 (비활성화됨)
+        
+        비동기 파이프라인 특성상 FK 제약이 방해될 수 있어 비활성화했습니다.
+        Soft delete + 백엔드 검증 + 정기 검증 Job으로 정합성을 관리합니다.
         
         Args:
             schema: 데이터베이스 스키마 이름
         """
+        # FK 생성을 하지 않음 (비활성화)
+        logger.info("DOCUMENTS 테이블 Foreign Key 제약조건 생성 건너뜀 (FK 미사용 정책)")
+        return
         logger.info("DOCUMENTS 테이블 Foreign Key 제약조건 생성 시작")
         
         with self._engine.connect() as conn:

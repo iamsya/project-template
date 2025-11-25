@@ -10,7 +10,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Index,
-    JSON,
+    Integer,
     String,
     Text,
     func,
@@ -20,16 +20,114 @@ from sqlalchemy.sql.expression import false, true
 from src.database.base import Base
 
 
+class RoleMaster(Base):
+    """
+    Role 마스터 테이블
+    
+    - Role 정보를 관리하는 마스터 테이블
+    - 시스템 관리자, 통합관리자, 공정 관리자 정보 저장
+    """
+    
+    __tablename__ = "ROLE_MASTER"
+    
+    # Primary Key
+    role_id = Column(
+        "ROLE_ID",
+        String(50),
+        primary_key=True,
+        comment=(
+            "Role ID (PK) - "
+            "system_admin, integrated_admin, process_manager"
+        )
+    )
+    
+    # Role 정보
+    role_name = Column(
+        "ROLE_NAME",
+        String(100),
+        nullable=False,
+        comment="Role 한글 이름 (예: 시스템 관리자, 통합관리자, 공정 관리자)"
+    )
+    description = Column(
+        "DESCRIPTION",
+        Text,
+        nullable=True,
+        comment="Role 설명"
+    )
+    display_order = Column(
+        "DISPLAY_ORDER",
+        Integer,
+        nullable=False,
+        server_default="0",
+        comment="화면 표시 순서"
+    )
+    
+    # 활성화 여부
+    is_active = Column(
+        "IS_ACTIVE",
+        Boolean,
+        nullable=False,
+        server_default=true(),
+        comment="활성화 여부"
+    )
+    
+    # 시간 정보
+    create_dt = Column(
+        "CREATE_DT",
+        DateTime,
+        nullable=False,
+        server_default=func.now(),
+        comment="생성 일시"
+    )
+    create_user = Column(
+        "CREATE_USER",
+        String(50),
+        nullable=False,
+        comment="생성자"
+    )
+    update_dt = Column(
+        "UPDATE_DT",
+        DateTime,
+        nullable=True,
+        onupdate=func.now(),
+        comment="수정 일시"
+    )
+    update_user = Column(
+        "UPDATE_USER",
+        String(50),
+        nullable=True,
+        comment="수정자"
+    )
+    
+    # 인덱스 정의
+    __table_args__ = (
+        # is_active + display_order 복합 인덱스 (활성 Role 조회 및 정렬 최적화)
+        Index(
+            "idx_role_master_active_order",
+            "IS_ACTIVE",
+            "DISPLAY_ORDER"
+        ),
+    )
+    
+    def __repr__(self):
+        return (
+            f"<RoleMaster(role_id='{self.role_id}', "
+            f"role_name='{self.role_name}')>"
+        )
+
+
 class PermissionGroup(Base):
     """
-    권한 그룹 테이블
+    권한 그룹 테이블 (그룹)
     
     - 사용자가 화면에서 직접 권한 그룹을 생성
-    - super 권한: 기준정보 메뉴 접근 가능
-    - plc 권한그룹: program 탭 등 여러 탭 접근 가능
+    - 시스템 관리자: 기준정보 + 사용자관리 + 모든 공정 접근 가능
+    - 통합관리자: 모든 공정 접근 가능
+    - 공정 관리자: 지정한 공정만 접근 가능
+    - 일반 사용자: 그룹에 속하지 않음 (메뉴 접근 불가, 채팅만 가능)
     """
 
-    __tablename__ = "PERMISSION_GROUPS"
+    __tablename__ = "GROUPS"
 
     # Primary Key
     group_id = Column(
@@ -53,24 +151,18 @@ class PermissionGroup(Base):
         comment="권한 그룹 설명"
     )
     
-    # Role 권한 (단수 선택)
-    # 시스템 관리자: 사용자 관리 + 모든 공정 접근 권한
-    # 통합 관리자: PLC 모든 공정 접근 가능
-    # 공정 관리자: 선택한 공정만 접근 가능
-    role = Column(
-        "ROLE",
+    # Role 권한 (FK)
+    # ROLE_MASTER 테이블을 참조하여 Role 정보 관리
+    role_id = Column(
+        "ROLE_ID",
         String(50),
+        ForeignKey("ROLE_MASTER.ROLE_ID"),
         nullable=False,
         index=True,
-        comment=(
-            "Role 권한 타입: "
-            "system_admin (시스템 관리자), "
-            "integrated_admin (통합 관리자), "
-            "process_manager (공정 관리자)"
-        )
+        comment="Role ID (FK) - ROLE_MASTER 참조"
     )
     
-    # Role 상수
+    # Role 상수 (하위 호환성을 위해 유지)
     ROLE_SYSTEM_ADMIN = "system_admin"
     ROLE_INTEGRATED_ADMIN = "integrated_admin"
     ROLE_PROCESS_MANAGER = "process_manager"
@@ -81,20 +173,11 @@ class PermissionGroup(Base):
         ROLE_PROCESS_MANAGER,
     ]
 
-    # 메뉴 접근 권한 (JSON)
-    # 프론트엔드에서 이 값을 받아서 해당 메뉴들을 보여주거나 숨김
-    # 예: {"menus": ["기준정보", "program", "chat", "plc_management"]}
-    # 이 배열에 포함된 메뉴명만 화면에 표시됨
-    menu_permissions = Column(
-        "MENU_PERMISSIONS",
-        JSON,
-        nullable=True,
-        comment=(
-            "접근 가능한 메뉴명 리스트 (JSON): "
-            "{'menus': ['기준정보', 'program', 'chat', 'plc_management']} "
-            "프론트엔드에서 이 값을 받아서 해당 메뉴들을 표시"
-        )
-    )
+    # 메뉴 접근 권한은 ROLE로 판단:
+    # - system_admin: 기준정보 + 사용자관리 + 모든 공정 접근 가능
+    # - integrated_admin: 모든 공정 접근 가능
+    # - process_manager: 지정한 공정만 접근 가능
+    # - 일반 사용자 (그룹 없음): 메뉴 접근 불가, 채팅만 가능
 
     # 활성화 여부
     is_active = Column(
@@ -162,10 +245,10 @@ class PermissionGroup(Base):
             "IS_ACTIVE",
             "IS_DELETED"
         ),
-        # role 단일 인덱스 (role별 그룹 조회 최적화)
+        # role_id 단일 인덱스 (role별 그룹 조회 최적화)
         Index(
-            "idx_permission_group_role",
-            "ROLE"
+            "idx_group_role",
+            "ROLE_ID"
         ),
     )
 
@@ -178,13 +261,13 @@ class PermissionGroup(Base):
 
 class GroupProcessPermission(Base):
     """
-    권한 그룹별 공정 권한 테이블
+    그룹별 공정 권한 테이블 (그룹-공정 매핑)
     
-    - plc 권한그룹의 경우, 접근 가능한 공정을 여기에 추가
-    - super 권한그룹은 모든 공정에 접근 가능하므로 이 테이블에 데이터가 없을 수 있음
+    - 공정 관리자 그룹의 경우, 접근 가능한 공정을 여기에 추가
+    - 시스템 관리자, 통합관리자는 모든 공정에 접근 가능하므로 이 테이블에 데이터가 없을 수 있음
     """
 
-    __tablename__ = "GROUP_PROCESS_PERMISSIONS"
+    __tablename__ = "GROUP_PROCESSES"
 
     # Primary Key
     permission_id = Column(
@@ -194,14 +277,14 @@ class GroupProcessPermission(Base):
         comment="권한 ID (PK)"
     )
 
-    # 권한 그룹 및 공정 정보
+    # 그룹 및 공정 정보
     group_id = Column(
         "GROUP_ID",
         String(50),
-        ForeignKey("PERMISSION_GROUPS.GROUP_ID"),
+        ForeignKey("GROUPS.GROUP_ID"),
         nullable=False,
         index=True,
-        comment="권한 그룹 ID"
+        comment="그룹 ID (FK)"
     )
     process_id = Column(
         "PROCESS_ID",
@@ -253,20 +336,20 @@ class GroupProcessPermission(Base):
     __table_args__ = (
         # group_id + process_id 복합 유니크 (한 그룹이 같은 공정에 대한 권한을 중복으로 가질 수 없음)
         Index(
-            "idx_group_process_permission_unique",
+            "idx_group_process_unique",
             "GROUP_ID",
             "PROCESS_ID",
             unique=True
         ),
         # group_id + is_active 복합 인덱스 (그룹별 활성 권한 조회 최적화)
         Index(
-            "idx_group_process_permission_group_active",
+            "idx_group_process_group_active",
             "GROUP_ID",
             "IS_ACTIVE"
         ),
         # process_id + is_active 복합 인덱스 (공정별 활성 권한 조회 최적화)
         Index(
-            "idx_group_process_permission_process_active",
+            "idx_group_process_process_active",
             "PROCESS_ID",
             "IS_ACTIVE"
         ),
@@ -281,13 +364,13 @@ class GroupProcessPermission(Base):
 
 class UserGroupMapping(Base):
     """
-    사용자-권한 그룹 매핑 테이블
+    사용자-그룹 매핑 테이블 (사용자 그룹)
     
-    - 사용자는 여러 권한 그룹에 속할 수 있음
+    - 사용자는 여러 그룹에 속할 수 있음
     - 사용자의 최종 권한은 속한 모든 그룹의 권한을 합집합
     """
 
-    __tablename__ = "USER_GROUP_MAPPINGS"
+    __tablename__ = "USER_GROUPS"
 
     # Primary Key
     mapping_id = Column(
@@ -297,22 +380,22 @@ class UserGroupMapping(Base):
         comment="매핑 ID (PK)"
     )
 
-    # 사용자 및 권한 그룹 정보
+    # 사용자 및 그룹 정보
     user_id = Column(
         "USER_ID",
         String(50),
         ForeignKey("USERS.USER_ID"),
         nullable=False,
         index=True,
-        comment="사용자 ID"
+        comment="사용자 ID (FK)"
     )
     group_id = Column(
         "GROUP_ID",
         String(50),
-        ForeignKey("PERMISSION_GROUPS.GROUP_ID"),
+        ForeignKey("GROUPS.GROUP_ID"),
         nullable=False,
         index=True,
-        comment="권한 그룹 ID"
+        comment="그룹 ID (FK)"
     )
 
     # 활성화 여부
@@ -356,20 +439,20 @@ class UserGroupMapping(Base):
     __table_args__ = (
         # user_id + group_id 복합 유니크 (한 사용자가 같은 그룹에 중복으로 속할 수 없음)
         Index(
-            "idx_user_group_mapping_unique",
+            "idx_user_group_unique",
             "USER_ID",
             "GROUP_ID",
             unique=True
         ),
         # user_id + is_active 복합 인덱스 (사용자별 활성 매핑 조회 최적화)
         Index(
-            "idx_user_group_mapping_user_active",
+            "idx_user_group_user_active",
             "USER_ID",
             "IS_ACTIVE"
         ),
         # group_id + is_active 복합 인덱스 (그룹별 활성 매핑 조회 최적화)
         Index(
-            "idx_user_group_mapping_group_active",
+            "idx_user_group_group_active",
             "GROUP_ID",
             "IS_ACTIVE"
         ),
