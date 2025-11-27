@@ -254,8 +254,10 @@ class ProcessingJob(Base):
     result_data = Column(JSON, nullable=True)
     error_message = Column(Text, nullable=True)
     
-    # Program 참조 (ERD에 추가됨)
-    program_id = Column("PROGRAM_ID", String(50), ForeignKey("PROGRAMS.PROGRAM_ID"), nullable=True, index=True)
+    # Program 참조
+    # Foreign Key 제약조건 없음 (PROGRAMS는 ai_backend의 Base에 있어 다른 Base 간 FK 불가)
+    # Soft delete + 백엔드 검증 + 정기 검증 Job으로 정합성 관리
+    program_id = Column("PROGRAM_ID", String(50), nullable=True, index=True)
     
     # 시간 정보
     started_at = Column(DateTime, default=datetime.utcnow)

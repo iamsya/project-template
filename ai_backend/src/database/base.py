@@ -204,7 +204,8 @@ class Database:
                 )
             
             # shared_core 모델들을 import하여 metadata에 포함
-            # 단, DOCUMENTS 테이블은 ai_backend의 Document 모델로 생성하므로 제외
+            # document_models.py는 shared_core의 Document를 re-export하므로
+            # shared_core의 Base에서 DOCUMENTS 테이블을 가져와야 함
             from shared_core.models import Base as SharedBase
             
             # 두 Base의 metadata를 합쳐서 한 번에 생성
@@ -214,13 +215,9 @@ class Database:
                 # 두 metadata를 합쳐서 생성
                 # SQLAlchemy는 자동으로 의존성 순서를 파악하여 올바른 순서로 테이블 생성
                 # SharedBase의 모든 테이블을 Base metadata에 추가
-                # 단, DOCUMENTS 테이블은 ai_backend의 Document 모델로 생성하므로 제외
+                # document_models.py는 re-export만 하므로 shared_core의 Base에서 가져와야 함
                 for table_name, table in SharedBase.metadata.tables.items():
-                    # DOCUMENTS 테이블은 ai_backend의 Document 모델로 생성하므로 건너뛰기
-                    if table_name == "DOCUMENTS":
-                        logger.debug("DOCUMENTS 테이블은 ai_backend의 Document 모델로 생성하므로 건너뜁니다.")
-                        continue
-                    # 테이블이 이미 Base에 있으면 건너뛰기
+                    # 테이블이 이미 Base에 있으면 건너뛰기 (중복 방지)
                     if table_name not in Base.metadata.tables:
                         # 테이블을 복사하여 Base metadata에 추가
                         table.tometadata(Base.metadata)
