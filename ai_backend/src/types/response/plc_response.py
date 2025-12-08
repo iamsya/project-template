@@ -68,6 +68,7 @@ class PLCListItem(BaseModel):
         None, description="매핑된 PGM ID"
     )
     mapping_user: Optional[str] = Field(None, description="매핑 등록자")
+    mapping_user_name: Optional[str] = Field(None, description="매핑 등록자 이름")
     mapping_dt: Optional[datetime] = Field(None, description="매핑 일시")
 
     class Config:
@@ -112,23 +113,6 @@ class ProgramMappingListResponse(BaseModel):
     page: int = Field(..., description="현재 페이지")
     page_size: int = Field(..., description="페이지당 항목 수")
     total_pages: int = Field(..., description="전체 페이지 수")
-
-
-class PLCMappingItem(BaseModel):
-    """PLC-PGM 매핑 항목"""
-
-    plc_uuids: List[str] = Field(
-        ..., description="매핑할 PLC UUID 리스트", min_items=1
-    )
-    program_id: str = Field(..., description="매핑할 PGM ID")
-
-
-class PLCMappingRequest(BaseModel):
-    """PLC-PGM 매핑 저장 요청"""
-
-    items: List[PLCMappingItem] = Field(
-        ..., description="PLC-PGM 매핑 항목 리스트", min_items=1
-    )
 
 
 class PLCMappingResponse(BaseModel):
@@ -341,64 +325,12 @@ class PLCUpdateResponse(BaseModel):
     message: str = Field(..., description="응답 메시지")
 
 
-class PLCDeleteRequest(BaseModel):
-    """PLC 삭제 요청 (일괄 삭제용)"""
-
-    plc_uuids: List[str] = Field(
-        ..., description="삭제할 PLC UUID 리스트", min_items=1
-    )
-
-
 class PLCDeleteResponse(BaseModel):
     """PLC 삭제 응답"""
 
     success: bool = Field(..., description="성공 여부")
     deleted_count: int = Field(..., description="삭제된 PLC 개수")
     message: str = Field(..., description="응답 메시지")
-
-
-class PLCBatchCreateItem(BaseModel):
-    """PLC 다건 저장 항목 (생성용)"""
-
-    plant_id: str = Field(..., description="Plant ID")
-    process_id: str = Field(..., description="공정 ID")
-    line_id: str = Field(..., description="Line ID")
-    plc_name: str = Field(..., description="PLC명")
-    unit: Optional[str] = Field(None, description="호기")
-    plc_id: str = Field(..., description="PLC ID")
-    create_user: str = Field(..., description="생성 사용자")
-
-
-class PLCBatchUpdateItem(BaseModel):
-    """PLC 다건 수정 항목 (수정용)"""
-
-    plc_uuid: str = Field(..., description="PLC UUID (필수)")
-    plant_id: Optional[str] = Field(None, description="Plant ID")
-    process_id: Optional[str] = Field(None, description="공정 ID")
-    line_id: Optional[str] = Field(None, description="Line ID")
-    plc_name: str = Field(..., description="PLC명")
-    unit: Optional[str] = Field(None, description="호기")
-    plc_id: str = Field(..., description="PLC ID")
-    program_id: Optional[str] = Field(
-        None, description='Program ID (변경 시, 빈 문자열("")이면 매핑 해제)'
-    )
-    update_user: str = Field(..., description="수정 사용자")
-
-
-class PLCBatchCreateRequest(BaseModel):
-    """PLC 다건 저장 요청"""
-
-    items: List[PLCBatchCreateItem] = Field(
-        ..., description="저장할 PLC 목록", min_items=1
-    )
-
-
-class PLCBatchUpdateRequest(BaseModel):
-    """PLC 다건 수정 요청"""
-
-    items: List[PLCBatchUpdateItem] = Field(
-        ..., description="수정할 PLC 목록", min_items=1
-    )
 
 
 class PLCBatchCreateResponse(BaseModel):

@@ -92,6 +92,29 @@ class Program(Base):
     STATUS_INDEXING = "indexing"
     STATUS_COMPLETED = "completed"
     STATUS_FAILED = "failed"
+    
+    # 상태 표시명 매핑
+    STATUS_DISPLAY_MAP = {
+        STATUS_PREPARING: "준비 중",
+        STATUS_PREPROCESSING: "전처리 중",
+        STATUS_INDEXING: "업로드 중",
+        STATUS_COMPLETED: "등록 완료",
+        STATUS_FAILED: "등록 실패",
+    }
+    
+    @classmethod
+    def get_status_display(cls, status: str) -> str:
+        """
+        상태 표시명 조회
+        
+        Args:
+            status: 상태 값 (예: "preparing", "completed")
+            
+        Returns:
+            str: 상태 표시명 (예: "준비 중", "등록 완료")
+                  매핑되지 않은 경우 원본 status 반환
+        """
+        return cls.STATUS_DISPLAY_MAP.get(status, status)
 
     def __repr__(self):
         return (

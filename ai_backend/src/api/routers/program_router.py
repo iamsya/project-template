@@ -12,6 +12,7 @@ from fastapi import (
     Form,
     HTTPException,
     Query,
+    Request,
     UploadFile,
     status,
 )
@@ -25,11 +26,19 @@ from src.core.dependencies import (
     get_s3_download_service,
     get_knowledge_status_service,
     get_s3_service,
+    resolve_user_id,
 )
 from src.api.services.s3_service import S3Service
 from src.config import settings
 from src.api.services.knowledge_status_service import KnowledgeStatusService
 from src.database.crud.program_crud import ProgramCRUD
+from src.database.models.program_models import Program
+from src.types.request.program_request import (
+    ProgramDeleteRequest,
+    ProgramFailureListRequest,
+    ProgramListRequest,
+    ProgramRetryRequest,
+)
 from src.types.response.program_response import (
     ProgramInfo,
     ProgramValidationResult,
@@ -225,6 +234,7 @@ def download_file(
     """,
 )
 async def register_program(
+    request: Request,
     ladder_zip: UploadFile = File(..., description="PLC ladder logic ZIP 파일", example="ladder_files.zip"),
     template_xlsx: UploadFile = File(
         ..., description="템플릿 분류체계 데이터 XLSX 파일", example="template.xlsx"
@@ -233,7 +243,7 @@ async def register_program(
     program_title: str = Form(..., description="PGM Name (프로그램 제목)", example="공정1 PLC 프로그램"),
     process_id: str = Form(..., description="공정 ID (드롭다운 선택, 필수)", example="process_001"),
     program_description: Optional[str] = Form(None, description="프로그램 설명", example="공정1 라인용 PLC 프로그램"),
-    user_id: str = Form(default="user", description="사용자 ID", example="user001"),
+    user_id: Optional[str] = Form(None, description="사용자 ID", example="user001"),
     program_service: ProgramService = Depends(get_program_service),
 ):
     """
@@ -248,14 +258,36 @@ async def register_program(
     2. 백엔드 DB에 메타데이터 저장 (비동기)
     3. Vector DB 인덱싱 요청 (비동기)
     """
+    # request.state.user_id 우선 사용 (미들웨어에서 설정된 경우), 없으면 파라미터 user_id 사용
+    check_user_id = resolve_user_id(request, user_id)
+    if not check_user_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="사용자 ID가 필요합니다."
+        )
+    
+    # process_id 기반 권한 체크
+    program_crud = ProgramCRUD(program_service.db)
+    accessible_process_ids = program_crud.get_accessible_process_ids(check_user_id)
+    if accessible_process_ids is not None:  # None이면 모든 공정 접근 가능
+        if not accessible_process_ids:  # 빈 리스트면 접근 불가
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"공정 '{process_id}'에 접근할 권한이 없습니다.",
+            )
+        if process_id not in accessible_process_ids:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"공정 '{process_id}'에 접근할 권한이 없습니다.",
+            )
+    
     # Service Layer에서 전파된 HandledException을 그대로 전파
     # Global Exception Handler가 자동으로 처리
-
     result = await program_service.register_program(
         program_title=program_title,
         process_id=process_id,
         program_description=program_description,
-        user_id=user_id,
+        user_id=check_user_id,
         ladder_zip=ladder_zip,
         template_xlsx=template_xlsx,
         comment_csv=comment_csv,
@@ -301,20 +333,17 @@ async def register_program(
     - PLC-PGM 매핑 화면의 PGM 프로그램 테이블
     - PGM 등록 화면의 프로그램 목록 테이블
     
-    **검색 기능:**
-    - `program_id`: PGM ID로 정확한 검색
+    **검색 기능 (모두 부분 일치):**
+    - `program_id`: PGM ID로 부분 일치 검색
     - `program_name`: 제목으로 부분 일치 검색
-    
-    **필터링 기능:**
-    - `process_id`: 공정 ID로 필터링 (드롭다운 선택)
-    - `status`: 등록 상태로 필터링
-      - `preparing`: 준비 중
+    - `process_id`: 공정 ID로 부분 일치 검색
+    - `status`: 등록 상태로 부분 일치 검색
       - `preparing`: 준비 중
       - `preprocessing`: 전처리 중
       - `indexing`: 업로드 중
       - `completed`: 등록 완료
       - `failed`: 등록 실패
-    - `create_user`: 작성자로 필터링
+    - `create_user`: 작성자로 부분 일치 검색
     
     **권한 기반 필터링:**
     - `user_id`: 사용자 ID (선택사항)
@@ -357,22 +386,9 @@ async def register_program(
     """,
 )
 def get_program_list(
-    program_id: Optional[str] = Query(None, description="PGM ID로 검색", example="pgm001"),
-    program_name: Optional[str] = Query(None, description="제목으로 검색", example="공정1"),
-    process_id: Optional[str] = Query(None, description="공정 ID로 필터링 (드롭다운 선택)", example="process_001"),
-    status_filter: Optional[str] = Query(
-        None, description="등록 상태로 필터링 (preparing, preprocessing, indexing, completed, failed)", alias="status", example="completed"
-    ),
-    create_user: Optional[str] = Query(None, description="작성자로 필터링", example="user001"),
-    user_id: Optional[str] = Query(None, description="사용자 ID (권한 기반 필터링용, 선택사항)", example="user001"),
-    page: int = Query(1, ge=1, description="페이지 번호", example=1),
-    page_size: int = Query(10, ge=1, le=10000, description="페이지당 항목 수 (페이지네이션 없이 모든 데이터를 가져오려면 큰 값 사용, 예: 10000)", example=10),
-    sort_by: str = Query(
-        "create_dt",
-        description="정렬 기준 (create_dt, program_id, program_name, status)",
-        example="create_dt",
-    ),
-    sort_order: str = Query("desc", description="정렬 순서 (asc, desc)", example="desc"),
+    request: Request,
+    request_data: ProgramListRequest = Depends(),
+    user_id: Optional[str] = Query(None, description="사용자 ID (권한 기반 필터링용, 테스트용)", example="user001"),
     db: Session = Depends(get_db),
 ):
     """
@@ -385,18 +401,21 @@ def get_program_list(
     - 페이지네이션 및 정렬 지원
     """
     try:
+        # request.state.user_id 우선 사용 (미들웨어에서 설정된 경우), 없으면 파라미터 user_id 사용
+        check_user_id = resolve_user_id(request, user_id)
+        
         program_crud = ProgramCRUD(db)
         programs, total_count = program_crud.get_programs(
-            program_id=program_id,
-            program_name=program_name,
-            process_id=process_id,
-            status=status_filter,
-            create_user=create_user,
-            user_id=user_id,
-            page=page,
-            page_size=page_size,
-            sort_by=sort_by,
-            sort_order=sort_order,
+            program_id=request_data.program_id,
+            program_name=request_data.program_name,
+            process_id=request_data.process_id,
+            status=request_data.status,
+            create_user=request_data.create_user,
+            user_id=check_user_id,  # request.state.user_id 또는 파라미터 user_id
+            page=request_data.page,
+            page_size=request_data.page_size,
+            sort_by=request_data.sort_by,
+            sort_order=request_data.sort_order,
         )
 
         # Program의 process_id로 ProcessMaster 조인하여 공정 정보 조회
@@ -415,6 +434,22 @@ def get_program_list(
             for process in processes:
                 process_name_map[process.process_id] = process.process_name
 
+        # Program의 create_user로 User 조인하여 작성자 정보 조회
+        from src.database.models.user_models import User
+        
+        user_ids = {p.create_user for p in programs if p.create_user}
+        user_map = {}  # user_id -> User 객체 매핑
+        if user_ids:
+            users = (
+                db.query(User)
+                .filter(User.user_id.in_(user_ids))
+                .filter(User.is_deleted.is_(False))
+                .all()
+            )
+            
+            for user in users:
+                user_map[user.user_id] = user
+
         # Document 통계는 metadata_json에 저장된 것을 사용
         # (백그라운드 작업에서 주기적으로 업데이트됨)
 
@@ -427,29 +462,26 @@ def get_program_list(
             # 기본값 1 (CSV 파일 1개)
             comment_file_count = metadata.get("comment_file_count", 1)
 
-            # 등록 소요시간 계산
+            # 등록 소요시간 계산 (HH:MM:SS 형식)
             processing_time = None
             if program.completed_at and program.create_dt:
                 duration = program.completed_at - program.create_dt
                 total_seconds = int(duration.total_seconds())
                 if total_seconds > 0:
-                    minutes = total_seconds // 60
-                    if minutes > 0:
-                        processing_time = f"{minutes} min"
+                    # 일, 시간, 분, 초 계산
+                    days = total_seconds // 86400
+                    hours = (total_seconds % 86400) // 3600
+                    minutes = (total_seconds % 3600) // 60
+                    seconds = total_seconds % 60
+                    
+                    # HH:MM:SS 형식으로 표시 (일이 있으면 일도 포함)
+                    if days > 0:
+                        processing_time = f"{days}d {hours:02d}:{minutes:02d}:{seconds:02d}"
                     else:
-                        processing_time = f"{total_seconds} sec"
+                        processing_time = f"{hours:02d}:{minutes:02d}:{seconds:02d}"
 
-            # 상태 표시명 매핑
-            status_display_map = {
-                "preparing": "준비 중",
-                "preprocessing": "전처리 중",
-                "indexing": "업로드 중",
-                "completed": "등록 완료",
-                "failed": "등록 실패",
-            }
-            status_display = status_display_map.get(
-                program.status, program.status
-            )
+            # 상태 표시명 조회 (Program 모델에서 가져옴)
+            status_display = Program.get_status_display(program.status)
 
             # 진행률 계산 (indexing만 진행률 표시)
             # preprocessing은 진행률 없이 "전처리 중"만 표시
@@ -482,6 +514,17 @@ def get_program_list(
             # 공정명 조회 (Program.process_id 사용)
             process_name = process_name_map.get(program.process_id) if program.process_id else None
 
+            # 작성자 정보 조회 (Program.create_user 사용)
+            create_user_obj = user_map.get(program.create_user) if program.create_user else None
+            # 작성자 이름은 임시 함수로 표시명 생성
+            # TODO: format_user_display(create_user_obj) 함수 구현 후 교체
+            if create_user_obj:
+                # 임시: user.name 사용
+                # 나중에: create_user_name = format_user_display(create_user_obj)
+                create_user_name = create_user_obj.name
+            else:
+                create_user_name = None
+
             items.append(
                 ProgramListItem(
                     program_id=program.program_id,
@@ -493,17 +536,20 @@ def get_program_list(
                     status_display=status_display,
                     processing_time=processing_time,
                     create_user=program.create_user,
+                    create_user_name=create_user_name,
                     create_dt=program.create_dt,
                 )
             )
 
-        total_pages = (total_count + page_size - 1) // page_size
+        total_pages = (
+            (total_count + request_data.page_size - 1) // request_data.page_size
+        )
 
         return ProgramListResponse(
             items=items,
             total_count=total_count,
-            page=page,
-            page_size=page_size,
+            page=request_data.page,
+            page_size=request_data.page_size,
             total_pages=total_pages,
         )
     except Exception as e:
@@ -550,11 +596,13 @@ def get_program_list(
 )
 async def get_program(
     program_id: str,
-    user_id: str = Query(default="user", description="사용자 ID"),
+    request: Request,
+    user_id: Optional[str] = Query(default=None, description="사용자 ID (테스트용)", example="user001"),
     program_service: ProgramService = Depends(get_program_service),
 ):
     """프로그램 상세 정보 조회 (팝업용)"""
-    program = await program_service.get_program(program_id, user_id)
+    check_user_id = resolve_user_id(request, user_id) or "user"
+    program = await program_service.get_program(program_id, check_user_id)
     # 검색 결과가 비어 있어도 200 OK 반환 (REST API 규칙)
     if program is None:
         return None
@@ -564,10 +612,9 @@ async def get_program(
 @router.post("/{program_id}/retry")
 async def retry_failed_files(
     program_id: str,
-    user_id: str = Query(default="user", description="사용자 ID"),
-    retry_type: str = Query(
-        default="all", description="재시도 타입 (preprocessing, document, all)"
-    ),
+    request: Request,
+    request_data: ProgramRetryRequest = Depends(),
+    user_id: Optional[str] = Query(default=None, description="사용자 ID (테스트용)", example="user001"),
     program_service: ProgramService = Depends(get_program_service),
 ):
     """
@@ -577,8 +624,11 @@ async def retry_failed_files(
     - document: Document 저장 실패 파일만 재시도
     - all: 모든 실패 파일 재시도
     """
+    check_user_id = resolve_user_id(request, user_id) or "user"
     result = await program_service.retry_failed_files(
-        program_id=program_id, user_id=user_id, retry_type=retry_type
+        program_id=program_id,
+        user_id=check_user_id,
+        retry_type=request_data.retry_type,
     )
     return result
 
@@ -586,19 +636,17 @@ async def retry_failed_files(
 @router.get("/{program_id}/failures")
 async def get_program_failures(
     program_id: str,
-    user_id: str = Query(default="user", description="사용자 ID"),
-    failure_type: Optional[str] = Query(
-        default=None,
-        description=(
-            "실패 타입 필터 "
-            "(preprocessing, document_storage, vector_indexing)"
-        ),
-    ),
+    request: Request,
+    request_data: ProgramFailureListRequest = Depends(),
+    user_id: Optional[str] = Query(default=None, description="사용자 ID (테스트용)", example="user001"),
     program_service: ProgramService = Depends(get_program_service),
 ):
     """프로그램의 실패 정보 목록 조회"""
+    check_user_id = resolve_user_id(request, user_id) or "user"
     failures = await program_service.get_program_failures(
-        program_id=program_id, user_id=user_id, failure_type=failure_type
+        program_id=program_id,
+        user_id=check_user_id,
+        failure_type=request_data.failure_type,
     )
     return {
         "program_id": program_id,
@@ -746,12 +794,9 @@ async def get_knowledge_status(
 
 @router.delete("", response_model=dict)
 async def delete_programs(
-    program_ids: List[str] = Query(
-        ..., description="삭제할 프로그램 ID 리스트"
-    ),
-    user_id: Optional[str] = Query(
-        None, description="사용자 ID (권한 확인용)"
-    ),
+    request: Request,
+    request_data: ProgramDeleteRequest = Depends(),
+    user_id: Optional[str] = Query(default=None, description="사용자 ID (권한 확인용, 테스트용)", example="user001"),
     program_service: ProgramService = Depends(get_program_service),
 ):
     """
@@ -762,7 +807,7 @@ async def delete_programs(
     - S3 파일, Documents, Knowledge, 관련 테이블 메타정보 모두 처리
     """
     try:
-        if not program_ids:
+        if not request_data.program_ids:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="삭제할 프로그램 ID가 필요합니다.",
@@ -771,10 +816,11 @@ async def delete_programs(
         results = []
         errors = []
 
-        for program_id in program_ids:
+        check_user_id = resolve_user_id(request, user_id)
+        for program_id in request_data.program_ids:
             try:
                 result = await program_service.delete_program(
-                    program_id=program_id, user_id=user_id
+                    program_id=program_id, user_id=check_user_id
                 )
                 results.append(result)
             except Exception as e:
@@ -791,7 +837,7 @@ async def delete_programs(
             "failed_count": len(errors),
             "results": results,
             "errors": errors,
-            "requested_ids": program_ids,
+            "requested_ids": request_data.program_ids,
         }
     except HTTPException:
         raise

@@ -145,7 +145,7 @@ class ProgramUploader:
                             "logic_id": logic_id,
                             "source_file_path": unzipped_file_path,
                         },
-                    )
+                        )
 
                     # TODO: 전처리 실패 시 status 업데이트
                     # 전처리 실패 시:

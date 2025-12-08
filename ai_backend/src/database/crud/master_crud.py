@@ -183,6 +183,39 @@ class ProcessMasterCRUD:
             logger.error(f"공정 기준정보 목록 조회 실패: {str(e)}")
             raise HandledException(ResponseCode.DATABASE_QUERY_ERROR, e=e)
 
+    def get_processes_by_ids(
+        self,
+        process_ids: List[str],
+        include_inactive: bool = False,
+        sort_by: str = "process_name",
+        sort_order: str = "asc",
+    ) -> List[ProcessMaster]:
+        """특정 공정 ID 목록으로 공정 기준정보 조회"""
+        try:
+            if not process_ids:
+                return []
+            
+            query = self.db.query(ProcessMaster).filter(
+                ProcessMaster.process_id.in_(process_ids)
+            )
+            
+            if not include_inactive:
+                query = query.filter(ProcessMaster.is_active.is_(True))
+            
+            # 정렬
+            sort_column = getattr(
+                ProcessMaster, sort_by, ProcessMaster.process_name
+            )
+            if sort_order.lower() == "desc":
+                query = query.order_by(desc(sort_column))
+            else:
+                query = query.order_by(sort_column)
+            
+            return query.all()
+        except Exception as e:
+            logger.error(f"공정 기준정보 목록 조회 실패: {str(e)}")
+            raise HandledException(ResponseCode.DATABASE_QUERY_ERROR, e=e)
+
     def update_process(
         self, process_id: str, update_user: Optional[str] = None, **kwargs
     ) -> bool:

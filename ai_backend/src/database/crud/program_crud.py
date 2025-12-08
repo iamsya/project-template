@@ -1,7 +1,6 @@
 # _*_ coding: utf-8 _*_
 """Program CRUD operations with database."""
 import logging
-from datetime import datetime
 from typing import Dict, List, Optional, Tuple
 
 from sqlalchemy import desc
@@ -9,6 +8,7 @@ from sqlalchemy.orm import Session
 from src.database.models.program_models import Program
 from src.types.response.exceptions import HandledException
 from src.types.response.response_code import ResponseCode
+from src.utils.datetime_utils import get_current_datetime
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +38,7 @@ class ProgramCRUD:
                 description=description,
                 status=status,
                 is_used=is_used,
+                create_dt=get_current_datetime(),
                 **kwargs,
             )
             self.db.add(program)
@@ -87,7 +88,7 @@ class ProgramCRUD:
                     if hasattr(program, key):
                         setattr(program, key, value)
                 # 수정 정보 업데이트
-                program.update_dt = datetime.now()
+                program.update_dt = get_current_datetime()
                 if update_user:
                     program.update_user = update_user
                 self.db.commit()
@@ -151,7 +152,7 @@ class ProgramCRUD:
             if program:
                 program.status = status
                 if status == Program.STATUS_COMPLETED:
-                    program.completed_at = datetime.now()
+                    program.completed_at = get_current_datetime()
                     program.error_message = None
                 elif error_message:
                     program.error_message = error_message
@@ -248,10 +249,10 @@ class ProgramCRUD:
                         self.db.query(GroupProcessPermission)
                         .filter(
                             GroupProcessPermission.group_id == group.group_id
-                        )
-                        .filter(GroupProcessPermission.is_active.is_(True))
-                        .all()
-                    )
+                )
+                .filter(GroupProcessPermission.is_active.is_(True))
+                .all()
+            )
                     accessible_process_ids.update(
                         [pp.process_id for pp in process_permissions]
                     )
@@ -333,9 +334,9 @@ class ProgramCRUD:
         Args:
             program_id: PGM ID로 검색 (부분 일치)
             program_name: 제목으로 검색 (부분 일치)
-            status: 상태로 필터링
-            create_user: 작성자로 필터링
-            process_id: 공정 ID로 필터링 (화면 드롭다운)
+            status: 상태로 필터링 (부분 일치)
+            create_user: 작성자로 필터링 (부분 일치)
+            process_id: 공정 ID로 필터링 (부분 일치)
             user_id: 사용자 ID (권한 기반 필터링용)
             page: 페이지 번호 (1부터 시작)
             page_size: 페이지당 항목 수
@@ -358,7 +359,7 @@ class ProgramCRUD:
                         return [], 0
                     query = query.filter(Program.process_id.in_(accessible_process_ids))
 
-            # 검색 조건
+            # 검색 조건 (모두 부분 일치)
             if program_id:
                 query = query.filter(
                     Program.program_id.ilike(f"%{program_id}%")
@@ -370,9 +371,13 @@ class ProgramCRUD:
             if status:
                 query = query.filter(Program.status == status)
             if create_user:
-                query = query.filter(Program.create_user == create_user)
+                query = query.filter(
+                    Program.create_user.ilike(f"%{create_user}%")
+                )
             if process_id:
-                query = query.filter(Program.process_id == process_id)
+                query = query.filter(
+                    Program.process_id.ilike(f"%{process_id}%")
+                )
 
             # 전체 개수 조회
             total_count = query.count()
@@ -409,7 +414,7 @@ class ProgramCRUD:
                 self.db.query(Program)
                 .filter(Program.program_id.in_(program_ids))
                 .filter(Program.is_deleted.is_(False))
-                .update({"is_deleted": True, "deleted_at": datetime.now()}, synchronize_session=False)
+                .update({"is_deleted": True, "deleted_at": get_current_datetime()}, synchronize_session=False)
             )
             self.db.commit()
             return deleted_count
@@ -433,7 +438,7 @@ class ProgramCRUD:
             program = self.get_program(program_id)
             if program:
                 program.is_deleted = True
-                program.deleted_at = datetime.now()
+                program.deleted_at = get_current_datetime()
                 self.db.commit()
                 return True
             return False

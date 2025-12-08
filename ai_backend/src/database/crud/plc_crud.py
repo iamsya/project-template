@@ -1,7 +1,7 @@
 # _*_ coding: utf-8 _*_
 """PLC CRUD operations with database."""
 import logging
-from datetime import datetime
+import re
 from typing import Dict, List, Optional
 
 from sqlalchemy import desc
@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from src.database.models.plc_models import PLC
 from src.types.response.exceptions import HandledException
 from src.types.response.response_code import ResponseCode
+from src.utils.datetime_utils import get_current_datetime
 from src.utils.uuid_gen import gen_plc_uuid
 
 logger = logging.getLogger(__name__)
@@ -307,6 +308,7 @@ class PLCCRUD:
         plc_id: Optional[str] = None,
         plc_name: Optional[str] = None,
         program_name: Optional[str] = None,
+        accessible_process_ids: Optional[List[str]] = None,
         page: int = 1,
         page_size: int = 10,
         sort_by: str = "plc_id",
@@ -322,6 +324,7 @@ class PLCCRUD:
             plc_id: PLC ID로 검색 (부분 일치)
             plc_name: PLC 이름으로 검색 (부분 일치)
             program_name: PGM명으로 필터링 (부분 일치)
+            accessible_process_ids: 접근 가능한 공정 ID 목록 (None이면 모든 공정, 리스트면 해당 공정만)
             page: 페이지 번호 (1부터 시작)
             page_size: 페이지당 항목 수
             sort_by: 정렬 기준 (plc_id, plc_name, create_dt)
@@ -373,6 +376,16 @@ class PLCCRUD:
                 query = query.filter(PLC.plc_name.ilike(f"%{plc_name}%"))
             if program_name:
                 query = query.filter(Program.program_name.ilike(f"%{program_name}%"))
+            
+            # 권한 기반 공정 필터링
+            # accessible_process_ids가 None이면 모든 공정 접근 가능 (필터링 안 함)
+            # accessible_process_ids가 리스트면 해당 공정만 필터링
+            # accessible_process_ids가 빈 리스트면 아무것도 반환하지 않음
+            if accessible_process_ids is not None:
+                if not accessible_process_ids:
+                    # 접근 가능한 공정이 없으면 빈 결과 반환
+                    return [], 0
+                query = query.filter(PLC.process_id.in_(accessible_process_ids))
 
             # 전체 개수 조회
             total_count = query.count()
@@ -439,16 +452,16 @@ class PLCCRUD:
 
                     # Program 매핑 업데이트
                     plc.program_id = normalized_program_id
-                    plc.mapping_dt = datetime.now()
+                    plc.mapping_dt = get_current_datetime()
                     plc.mapping_user = mapping_user if mapping_user else "user"
-                    plc.update_dt = datetime.now()
+                    plc.update_dt = get_current_datetime()
                     plc.update_user = mapping_user if mapping_user else "user"
 
                     success_count += 1
 
                 except Exception as e:
                     failed_count += 1
-                    error_msg = f"PLC {plc_id} 매핑 실패: {str(e)}"
+                    error_msg = f"PLC {plc_uuid} 매핑 실패: {str(e)}"
                     errors.append(error_msg)
                     logger.warning(error_msg)
 
@@ -536,7 +549,7 @@ class PLCCRUD:
             # 필드 업데이트
             plc.plc_name = plc_name
             plc.plc_id = plc_id
-            plc.update_dt = datetime.now()
+            plc.update_dt = get_current_datetime()
             plc.update_user = update_user
             
             if plant_id is not None:
@@ -566,7 +579,7 @@ class PLCCRUD:
                         plc.metadata_json = metadata
                     
                     plc.program_id = program_id
-                    plc.mapping_dt = datetime.now()
+                    plc.mapping_dt = get_current_datetime()
                     plc.mapping_user = update_user
             
             self.db.commit()
@@ -603,7 +616,7 @@ class PLCCRUD:
 
             # 소프트 삭제: is_deleted = True
             plc.is_deleted = True
-            plc.deleted_at = datetime.now()
+            plc.deleted_at = get_current_datetime()
             plc.deleted_by = delete_user
             
             # 매핑된 program_id 제거
@@ -612,7 +625,7 @@ class PLCCRUD:
             plc.mapping_user = None
             
             # 업데이트 정보
-            plc.update_dt = datetime.now()
+            plc.update_dt = get_current_datetime()
             plc.update_user = delete_user
 
             self.db.commit()
@@ -656,7 +669,9 @@ class PLCCRUD:
             logger.error(f"PLC 일괄 삭제 실패: {str(e)}")
             raise HandledException(ResponseCode.DATABASE_QUERY_ERROR, e=e)
 
-    def get_plc_tree(self) -> List[Dict]:
+    def get_plc_tree(
+        self, accessible_process_ids: Optional[List[str]] = None
+    ) -> List[Dict]:
         """
         PLC Tree 구조 조회 (채팅 메뉴에서 PLC 선택용)
         
@@ -668,6 +683,18 @@ class PLCCRUD:
         Note:
             program_id가 있는 PLC만 조회합니다 (프로그램이 매핑된 PLC만)
         """
+        def natural_sort_key(text: str):
+            """
+            자연 정렬 키 생성 (숫자 순서로 정렬)
+            예: "1", "2", "3", "16", "23", "41" 순서
+            """
+            def convert(text_part):
+                if text_part.isdigit():
+                    return int(text_part)
+                return text_part.lower()
+            
+            return [convert(c) for c in re.split(r'(\d+)', text)]
+        
         try:
             from src.database.models.master_models import (
                 LineMaster,
@@ -677,7 +704,7 @@ class PLCCRUD:
 
             # 활성화된 PLC만 조회 (마스터 테이블과 조인하여 이름도 함께 가져옴)
             # program_id가 있는 것만 조회
-            plcs_with_masters = (
+            query = (
                 self.db.query(
                     PLC,
                     PlantMaster.plant_name,
@@ -701,6 +728,15 @@ class PLCCRUD:
                 .filter(PlantMaster.is_active.is_(True))
                 .filter(ProcessMaster.is_active.is_(True))
                 .filter(LineMaster.is_active.is_(True))
+            )
+            
+            # 권한 기반 공정 필터링
+            # accessible_process_ids가 None이면 모든 공정, 리스트면 해당 공정만
+            if accessible_process_ids is not None:
+                query = query.filter(PLC.process_id.in_(accessible_process_ids))
+            
+            plcs_with_masters = (
+                query
                 .order_by(
                     PlantMaster.plant_name,
                     ProcessMaster.process_name,
@@ -754,6 +790,8 @@ class PLCCRUD:
                 )
 
             # 응답 형식으로 변환
+            # plant, 공정, line, plc명: 기본 문자열 정렬 (한글: ㄱㄴㄷ, 영문: abcd)
+            # 호기(unit): 자연 정렬 (숫자 순서: 1, 2, 3, 14, 23)
             result = []
             for plant_name, processes in sorted(tree.items()):
                 proc_list = []
@@ -763,7 +801,10 @@ class PLCCRUD:
                         plc_name_list = []
                         for plc_name, units in sorted(plc_names.items()):
                             unit_list = []
-                            for unit, plc_infos in sorted(units.items()):
+                            # 호기만 자연 정렬 적용
+                            for unit, plc_infos in sorted(
+                                units.items(), key=lambda x: natural_sort_key(x[0])
+                            ):
                                 unit_list.append({
                                     "unit": unit,
                                     "info": plc_infos,

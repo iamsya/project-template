@@ -128,9 +128,12 @@ class ProgramListItem(BaseModel):
     status: str = Field(..., description="등록 상태")
     status_display: str = Field(..., description="등록 상태 표시명")
     processing_time: Optional[str] = Field(
-        None, description="등록 소요시간 (예: '10 min', '-')"
+        None, description="등록 소요시간 (HH:MM:SS 형식, 예: '00:10:30', '1d 02:30:15')"
     )
-    create_user: str = Field(..., description="작성자")
+    create_user: str = Field(..., description="작성자 ID")
+    create_user_name: Optional[str] = Field(
+        None, description="작성자 이름 (users 테이블에서 조회)"
+    )
     create_dt: datetime = Field(..., description="등록일시")
 
     class Config:

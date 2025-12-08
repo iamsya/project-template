@@ -1,8 +1,8 @@
 # _*_ coding: utf-8 _*_
 """Dependency injection for FastAPI."""
 import logging
-from typing import Generator
-from fastapi import Depends
+from typing import Generator, Optional
+from fastapi import Depends, Request
 from sqlalchemy.orm import Session
 from src.api.services.llm_chat_service import LLMChatService
 from src.api.services.program_service import ProgramService
@@ -12,6 +12,7 @@ from src.api.services.s3_download_service import S3DownloadService
 from src.api.services.s3_service import S3Service
 from src.api.services.knowledge_status_service import KnowledgeStatusService
 from src.database.base import Database
+from src.database.crud.user_crud import UserCRUD
 from src.config import settings
 from src.cache.redis_client import get_redis_client
 
@@ -258,3 +259,152 @@ def get_knowledge_status_service(
 ) -> KnowledgeStatusService:
     """Knowledge 상태 확인 서비스 의존성 주입"""
     return KnowledgeStatusService(db=db)
+
+
+def get_user_name(
+    user_id: Optional[str] = None,
+    request: Optional[Request] = None,
+    db: Optional[Session] = None,
+    default: str = "user",
+) -> str:
+    """
+    user_id로 users 테이블에서 name 조회 (JWT/SSO 사용 여부에 따라 자동 처리)
+    
+    JWT_ENABLED=true (SSO 사용): request.state.user_id 우선 사용
+    JWT_ENABLED=false (SSO 미사용): 파라미터 user_id 사용
+    
+    Args:
+        user_id: 사용자 ID (JWT_ENABLED=false 시 필수)
+        request: FastAPI Request 객체 (JWT_ENABLED=true 시 필수)
+        db: 데이터베이스 세션
+        default: user_id가 없거나 사용자를 찾을 수 없을 때 반환할 기본값
+        
+    Returns:
+        str: 사용자 이름 (name 컬럼 값)
+    """
+    from src.config import settings
+    
+    try:
+        # JWT/SSO 사용 여부에 따라 user_id 결정
+        if settings.jwt_enabled:
+            # JWT_ENABLED=true (SSO 사용): request.state.user_id 우선 (파라미터보다 우선순위 높음)
+            if request:
+                resolved_user_id = getattr(request.state, "user_id", None)
+                if resolved_user_id:
+                    user_id = resolved_user_id
+                    logger.debug(
+                        "JWT/SSO 모드: request.state에서 user_id 가져옴: %s "
+                        "(파라미터 user_id 무시)",
+                        user_id,
+                    )
+                elif user_id:
+                    # request.state에 없으면 파라미터 user_id 사용 (fallback)
+                    logger.debug(
+                        "JWT/SSO 모드: request.state에 user_id 없음. "
+                        "파라미터 user_id 사용: %s",
+                        user_id,
+                    )
+        else:
+            # JWT_ENABLED=false (SSO 미사용): 파라미터 user_id 사용
+            if not user_id:
+                logger.debug(
+                    "JWT 미사용 모드: user_id 파라미터가 없습니다. "
+                    "기본값 반환: %s",
+                    default,
+                )
+                return default
+            logger.debug("JWT 미사용 모드: 파라미터 user_id 사용: %s", user_id)
+        
+        if not user_id:
+            logger.debug("user_id가 없습니다. 기본값 반환: %s", default)
+            return default
+        
+        # users 테이블에서 name 조회
+        if not db:
+            logger.warning("데이터베이스 세션이 없습니다. 기본값 반환: %s", default)
+            return default
+        
+        user_crud = UserCRUD(db)
+        user = user_crud.get_user(user_id)
+        
+        if user and user.name:
+            logger.debug("사용자 이름 조회 성공: user_id=%s, name=%s", user_id, user.name)
+            return user.name
+        
+        logger.warning(
+            "사용자를 찾을 수 없습니다: user_id=%s. 기본값 반환: %s",
+            user_id,
+            default,
+        )
+        return default
+        
+    except Exception as e:
+        logger.error(
+            "사용자 이름 조회 중 오류 발생: user_id=%s, error=%s. 기본값 반환: %s",
+            user_id,
+            str(e),
+            default,
+        )
+        return default
+
+
+def get_user_name_from_request(
+    request: Request,
+    db: Session = Depends(get_db),
+    default: str = "user",
+) -> str:
+    """
+    request.state에서 user_id를 가져와 users 테이블에서 name 조회 (JWT_ENABLED=true 시)
+    
+    Deprecated: get_user_name() 사용 권장
+    
+    Args:
+        request: FastAPI Request 객체
+        db: 데이터베이스 세션
+        default: user_id가 없거나 사용자를 찾을 수 없을 때 반환할 기본값
+        
+    Returns:
+        str: 사용자 이름 (name 컬럼 값)
+    """
+    return get_user_name(request=request, db=db, default=default)
+
+
+def resolve_user_id(
+    request: Request, user_id: Optional[str] = None
+) -> Optional[str]:
+    """
+    request.state.user_id와 파라미터 user_id 중 우선순위에 따라 user_id 반환
+    
+    우선순위:
+    1. request.state.user_id (미들웨어에서 설정된 경우) - 최우선
+    2. 파라미터 user_id (테스트용) - fallback
+    
+    Args:
+        request: FastAPI Request 객체
+        user_id: 파라미터로 전달된 user_id (선택사항)
+        
+    Returns:
+        Optional[str]: 결정된 user_id (둘 다 없으면 None)
+    """
+    if hasattr(request.state, "user_id") and request.state.user_id:
+        return request.state.user_id
+    return user_id
+
+
+def get_user_name_from_param(
+    user_id: str,
+    db: Session = Depends(get_db),
+    default: str = "user",
+) -> str:
+    """
+    파라미터로 받은 user_id로 users 테이블에서 name 조회 (JWT_ENABLED=false 시)
+    
+    Args:
+        user_id: 사용자 ID
+        db: 데이터베이스 세션
+        default: 사용자를 찾을 수 없을 때 반환할 기본값
+        
+    Returns:
+        str: 사용자 이름 (name 컬럼 값)
+    """
+    return get_user_name(user_id=user_id, db=db, default=default)

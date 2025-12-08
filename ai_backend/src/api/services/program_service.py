@@ -938,8 +938,13 @@ class ProgramService:
             if not program:
                 raise HandledException(ResponseCode.PROGRAM_NOT_FOUND)
 
-            # 사용자 권한 확인
-            if program.user_id != user_id:
+            # 사용자 권한 확인 (process_id 기반)
+            if program.process_id:
+                accessible_process_ids = (
+                    self.program_crud.get_accessible_process_ids(user_id)
+                )
+                if accessible_process_ids is not None:  # None이면 모든 공정 접근 가능
+                    if program.process_id not in accessible_process_ids:
                 raise HandledException(
                     ResponseCode.CHAT_ACCESS_DENIED,
                     msg="프로그램에 접근할 권한이 없습니다.",
@@ -1108,8 +1113,13 @@ class ProgramService:
             if not program:
                 raise HandledException(ResponseCode.PROGRAM_NOT_FOUND)
 
-            # 사용자 권한 확인
-            if program.user_id != user_id:
+            # 사용자 권한 확인 (process_id 기반)
+            if program.process_id:
+                accessible_process_ids = (
+                    self.program_crud.get_accessible_process_ids(user_id)
+                )
+                if accessible_process_ids is not None:  # None이면 모든 공정 접근 가능
+                    if program.process_id not in accessible_process_ids:
                 raise HandledException(
                     ResponseCode.CHAT_ACCESS_DENIED,
                     msg="프로그램에 접근할 권한이 없습니다.",
@@ -1187,8 +1197,13 @@ class ProgramService:
             if not program:
                 raise HandledException(ResponseCode.PROGRAM_NOT_FOUND)
 
-            # 사용자 권한 확인 (user_id가 제공된 경우)
-            if user_id and program.create_user != user_id:
+            # 사용자 권한 확인 (process_id 기반, user_id가 제공된 경우)
+            if user_id and program.process_id:
+                accessible_process_ids = (
+                    self.program_crud.get_accessible_process_ids(user_id)
+                )
+                if accessible_process_ids is not None:  # None이면 모든 공정 접근 가능
+                    if program.process_id not in accessible_process_ids:
                 raise HandledException(
                     ResponseCode.CHAT_ACCESS_DENIED,
                     msg="프로그램을 삭제할 권한이 없습니다.",
