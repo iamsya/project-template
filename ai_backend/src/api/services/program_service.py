@@ -7,11 +7,11 @@ from typing import Dict, List, Optional
 
 from fastapi import UploadFile
 from sqlalchemy.orm import Session
-from src.database.models.document_models import Document
 from src.api.services.program_uploader import ProgramUploader
 from src.api.services.program_validator import ProgramValidator
 from src.api.services.s3_service import S3Service
 from src.config import settings
+from src.database.models.document_models import Document
 from src.types.response.exceptions import HandledException
 from src.types.response.response_code import ResponseCode
 from src.utils.uuid_gen import gen, gen_program_id
@@ -22,7 +22,12 @@ logger = logging.getLogger(__name__)
 class ProgramService:
     """프로그램 관리 서비스"""
 
-    def __init__(self, db: Session, uploader: ProgramUploader = None, s3_service: S3Service = None):
+    def __init__(
+        self,
+        db: Session,
+        uploader: ProgramUploader = None,
+        s3_service: S3Service = None,
+    ):
         """
         Args:
             db: 데이터베이스 세션
@@ -372,7 +377,7 @@ class ProgramService:
         if total_expected is not None:
             metadata["total_expected"] = total_expected
             metadata["ladder_file_count"] = total_expected  # Logic 파일 개수
-        
+
         self.program_crud.update_program(
             program_id=program_id,
             metadata_json=metadata,
@@ -391,7 +396,7 @@ class ProgramService:
         process_id: str,
     ):
         """프로그램 등록 완료 처리 (비동기)
-        
+
         - 프로그램 메타데이터 저장
         - 템플릿 및 템플릿데이터 생성
         - Document 생성
@@ -428,14 +433,12 @@ class ProgramService:
 
             # 4. Program.metadata_json 업데이트 (초기값만 설정)
             # total_expected는 전처리 단계에서 계산되어 업데이트됨
-            self._update_program_metadata(
-                program_id=program_id
-            )
+            self._update_program_metadata(program_id=program_id)
 
             # 5. S3에 파일 업로드 (단위 함수 재사용)
             logger.info(f"S3 파일 업로드 시작: program_id={program_id}")
             s3_paths = {}
-            
+
             # ZIP 파일 업로드
             ladder_zip_result = await self._upload_file_to_s3(
                 file=ladder_zip,
@@ -443,7 +446,7 @@ class ProgramService:
             )
             s3_paths["ladder_zip_path"] = ladder_zip_result["s3_path"]
             s3_paths["ladder_zip_filename"] = ladder_zip_result["filename"]
-            
+
             # XLSX 파일 업로드
             template_xlsx_result = await self._upload_file_to_s3(
                 file=template_xlsx,
@@ -451,7 +454,7 @@ class ProgramService:
             )
             s3_paths["template_xlsx_path"] = template_xlsx_result["s3_path"]
             s3_paths["template_xlsx_filename"] = template_xlsx_result["filename"]
-            
+
             # CSV 파일 업로드
             comment_csv_result = await self._upload_file_to_s3(
                 file=comment_csv,
@@ -459,19 +462,22 @@ class ProgramService:
             )
             s3_paths["comment_csv_path"] = comment_csv_result["s3_path"]
             s3_paths["comment_csv_filename"] = comment_csv_result["filename"]
-            
+
             logger.info(f"S3 파일 업로드 완료: program_id={program_id}")
 
             # 6. Document에 S3 경로 업데이트
             logger.info(f"Document S3 경로 업데이트 시작: program_id={program_id}")
             from src.database.crud.document_crud import DocumentCRUD
+
             document_crud = DocumentCRUD(self.db)
 
             # S3 프로그램 경로 prefix 가져오기
             program_prefix = settings.s3_program_prefix.rstrip("/")
-            
+
             # ladder_document 업데이트
-            if document_ids.get("ladder_document_id") and s3_paths.get("ladder_zip_path"):
+            if document_ids.get("ladder_document_id") and s3_paths.get(
+                "ladder_zip_path"
+            ):
                 document_crud.update_document(
                     document_id=document_ids["ladder_document_id"],
                     file_key=f"{program_prefix}/{program_id}/{s3_paths['ladder_zip_filename']}",
@@ -479,7 +485,9 @@ class ProgramService:
                 )
 
             # comment_document 업데이트
-            if document_ids.get("comment_document_id") and s3_paths.get("comment_csv_path"):
+            if document_ids.get("comment_document_id") and s3_paths.get(
+                "comment_csv_path"
+            ):
                 document_crud.update_document(
                     document_id=document_ids["comment_document_id"],
                     file_key=f"{program_prefix}/{program_id}/{s3_paths['comment_csv_filename']}",
@@ -487,7 +495,9 @@ class ProgramService:
                 )
 
             # template_document 업데이트
-            if document_ids.get("template_document_id") and s3_paths.get("template_xlsx_path"):
+            if document_ids.get("template_document_id") and s3_paths.get(
+                "template_xlsx_path"
+            ):
                 document_crud.update_document(
                     document_id=document_ids["template_document_id"],
                     file_key=f"{program_prefix}/{program_id}/{s3_paths['template_xlsx_filename']}",
@@ -499,12 +509,12 @@ class ProgramService:
 
             # 7. 전처리 및 Vector DB 인덱싱 시작 (기존 로직 유지)
             await self._process_program_async(
-                    program_id=program_id,
-                    program_title=program_title,
-                    user_id=user_id,
-                    ladder_zip=ladder_zip,
-                    template_xlsx=template_xlsx,
-                    comment_csv=comment_csv,
+                program_id=program_id,
+                program_title=program_title,
+                user_id=user_id,
+                ladder_zip=ladder_zip,
+                template_xlsx=template_xlsx,
+                comment_csv=comment_csv,
                 ladder_document_id=document_ids.get("ladder_document_id"),
                 comment_document_id=document_ids.get("comment_document_id"),
                 template_document_id=document_ids.get("template_document_id"),
@@ -532,12 +542,12 @@ class ProgramService:
     ) -> Dict[str, str]:
         """
         파일을 S3에 업로드하는 단위 함수 (재사용 가능)
-        
+
         Args:
             file: 업로드할 파일
             program_id: 프로그램 ID
             filename: 파일명 (없으면 원본 파일명 사용)
-            
+
         Returns:
             Dict: {
                 's3_path': 's3://bucket/key',
@@ -550,37 +560,39 @@ class ProgramService:
                 ResponseCode.DATABASE_QUERY_ERROR,
                 msg="S3 서비스가 초기화되지 않았습니다.",
             )
-        
+
         # S3 프로그램 경로 prefix 가져오기
         program_prefix = settings.s3_program_prefix.rstrip("/")
-        
+
         # 파일명 결정
         original_filename = filename or file.filename
         if not original_filename:
             raise ValueError("파일명을 확인할 수 없습니다.")
-        
+
         # S3 키 생성
         s3_key = f"{program_prefix}/{program_id}/{original_filename}"
-        
+
         # Content-Type 결정
         content_type = file.content_type
         if not content_type:
-            if original_filename.endswith('.zip'):
+            if original_filename.endswith(".zip"):
                 content_type = "application/zip"
-            elif original_filename.endswith('.xlsx'):
-                content_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            elif original_filename.endswith('.csv'):
+            elif original_filename.endswith(".xlsx"):
+                content_type = (
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
+            elif original_filename.endswith(".csv"):
                 content_type = "text/csv"
             else:
                 content_type = "application/octet-stream"
-        
+
         # S3 업로드
         s3_path = await self.s3_service.upload_file(
             file=file,
             s3_key=s3_key,
             content_type=content_type,
         )
-        
+
         return {
             "s3_path": s3_path,
             "s3_key": s3_key,
@@ -673,7 +685,9 @@ class ProgramService:
 
             # 실패 정보 요약을 Program.metadata_json에 저장 (통계용)
             processing_metadata = {
-                "total_expected": preprocess_summary.get("total", 0),  # 전처리 결과 기준
+                "total_expected": preprocess_summary.get(
+                    "total", 0
+                ),  # 전처리 결과 기준
                 "total_successful_documents": len(created_documents),
                 "has_partial_failure": has_partial_failure,
                 "preprocessing_summary": preprocess_summary,
@@ -712,7 +726,7 @@ class ProgramService:
                 job_type="vector_indexing",
                 total_steps=1,
             )
-            
+
             # 프로그램 상태를 indexing으로 변경
             self.program_crud.update_program_status(
                 program_id=program_id, status=Program.STATUS_INDEXING
@@ -802,15 +816,15 @@ class ProgramService:
         """
         try:
             from src.database.models.master_models import ProcessMaster
-            
+
             program = self.program_crud.get_program(program_id)
             if not program:
                 raise HandledException(ResponseCode.PROGRAM_NOT_FOUND)
 
             # 권한 확인: 사용자가 접근 가능한 공정인지 확인
             if program.process_id:
-                accessible_process_ids = (
-                    self.program_crud.get_accessible_process_ids(user_id)
+                accessible_process_ids = self.program_crud.get_accessible_process_ids(
+                    user_id
                 )
                 if accessible_process_ids is not None:  # None이면 모든 공정 접근 가능
                     if program.process_id not in accessible_process_ids:
@@ -940,19 +954,18 @@ class ProgramService:
 
             # 사용자 권한 확인 (process_id 기반)
             if program.process_id:
-                accessible_process_ids = (
-                    self.program_crud.get_accessible_process_ids(user_id)
+                accessible_process_ids = self.program_crud.get_accessible_process_ids(
+                    user_id
                 )
                 if accessible_process_ids is not None:  # None이면 모든 공정 접근 가능
                     if program.process_id not in accessible_process_ids:
-                raise HandledException(
-                    ResponseCode.CHAT_ACCESS_DENIED,
-                    msg="프로그램에 접근할 권한이 없습니다.",
-                )
+                        raise HandledException(
+                            ResponseCode.CHAT_ACCESS_DENIED,
+                            msg="프로그램에 접근할 권한이 없습니다.",
+                        )
 
             # 실패 정보 조회 (ProcessingFailure 테이블에서)
             from src.database.crud.program_failure_crud import ProcessingFailureCRUD
-
             from src.database.models.program_models import ProcessingFailure
 
             failure_crud = ProcessingFailureCRUD(self.db)
@@ -1115,15 +1128,15 @@ class ProgramService:
 
             # 사용자 권한 확인 (process_id 기반)
             if program.process_id:
-                accessible_process_ids = (
-                    self.program_crud.get_accessible_process_ids(user_id)
+                accessible_process_ids = self.program_crud.get_accessible_process_ids(
+                    user_id
                 )
                 if accessible_process_ids is not None:  # None이면 모든 공정 접근 가능
                     if program.process_id not in accessible_process_ids:
-                raise HandledException(
-                    ResponseCode.CHAT_ACCESS_DENIED,
-                    msg="프로그램에 접근할 권한이 없습니다.",
-                )
+                        raise HandledException(
+                            ResponseCode.CHAT_ACCESS_DENIED,
+                            msg="프로그램에 접근할 권한이 없습니다.",
+                        )
 
             # 실패 정보 조회
             from src.database.crud.program_failure_crud import ProcessingFailureCRUD
@@ -1141,8 +1154,7 @@ class ProgramService:
                     "source_id": failure.source_id,
                     "program_id": (
                         failure.source_id
-                        if failure.source_type
-                        == ProcessingFailure.SOURCE_TYPE_PROGRAM
+                        if failure.source_type == ProcessingFailure.SOURCE_TYPE_PROGRAM
                         else None
                     ),  # 호환성을 위해 유지
                     "failure_type": failure.failure_type,
@@ -1199,15 +1211,15 @@ class ProgramService:
 
             # 사용자 권한 확인 (process_id 기반, user_id가 제공된 경우)
             if user_id and program.process_id:
-                accessible_process_ids = (
-                    self.program_crud.get_accessible_process_ids(user_id)
+                accessible_process_ids = self.program_crud.get_accessible_process_ids(
+                    user_id
                 )
                 if accessible_process_ids is not None:  # None이면 모든 공정 접근 가능
                     if program.process_id not in accessible_process_ids:
-                raise HandledException(
-                    ResponseCode.CHAT_ACCESS_DENIED,
-                    msg="프로그램을 삭제할 권한이 없습니다.",
-                )
+                        raise HandledException(
+                            ResponseCode.CHAT_ACCESS_DENIED,
+                            msg="프로그램을 삭제할 권한이 없습니다.",
+                        )
 
             logger.info(f"프로그램 삭제 시작: program_id={program_id}")
 
@@ -1226,9 +1238,7 @@ class ProgramService:
             # 2. Documents 및 Knowledge 삭제 (비동기)
             async def delete_documents_and_knowledge():
                 try:
-                    result = await self._delete_documents_and_knowledge(
-                        program_id
-                    )
+                    result = await self._delete_documents_and_knowledge(program_id)
                     return result
                 except Exception as e:
                     logger.error(f"Documents/Knowledge 삭제 실패: {str(e)}")
@@ -1241,9 +1251,7 @@ class ProgramService:
             results = await asyncio.gather(*tasks, return_exceptions=True)
 
             s3_result = results[0] if not isinstance(results[0], Exception) else {}
-            docs_result = (
-                results[1] if not isinstance(results[1], Exception) else {}
-            )
+            docs_result = results[1] if not isinstance(results[1], Exception) else {}
 
             # 3. 관련 테이블 메타정보 업데이트
             try:
@@ -1290,8 +1298,10 @@ class ProgramService:
 
             try:
                 # S3Service의 delete_files_by_prefix 사용
-                deleted_count = await self.s3_service.delete_files_by_prefix(prefix=prefix)
-                
+                deleted_count = await self.s3_service.delete_files_by_prefix(
+                    prefix=prefix
+                )
+
                 if deleted_count > 0:
                     logger.info(
                         f"S3 파일 삭제 완료: program_id={program_id}, "
@@ -1304,7 +1314,9 @@ class ProgramService:
                     )
 
             except Exception as e:
-                logger.error(f"S3 파일 삭제 중 오류: program_id={program_id}, error={str(e)}")
+                logger.error(
+                    f"S3 파일 삭제 중 오류: program_id={program_id}, error={str(e)}"
+                )
                 raise
 
         except Exception as e:
@@ -1382,24 +1394,20 @@ class ProgramService:
             logger.error(f"Documents/Knowledge 삭제 실패: {str(e)}")
             raise
 
-    async def _delete_milvus_vectors(
-        self, document_id: str, collection_name: str
-    ):
+    async def _delete_milvus_vectors(self, document_id: str, collection_name: str):
         """Milvus에서 벡터 삭제"""
         try:
-            from pymilvus import Collection, connections, utility
-
             # Milvus 연결 설정 (환경변수에서 가져오기)
             import os
+
+            from pymilvus import Collection, connections, utility
 
             milvus_uri = os.getenv("MILVUS_URI", "./milvus_lite.db")
             connections.connect("default", uri=milvus_uri)
 
             # 컬렉션이 존재하는지 확인
             if not utility.has_collection(collection_name):
-                logger.warning(
-                    f"Milvus 컬렉션이 없습니다: {collection_name}"
-                )
+                logger.warning(f"Milvus 컬렉션이 없습니다: {collection_name}")
                 return
 
             # 컬렉션 로드
@@ -1480,10 +1488,10 @@ class ProgramService:
                 self.db.delete(chunk)
 
             # 4. KnowledgeReference: Document를 통해 연결된 것들 삭제
+            from src.database.models.document_models import Document
             from src.database.models.knowledge_reference_models import (
                 KnowledgeReference,
             )
-            from src.database.models.document_models import Document
 
             # Program과 연결된 Document를 통해 KnowledgeReference 조회
             documents_with_ref = (
@@ -1503,9 +1511,7 @@ class ProgramService:
             if knowledge_ref_ids:
                 knowledge_refs = (
                     self.db.query(KnowledgeReference)
-                    .filter(
-                        KnowledgeReference.reference_id.in_(knowledge_ref_ids)
-                    )
+                    .filter(KnowledgeReference.reference_id.in_(knowledge_ref_ids))
                     .all()
                 )
 

@@ -1,21 +1,14 @@
 # _*_ coding: utf-8 _*_
 """Knowledge Reference Management API endpoints."""
-import logging
 import io
+import logging
 import urllib.parse
 
-from fastapi import (
-    APIRouter,
-    Depends,
-    HTTPException,
-    Path,
-    status,
-)
+from fastapi import APIRouter, Depends, HTTPException, Path, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
-
-from src.core.dependencies import get_db, get_s3_download_service
-from src.api.services.s3_download_service import S3DownloadService
+from src.api.services.s3_service import S3Service
+from src.core.dependencies import get_db, get_s3_service
 from src.database.crud.knowledge_reference_crud import KnowledgeReferenceCRUD
 
 logger = logging.getLogger(__name__)
@@ -55,9 +48,11 @@ router = APIRouter(prefix="/knowledge", tags=["knowledge-management"])
     """,
 )
 def download_knowledge_file(
-    reference_id: str = Path(..., description="Reference ID", example="REF_MITSUBISHI_001"),
+    reference_id: str = Path(
+        ..., description="Reference ID", example="REF_MITSUBISHI_001"
+    ),
     db: Session = Depends(get_db),
-    s3_download_service: S3DownloadService = Depends(get_s3_download_service),
+    s3_service: S3Service = Depends(get_s3_service),
 ):
     """
     기준정보 파일 다운로드 API
@@ -72,7 +67,7 @@ def download_knowledge_file(
     """
     try:
         knowledge_crud = KnowledgeReferenceCRUD(db)
-        
+
         # 1. KnowledgeReference 존재 확인
         reference = knowledge_crud.get_reference(reference_id)
         if not reference:
@@ -80,23 +75,23 @@ def download_knowledge_file(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"기준정보를 찾을 수 없습니다: {reference_id}",
             )
-        
+
         # 2. 활성화 및 삭제 여부 확인
         if not reference.is_active:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="비활성화된 기준정보입니다.",
             )
-        
+
         if reference.is_deleted:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="삭제된 기준정보입니다.",
             )
-        
+
         # 3. Document 조회 (knowledge_reference_id로 연결된 Document)
         from src.database.models.document_models import Document
-        
+
         document = (
             db.query(Document)
             .filter(Document.knowledge_reference_id == reference_id)
@@ -104,24 +99,22 @@ def download_knowledge_file(
             .order_by(Document.create_dt.desc())  # 최신 파일 우선
             .first()
         )
-        
+
         if not document:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"기준정보 파일을 찾을 수 없습니다: {reference_id}",
             )
-        
+
         # 4. 파일 다운로드
-        file_content, filename, content_type = (
-            s3_download_service.download_file_by_document_id(
-                document_id=document.document_id,
-                db_session=db,
-            )
+        file_content, filename, content_type = s3_service.download_file_by_document_id(
+            document_id=document.document_id,
+            db_session=db,
         )
-        
+
         # 한글 파일명 처리를 위한 URL 인코딩
         encoded_filename = urllib.parse.quote(filename.encode("utf-8"))
-        
+
         return StreamingResponse(
             io.BytesIO(file_content),
             media_type=content_type,
@@ -134,13 +127,9 @@ def download_knowledge_file(
     except HTTPException:
         raise
     except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except FileNotFoundError as e:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except Exception as e:
         logger.error(
             "기준정보 파일 다운로드 실패: reference_id=%s, error=%s",
@@ -151,4 +140,3 @@ def download_knowledge_file(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"파일 다운로드 중 오류가 발생했습니다: {str(e)}",
         ) from e
-

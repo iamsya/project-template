@@ -1,10 +1,10 @@
 # _*_ coding: utf-8 _*_
 """Program Management API endpoints."""
+import io
 import logging
+import urllib.parse
 from typing import List, Optional
 
-import io
-import urllib.parse
 from fastapi import (
     APIRouter,
     Depends,
@@ -12,25 +12,24 @@ from fastapi import (
     Form,
     HTTPException,
     Query,
-    Request,
     UploadFile,
     status,
 )
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
+from src.api.services.knowledge_status_service import KnowledgeStatusService
 from src.api.services.program_service import ProgramService
-from src.api.services.s3_download_service import S3DownloadService
-from src.core.dependencies import (
-    get_program_service,
-    get_db,
-    get_s3_download_service,
-    get_knowledge_status_service,
-    get_s3_service,
-    resolve_user_id,
-)
 from src.api.services.s3_service import S3Service
 from src.config import settings
-from src.api.services.knowledge_status_service import KnowledgeStatusService
+from src.core.dependencies import (
+    get_accessible_process_ids_dependency,
+    get_db,
+    get_knowledge_status_service,
+    get_program_service,
+    get_s3_service,
+    get_user_id_dependency,
+)
+from src.core.permissions import is_process_accessible
 from src.database.crud.program_crud import ProgramCRUD
 from src.database.models.program_models import Program
 from src.types.request.program_request import (
@@ -41,10 +40,10 @@ from src.types.request.program_request import (
 )
 from src.types.response.program_response import (
     ProgramInfo,
-    ProgramValidationResult,
-    RegisterProgramResponse,
     ProgramListItem,
     ProgramListResponse,
+    ProgramValidationResult,
+    RegisterProgramResponse,
 )
 
 logger = logging.getLogger(__name__)
@@ -96,12 +95,11 @@ def download_file(
         ),
         example="program_classification",
     ),
-    program_id: str = Query(
-        ..., description="Program ID", example="PGM_000001"
-    ),
-    user_id: str = Query(..., description="사용자 ID (권한 검증용)", example="user001"),
+    program_id: str = Query(..., description="Program ID", example="PGM_000001"),
     db: Session = Depends(get_db),
-    s3_download_service: S3DownloadService = Depends(get_s3_download_service),
+    accessible_process_ids: Optional[List[str]] = Depends(
+        get_accessible_process_ids_dependency
+    ),
 ):
     """
     S3 파일 다운로드 API (file_type + program_id 방식)
@@ -117,7 +115,7 @@ def download_file(
     try:
         # 권한 검증 및 파일 다운로드
         program_crud = ProgramCRUD(db)
-        
+
         # 1. Program 존재 확인 및 권한 검증
         program = program_crud.get_program(program_id)
         if not program:
@@ -125,26 +123,21 @@ def download_file(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"프로그램을 찾을 수 없습니다: {program_id}",
             )
-        
+
         # 2. 사용자 권한 확인 (process_id 기반)
         if program.process_id:
-            accessible_process_ids = (
-                program_crud.get_accessible_process_ids(user_id)
-            )
-            if accessible_process_ids is not None:  # None이면 모든 공정 접근 가능
-                if program.process_id not in accessible_process_ids:
-                    raise HTTPException(
-                        status_code=status.HTTP_403_FORBIDDEN,
-                        detail="프로그램 파일에 접근할 권한이 없습니다.",
-                    )
-        
+            if not is_process_accessible(program.process_id, accessible_process_ids):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="프로그램 파일에 접근할 권한이 없습니다.",
+                )
+
         # 3. 파일 다운로드 (file_type + program_id로 조회)
-        file_content, filename, content_type = (
-            s3_download_service.download_program_file(
-                file_type=file_type,
-                program_id=program_id,
-                db_session=db,
-            )
+        s3_service = get_s3_service()
+        file_content, filename, content_type = s3_service.download_program_file(
+            file_type=file_type,
+            program_id=program_id,
+            db_session=db,
         )
 
         # 한글 파일명 처리를 위한 URL 인코딩
@@ -160,13 +153,9 @@ def download_file(
             },
         )
     except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except FileNotFoundError as e:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except Exception as e:
         logger.error(
             "파일 다운로드 실패: file_type=%s, program_id=%s, error=%s",
@@ -234,17 +223,29 @@ def download_file(
     """,
 )
 async def register_program(
-    request: Request,
-    ladder_zip: UploadFile = File(..., description="PLC ladder logic ZIP 파일", example="ladder_files.zip"),
+    ladder_zip: UploadFile = File(
+        ..., description="PLC ladder logic ZIP 파일", example="ladder_files.zip"
+    ),
     template_xlsx: UploadFile = File(
         ..., description="템플릿 분류체계 데이터 XLSX 파일", example="template.xlsx"
     ),
-    comment_csv: UploadFile = File(..., description="PLC Ladder Comment CSV 파일", example="comment.csv"),
-    program_title: str = Form(..., description="PGM Name (프로그램 제목)", example="공정1 PLC 프로그램"),
-    process_id: str = Form(..., description="공정 ID (드롭다운 선택, 필수)", example="process_001"),
-    program_description: Optional[str] = Form(None, description="프로그램 설명", example="공정1 라인용 PLC 프로그램"),
-    user_id: Optional[str] = Form(None, description="사용자 ID", example="user001"),
+    comment_csv: UploadFile = File(
+        ..., description="PLC Ladder Comment CSV 파일", example="comment.csv"
+    ),
+    program_title: str = Form(
+        ..., description="PGM Name (프로그램 제목)", example="공정1 PLC 프로그램"
+    ),
+    process_id: str = Form(
+        ..., description="공정 ID (드롭다운 선택, 필수)", example="process_001"
+    ),
+    program_description: Optional[str] = Form(
+        None, description="프로그램 설명", example="공정1 라인용 PLC 프로그램"
+    ),
     program_service: ProgramService = Depends(get_program_service),
+    check_user_id: str = Depends(get_user_id_dependency),
+    accessible_process_ids: Optional[List[str]] = Depends(
+        get_accessible_process_ids_dependency
+    ),
 ):
     """
     프로그램 등록 API
@@ -258,29 +259,13 @@ async def register_program(
     2. 백엔드 DB에 메타데이터 저장 (비동기)
     3. Vector DB 인덱싱 요청 (비동기)
     """
-    # request.state.user_id 우선 사용 (미들웨어에서 설정된 경우), 없으면 파라미터 user_id 사용
-    check_user_id = resolve_user_id(request, user_id)
-    if not check_user_id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="사용자 ID가 필요합니다."
-        )
-    
     # process_id 기반 권한 체크
-    program_crud = ProgramCRUD(program_service.db)
-    accessible_process_ids = program_crud.get_accessible_process_ids(check_user_id)
-    if accessible_process_ids is not None:  # None이면 모든 공정 접근 가능
-        if not accessible_process_ids:  # 빈 리스트면 접근 불가
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"공정 '{process_id}'에 접근할 권한이 없습니다.",
-            )
-        if process_id not in accessible_process_ids:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"공정 '{process_id}'에 접근할 권한이 없습니다.",
-            )
-    
+    if not is_process_accessible(process_id, accessible_process_ids):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"공정 '{process_id}'에 접근할 권한이 없습니다.",
+        )
+
     # Service Layer에서 전파된 HandledException을 그대로 전파
     # Global Exception Handler가 자동으로 처리
     result = await program_service.register_program(
@@ -386,10 +371,9 @@ async def register_program(
     """,
 )
 def get_program_list(
-    request: Request,
     request_data: ProgramListRequest = Depends(),
-    user_id: Optional[str] = Query(None, description="사용자 ID (권한 기반 필터링용, 테스트용)", example="user001"),
     db: Session = Depends(get_db),
+    check_user_id: str = Depends(get_user_id_dependency),
 ):
     """
     프로그램 목록 조회 (검색, 필터링, 페이지네이션, 정렬)
@@ -401,9 +385,6 @@ def get_program_list(
     - 페이지네이션 및 정렬 지원
     """
     try:
-        # request.state.user_id 우선 사용 (미들웨어에서 설정된 경우), 없으면 파라미터 user_id 사용
-        check_user_id = resolve_user_id(request, user_id)
-        
         program_crud = ProgramCRUD(db)
         programs, total_count = program_crud.get_programs(
             program_id=request_data.program_id,
@@ -411,7 +392,7 @@ def get_program_list(
             process_id=request_data.process_id,
             status=request_data.status,
             create_user=request_data.create_user,
-            user_id=check_user_id,  # request.state.user_id 또는 파라미터 user_id
+            user_id=check_user_id,
             page=request_data.page,
             page_size=request_data.page_size,
             sort_by=request_data.sort_by,
@@ -420,7 +401,7 @@ def get_program_list(
 
         # Program의 process_id로 ProcessMaster 조인하여 공정 정보 조회
         from src.database.models.master_models import ProcessMaster
-        
+
         process_ids = {p.process_id for p in programs if p.process_id}
         process_name_map = {}
         if process_ids:
@@ -430,13 +411,13 @@ def get_program_list(
                 .filter(ProcessMaster.is_active.is_(True))
                 .all()
             )
-            
+
             for process in processes:
                 process_name_map[process.process_id] = process.process_name
 
         # Program의 create_user로 User 조인하여 작성자 정보 조회
         from src.database.models.user_models import User
-        
+
         user_ids = {p.create_user for p in programs if p.create_user}
         user_map = {}  # user_id -> User 객체 매핑
         if user_ids:
@@ -446,7 +427,7 @@ def get_program_list(
                 .filter(User.is_deleted.is_(False))
                 .all()
             )
-            
+
             for user in users:
                 user_map[user.user_id] = user
 
@@ -473,10 +454,12 @@ def get_program_list(
                     hours = (total_seconds % 86400) // 3600
                     minutes = (total_seconds % 3600) // 60
                     seconds = total_seconds % 60
-                    
+
                     # HH:MM:SS 형식으로 표시 (일이 있으면 일도 포함)
                     if days > 0:
-                        processing_time = f"{days}d {hours:02d}:{minutes:02d}:{seconds:02d}"
+                        processing_time = (
+                            f"{days}d {hours:02d}:{minutes:02d}:{seconds:02d}"
+                        )
                     else:
                         processing_time = f"{hours:02d}:{minutes:02d}:{seconds:02d}"
 
@@ -504,7 +487,7 @@ def get_program_list(
                     "total_expected", stats.get("total_processed", 0)
                 )
                 embedded = stats.get("embedded", 0)
-                
+
                 if total_files > 0:
                     progress = round((embedded / total_files) * 100)
                     status_display = f"업로드 중({progress}%)"
@@ -512,10 +495,14 @@ def get_program_list(
                     status_display = "업로드 중(0%)"
 
             # 공정명 조회 (Program.process_id 사용)
-            process_name = process_name_map.get(program.process_id) if program.process_id else None
+            process_name = (
+                process_name_map.get(program.process_id) if program.process_id else None
+            )
 
             # 작성자 정보 조회 (Program.create_user 사용)
-            create_user_obj = user_map.get(program.create_user) if program.create_user else None
+            create_user_obj = (
+                user_map.get(program.create_user) if program.create_user else None
+            )
             # 작성자 이름은 임시 함수로 표시명 생성
             # TODO: format_user_display(create_user_obj) 함수 구현 후 교체
             if create_user_obj:
@@ -542,8 +529,8 @@ def get_program_list(
             )
 
         total_pages = (
-            (total_count + request_data.page_size - 1) // request_data.page_size
-        )
+            total_count + request_data.page_size - 1
+        ) // request_data.page_size
 
         return ProgramListResponse(
             items=items,
@@ -596,12 +583,10 @@ def get_program_list(
 )
 async def get_program(
     program_id: str,
-    request: Request,
-    user_id: Optional[str] = Query(default=None, description="사용자 ID (테스트용)", example="user001"),
     program_service: ProgramService = Depends(get_program_service),
+    check_user_id: str = Depends(get_user_id_dependency),
 ):
     """프로그램 상세 정보 조회 (팝업용)"""
-    check_user_id = resolve_user_id(request, user_id) or "user"
     program = await program_service.get_program(program_id, check_user_id)
     # 검색 결과가 비어 있어도 200 OK 반환 (REST API 규칙)
     if program is None:
@@ -612,10 +597,9 @@ async def get_program(
 @router.post("/{program_id}/retry")
 async def retry_failed_files(
     program_id: str,
-    request: Request,
     request_data: ProgramRetryRequest = Depends(),
-    user_id: Optional[str] = Query(default=None, description="사용자 ID (테스트용)", example="user001"),
     program_service: ProgramService = Depends(get_program_service),
+    check_user_id: str = Depends(get_user_id_dependency),
 ):
     """
     실패한 파일 재시도 API
@@ -624,7 +608,6 @@ async def retry_failed_files(
     - document: Document 저장 실패 파일만 재시도
     - all: 모든 실패 파일 재시도
     """
-    check_user_id = resolve_user_id(request, user_id) or "user"
     result = await program_service.retry_failed_files(
         program_id=program_id,
         user_id=check_user_id,
@@ -636,13 +619,11 @@ async def retry_failed_files(
 @router.get("/{program_id}/failures")
 async def get_program_failures(
     program_id: str,
-    request: Request,
     request_data: ProgramFailureListRequest = Depends(),
-    user_id: Optional[str] = Query(default=None, description="사용자 ID (테스트용)", example="user001"),
     program_service: ProgramService = Depends(get_program_service),
+    check_user_id: str = Depends(get_user_id_dependency),
 ):
     """프로그램의 실패 정보 목록 조회"""
-    check_user_id = resolve_user_id(request, user_id) or "user"
     failures = await program_service.get_program_failures(
         program_id=program_id,
         user_id=check_user_id,
@@ -661,6 +642,10 @@ async def sync_knowledge_status(
     knowledge_status_service: KnowledgeStatusService = Depends(
         get_knowledge_status_service
     ),
+    db: Session = Depends(get_db),
+    accessible_process_ids: Optional[List[str]] = Depends(
+        get_accessible_process_ids_dependency
+    ),
 ):
     """
     Program의 Knowledge 상태 동기화 API
@@ -674,10 +659,22 @@ async def sync_knowledge_status(
         Dict: 동기화 결과
     """
     try:
+        # 권한 체크: Program의 process_id에 접근 권한이 있는지 확인
+        program_crud = ProgramCRUD(db)
+        program = program_crud.get_program(program_id)
+        if program and program.process_id:
+            if not is_process_accessible(program.process_id, accessible_process_ids):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="프로그램에 접근할 권한이 없습니다.",
+                )
+
         result = await knowledge_status_service.sync_document_status(
             program_id=program_id
         )
         return result
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(
             "Knowledge 상태 동기화 실패: program_id=%s, error=%s",
@@ -696,6 +693,10 @@ async def get_knowledge_status(
     knowledge_status_service: KnowledgeStatusService = Depends(
         get_knowledge_status_service
     ),
+    db: Session = Depends(get_db),
+    accessible_process_ids: Optional[List[str]] = Depends(
+        get_accessible_process_ids_dependency
+    ),
 ):
     """
     Program의 Knowledge 상태 조회 API
@@ -709,10 +710,17 @@ async def get_knowledge_status(
         Dict: Knowledge 상태 정보
     """
     try:
-        from src.database.models.knowledge_reference_models import (
-            KnowledgeReference,
-        )
+        # 권한 체크: Program의 process_id에 접근 권한이 있는지 확인
+        program_crud = ProgramCRUD(db)
+        program = program_crud.get_program(program_id)
+        if program and program.process_id:
+            if not is_process_accessible(program.process_id, accessible_process_ids):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="프로그램에 접근할 권한이 없습니다.",
+                )
         from src.database.models.document_models import Document
+        from src.database.models.knowledge_reference_models import KnowledgeReference
 
         # Program과 연결된 Document를 통해 KnowledgeReference 조회
         documents_with_ref = (
@@ -759,9 +767,7 @@ async def get_knowledge_status(
             if not repo_id:
                 continue
 
-            documents = await knowledge_status_service.get_repo_documents(
-                repo_id
-            )
+            documents = await knowledge_status_service.get_repo_documents(repo_id)
 
             repo_statuses.append(
                 {
@@ -794,10 +800,12 @@ async def get_knowledge_status(
 
 @router.delete("", response_model=dict)
 async def delete_programs(
-    request: Request,
     request_data: ProgramDeleteRequest = Depends(),
-    user_id: Optional[str] = Query(default=None, description="사용자 ID (권한 확인용, 테스트용)", example="user001"),
     program_service: ProgramService = Depends(get_program_service),
+    check_user_id: str = Depends(get_user_id_dependency),
+    accessible_process_ids: Optional[List[str]] = Depends(
+        get_accessible_process_ids_dependency
+    ),
 ):
     """
     프로그램 삭제 (여러 개 일괄 삭제)
@@ -816,7 +824,6 @@ async def delete_programs(
         results = []
         errors = []
 
-        check_user_id = resolve_user_id(request, user_id)
         for program_id in request_data.program_ids:
             try:
                 result = await program_service.delete_program(
@@ -867,38 +874,53 @@ async def delete_programs(
 async def list_program_files(
     program_id: str,
     s3_service: S3Service = Depends(get_s3_service),
+    db: Session = Depends(get_db),
+    accessible_process_ids: Optional[List[str]] = Depends(
+        get_accessible_process_ids_dependency
+    ),
 ):
     """
     프로그램 파일 목록 조회 API
-    
+
     S3의 programs/{program_id}/ 하위에 있는 모든 파일 목록을 반환합니다.
     """
     try:
+        # 권한 체크: Program의 process_id에 접근 권한이 있는지 확인
+        program_crud = ProgramCRUD(db)
+        program = program_crud.get_program(program_id)
+        if program and program.process_id:
+            if not is_process_accessible(program.process_id, accessible_process_ids):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="프로그램에 접근할 권한이 없습니다.",
+                )
         # S3 프로그램 경로 prefix 가져오기
         program_prefix = settings.s3_program_prefix.rstrip("/")
         s3_prefix = f"{program_prefix}/{program_id}/"
-        
+
         # S3에서 파일 목록 조회
         files = s3_service.list_files(prefix=s3_prefix)
-        
+
         return {
             "program_id": program_id,
             "prefix": s3_prefix,
             "file_count": len(files),
             "files": files,
         }
-        
+
     except ValueError as e:
-        logger.error(f"프로그램 파일 목록 조회 실패: program_id={program_id}, error={str(e)}")
+        logger.error(
+            f"프로그램 파일 목록 조회 실패: program_id={program_id}, error={str(e)}"
+        )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e),
         ) from e
     except Exception as e:
-        logger.error(f"프로그램 파일 목록 조회 실패: program_id={program_id}, error={str(e)}")
+        logger.error(
+            f"프로그램 파일 목록 조회 실패: program_id={program_id}, error={str(e)}"
+        )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"파일 목록 조회 중 오류가 발생했습니다: {str(e)}",
         ) from e
-
-

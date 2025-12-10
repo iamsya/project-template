@@ -1,30 +1,45 @@
 # _*_ coding: utf-8 _*_
 """PLC Management API endpoints."""
+import io
 import logging
-from typing import Optional
+from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+import pandas as pd
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    Query,
+    UploadFile,
+    status,
+)
 from sqlalchemy.orm import Session
-from src.core.dependencies import get_db, get_user_name, resolve_user_id
-from src.core.permissions import check_any_role_dependency
+from src.core.dependencies import (
+    get_accessible_process_ids_dependency,
+    get_db,
+    get_user_id_dependency,
+    get_user_name,
+)
+from src.core.permissions import check_any_role_dependency, is_process_accessible
 from src.database.crud.plc_crud import PLCCRUD
-from src.database.crud.program_crud import ProgramCRUD
-from src.types.response.exceptions import HandledException
 from src.types.request.plc_request import (
     PLCBatchCreateRequest,
     PLCBatchUpdateRequest,
     PLCDeleteRequest,
     PLCMappingRequest,
 )
+from src.types.response.exceptions import HandledException
 from src.types.response.plc_response import (
     PLCBasicInfo,
-    PLCDeleteResponse,
-    PLCListResponse,
-    PLCListItem,
-    PLCMappingResponse,
-    PLCTreeResponse,
     PLCBatchCreateResponse,
     PLCBatchUpdateResponse,
+    PLCDeleteResponse,
+    PLCListItem,
+    PLCListResponse,
+    PLCMappingResponse,
+    PLCTreeResponse,
 )
 
 logger = logging.getLogger(__name__)
@@ -89,16 +104,30 @@ router = APIRouter(prefix="/plcs", tags=["plc-management"])
     """,
 )
 def get_plc_list(
-    request: Request,
-    user_id: Optional[str] = Query(None, description="사용자 ID (SSO 미사용 시 필수)", example="user001"),
-    plant_id: Optional[str] = Query(None, description="Plant ID로 필터링", example="plant001"),
-    process_id: Optional[str] = Query(None, description="공정 ID로 필터링 (접근 가능한 공정만)", example="process001"),
-    line_id: Optional[str] = Query(None, description="Line ID로 필터링", example="line001"),
+    plant_id: Optional[str] = Query(
+        None, description="Plant ID로 필터링", example="plant001"
+    ),
+    process_id: Optional[str] = Query(
+        None, description="공정 ID로 필터링 (접근 가능한 공정만)", example="process001"
+    ),
+    line_id: Optional[str] = Query(
+        None, description="Line ID로 필터링", example="line001"
+    ),
     plc_id: Optional[str] = Query(None, description="PLC ID로 검색", example="plc001"),
-    plc_name: Optional[str] = Query(None, description="PLC 명으로 검색", example="PLC001"),
-    program_name: Optional[str] = Query(None, description="PGM명으로 필터링", example="라벨부착"),
+    plc_name: Optional[str] = Query(
+        None, description="PLC 명으로 검색", example="PLC001"
+    ),
+    program_name: Optional[str] = Query(
+        None, description="PGM명으로 필터링", example="라벨부착"
+    ),
     page: int = Query(1, ge=1, description="페이지 번호", example=1),
-    page_size: int = Query(10, ge=1, le=10000, description="페이지당 항목 수 (페이지네이션 없이 모든 데이터를 가져오려면 큰 값 사용, 예: 10000)", example=10),
+    page_size: int = Query(
+        10,
+        ge=1,
+        le=10000,
+        description="페이지당 항목 수 (페이지네이션 없이 모든 데이터를 가져오려면 큰 값 사용, 예: 10000)",
+        example=10,
+    ),
     sort_by: str = Query(
         "plc_id",
         description="정렬 기준 (plc_id, plc_name, create_dt)",
@@ -107,6 +136,9 @@ def get_plc_list(
     sort_order: str = Query("asc", description="정렬 순서 (asc, desc)", example="asc"),
     db: Session = Depends(get_db),
     _: None = Depends(check_any_role_dependency),
+    accessible_process_ids: Optional[List[str]] = Depends(
+        get_accessible_process_ids_dependency
+    ),
 ):
     """
     PLC 기준 정보 목록 조회 (검색, 필터링, 페이지네이션, 정렬)
@@ -118,33 +150,15 @@ def get_plc_list(
     - 권한 기반 공정 필터링 적용
     """
     try:
-        # request.state.user_id 우선 사용 (미들웨어에서 설정된 경우), 없으면 파라미터 user_id 사용 (테스트용)
-        check_user_id = None
-        if hasattr(request.state, "user_id") and request.state.user_id:
-            check_user_id = request.state.user_id
-        elif user_id:
-            check_user_id = user_id
-        
-        if not check_user_id:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="사용자 ID가 필요합니다."
-            )
-        
-        # 사용자 권한 기반 접근 가능한 공정 ID 목록 조회
-        program_crud = ProgramCRUD(db)
-        accessible_process_ids = program_crud.get_accessible_process_ids(check_user_id)
-        
+
         # process_id가 제공된 경우, 접근 가능한 공정인지 확인
         if process_id:
-            from src.core.permissions import is_all_processes_accessible
-            if not is_all_processes_accessible(accessible_process_ids):
-                if process_id not in accessible_process_ids:
-                    raise HTTPException(
-                        status_code=status.HTTP_403_FORBIDDEN,
-                        detail=f"공정 '{process_id}'에 접근할 권한이 없습니다."
-                    )
-        
+            if not is_process_accessible(process_id, accessible_process_ids):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=f"공정 '{process_id}'에 접근할 권한이 없습니다.",
+                )
+
         # 접근 가능한 공정만 필터링 (process_id가 제공되지 않은 경우)
         # accessible_process_ids가 None이면 모든 공정, 리스트면 해당 공정만
         plc_crud = PLCCRUD(db)
@@ -164,7 +178,7 @@ def get_plc_list(
 
         # PLC의 mapping_user로 User 조인하여 매핑 사용자 정보 조회
         from src.database.models.user_models import User
-        
+
         mapping_user_ids = {p.mapping_user for p in plcs if p.mapping_user}
         mapping_user_map = {}  # user_id -> User 객체 매핑
         if mapping_user_ids:
@@ -174,7 +188,7 @@ def get_plc_list(
                 .filter(User.is_deleted.is_(False))
                 .all()
             )
-            
+
             for user in users:
                 mapping_user_map[user.user_id] = user
 
@@ -197,17 +211,13 @@ def get_plc_list(
                     plc_uuid=plc.plc_uuid,
                     plc_id=plc.plc_id,
                     plc_name=plc.plc_name,
-                    plant=hierarchy.get("plant", {}).get("name")
-                    if hierarchy
-                    else None,
+                    plant=hierarchy.get("plant", {}).get("name") if hierarchy else None,
                     plant_id=plc.plant_id,
-                    process=hierarchy.get("process", {}).get("name")
-                    if hierarchy
-                    else None,
+                    process=(
+                        hierarchy.get("process", {}).get("name") if hierarchy else None
+                    ),
                     process_id=plc.process_id,
-                    line=hierarchy.get("line", {}).get("name")
-                    if hierarchy
-                    else None,
+                    line=hierarchy.get("line", {}).get("name") if hierarchy else None,
                     line_id=plc.line_id,
                     unit=plc.unit,
                     program_id=plc.program_id,
@@ -286,72 +296,58 @@ def get_plc_list(
 )
 def update_plc_program_mapping(
     request_body: PLCMappingRequest,
-    request: Request,
-    user_id: Optional[str] = Query(None, description="사용자 ID (SSO 미사용 시 필수)"),
     db: Session = Depends(get_db),
+    check_user_id: str = Depends(get_user_id_dependency),
+    accessible_process_ids: Optional[List[str]] = Depends(
+        get_accessible_process_ids_dependency
+    ),
 ):
     """
     PLC-PGM 매핑 저장
 
     여러 매핑 항목을 한 번에 처리합니다.
-    
+
     **권한 기반 필터링:**
     - 시스템 관리자/통합 관리자: 모든 공정의 PLC 매핑 가능
     - 공정 관리자: 지정된 공정의 PLC만 매핑 가능
     - 일반 사용자: 접근 불가 (403 에러)
     """
     try:
-        # request.state.user_id 우선 사용 (미들웨어에서 설정된 경우), 없으면 파라미터 user_id 사용 (테스트용)
-        check_user_id = resolve_user_id(request, user_id)
-        
-        if not check_user_id:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="사용자 ID가 필요합니다."
-            )
-        
         # 권한 체크 (일반 사용자 제외)
         from src.core.permissions import check_any_role
+
         check_any_role(check_user_id, db)
-        
+
         # SSO 사용 여부에 따라 사용자 이름 가져오기
         mapping_user = get_user_name(
             user_id=check_user_id,
-            request=request,
             db=db,
             default="user",
         )
-        
+
         plc_crud = PLCCRUD(db)
         success_count = 0
         failed_count = 0
         errors = []
 
-        # 사용자 권한 기반 접근 가능한 공정 ID 목록 조회
-        program_crud = ProgramCRUD(db)
-        accessible_process_ids = program_crud.get_accessible_process_ids(check_user_id)
-        
         # 각 매핑 항목 처리
         for item in request_body.items:
             try:
                 # 매핑할 PLC들의 process_id 권한 체크
-                plcs_to_check = [
-                    plc_crud.get_plc(uuid) for uuid in item.plc_uuids
-                ]
+                plcs_to_check = [plc_crud.get_plc(uuid) for uuid in item.plc_uuids]
                 for plc in plcs_to_check:
                     if plc and plc.process_id:
-                        if accessible_process_ids is not None:  # None이면 모든 공정 접근 가능
-                            if not accessible_process_ids:  # 빈 리스트면 접근 불가
-                                raise HTTPException(
-                                    status_code=status.HTTP_403_FORBIDDEN,
-                                    detail=f"PLC '{plc.plc_id}'의 공정 '{plc.process_id}'에 접근할 권한이 없습니다.",
-                                )
-                            if plc.process_id not in accessible_process_ids:
-                                raise HTTPException(
-                                    status_code=status.HTTP_403_FORBIDDEN,
-                                    detail=f"PLC '{plc.plc_id}'의 공정 '{plc.process_id}'에 접근할 권한이 없습니다.",
-                                )
-                
+                        if not is_process_accessible(
+                            plc.process_id, accessible_process_ids
+                        ):
+                            raise HTTPException(
+                                status_code=status.HTTP_403_FORBIDDEN,
+                                detail=(
+                                    f"PLC '{plc.plc_id}'의 공정 "
+                                    f"'{plc.process_id}'에 접근할 권한이 없습니다."
+                                ),
+                            )
+
                 result = plc_crud.update_plc_program_mapping(
                     plc_uuids=item.plc_uuids,
                     program_id=item.program_id,
@@ -444,39 +440,25 @@ def update_plc_program_mapping(
     """,
 )
 def get_plc_tree(
-    request: Request,
-    user_id: Optional[str] = Query(None, description="사용자 ID (SSO 미사용 시 필수)", example="user001"),
     db: Session = Depends(get_db),
     _: None = Depends(check_any_role_dependency),
+    accessible_process_ids: Optional[List[str]] = Depends(
+        get_accessible_process_ids_dependency
+    ),
 ):
     """
     PLC Tree 구조 조회 (채팅 메뉴에서 PLC 선택용)
-    
+
     Hierarchy: Plant → 공정 → Line → PLC명 → 호기 → PLC ID
-    
+
     **권한 기반 필터링:**
     - 시스템 관리자/통합 관리자: 모든 공정의 PLC 조회 가능
     - 공정 관리자: 지정된 공정의 PLC만 조회 가능
     - 일반 사용자: 접근 불가 (403 에러)
     """
     try:
-        # request.state.user_id 우선 사용 (미들웨어에서 설정된 경우), 없으면 파라미터 user_id 사용 (테스트용)
-        check_user_id = resolve_user_id(request, user_id)
-        
-        if not check_user_id:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="사용자 ID가 필요합니다."
-            )
-        
-        # 사용자 권한 기반 접근 가능한 공정 ID 목록 조회
-        program_crud = ProgramCRUD(db)
-        accessible_process_ids = program_crud.get_accessible_process_ids(check_user_id)
-        
         plc_crud = PLCCRUD(db)
-        tree_data = plc_crud.get_plc_tree(
-            accessible_process_ids=accessible_process_ids
-        )
+        tree_data = plc_crud.get_plc_tree(accessible_process_ids=accessible_process_ids)
 
         return PLCTreeResponse(data=tree_data)
     except Exception as e:
@@ -518,58 +500,42 @@ def get_plc_tree(
 )
 def delete_plcs(
     request_body: PLCDeleteRequest,
-    request: Request,
-    user_id: Optional[str] = Query(None, description="사용자 ID (SSO 미사용 시 필수)", example="user001"),
     db: Session = Depends(get_db),
+    check_user_id: str = Depends(get_user_id_dependency),
     _: None = Depends(check_any_role_dependency),
+    accessible_process_ids: Optional[List[str]] = Depends(
+        get_accessible_process_ids_dependency
+    ),
 ):
     """
     PLC 일괄 삭제
-    
+
     **권한 기반 필터링:**
     - 시스템 관리자/통합 관리자: 모든 공정의 PLC 삭제 가능
     - 공정 관리자: 지정된 공정의 PLC만 삭제 가능
     - 일반 사용자: 접근 불가 (403 에러)
     """
     try:
-        # request.state.user_id 우선 사용 (미들웨어에서 설정된 경우), 없으면 파라미터 user_id 사용 (테스트용)
-        check_user_id = resolve_user_id(request, user_id)
-        
-        if not check_user_id:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="사용자 ID가 필요합니다."
-            )
-        
         plc_crud = PLCCRUD(db)
-        
-        # 사용자 권한 기반 접근 가능한 공정 ID 목록 조회
-        program_crud = ProgramCRUD(db)
-        accessible_process_ids = program_crud.get_accessible_process_ids(check_user_id)
-        
+
         # 삭제할 PLC들의 process_id 권한 체크
-        plcs_to_check = [
-            plc_crud.get_plc(uuid) for uuid in request_body.plc_uuids
-        ]
+        plcs_to_check = [plc_crud.get_plc(uuid) for uuid in request_body.plc_uuids]
         for plc in plcs_to_check:
             if plc and plc.process_id:
-                if accessible_process_ids is not None:  # None이면 모든 공정 접근 가능
-                    if not accessible_process_ids:  # 빈 리스트면 접근 불가
-                        raise HTTPException(
-                            status_code=status.HTTP_403_FORBIDDEN,
-                            detail=f"PLC '{plc.plc_id}'의 공정 '{plc.process_id}'에 접근할 권한이 없습니다.",
-                        )
-                    if plc.process_id not in accessible_process_ids:
-                        raise HTTPException(
-                            status_code=status.HTTP_403_FORBIDDEN,
-                            detail=f"PLC '{plc.plc_id}'의 공정 '{plc.process_id}'에 접근할 권한이 없습니다.",
-                        )
-        
+                if not is_process_accessible(plc.process_id, accessible_process_ids):
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail=(
+                            f"PLC '{plc.plc_id}'의 공정 "
+                            f"'{plc.process_id}'에 접근할 권한이 없습니다."
+                        ),
+                    )
+
         # PLC 일괄 삭제
         deleted_count = plc_crud.delete_plcs(
             plc_uuids=request_body.plc_uuids, delete_user=check_user_id
         )
-        
+
         return PLCDeleteResponse(
             success=True,
             deleted_count=deleted_count,
@@ -609,30 +575,23 @@ def delete_plcs(
 )
 def batch_create_plcs(
     request_body: PLCBatchCreateRequest,
-    request: Request,
-    user_id: Optional[str] = Query(None, description="사용자 ID (SSO 미사용 시 필수)", example="user001"),
     db: Session = Depends(get_db),
     _: None = Depends(check_any_role_dependency),
+    accessible_process_ids: Optional[List[str]] = Depends(
+        get_accessible_process_ids_dependency
+    ),
 ):
     """
     PLC 다건 저장 (생성)
-    
+
     새 PLC 추가 시 호출되는 API입니다.
-    
+
     **권한 기반 필터링:**
     - 시스템 관리자/통합 관리자: 모든 공정에 PLC 생성 가능
     - 공정 관리자: 지정된 공정에만 PLC 생성 가능
     - 일반 사용자: 접근 불가 (403 에러)
     """
     try:
-        # request.state.user_id 우선 사용 (미들웨어에서 설정된 경우), 없으면 파라미터 user_id 사용 (테스트용)
-        check_user_id = resolve_user_id(request, user_id)
-        
-        if not check_user_id:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="사용자 ID가 필요합니다."
-            )
         plc_crud = PLCCRUD(db)
         from src.database.crud.master_crud import (
             LineMasterCRUD,
@@ -643,10 +602,6 @@ def batch_create_plcs(
         plant_crud = PlantMasterCRUD(db)
         process_crud = ProcessMasterCRUD(db)
         line_crud = LineMasterCRUD(db)
-        
-        # 사용자 권한 기반 접근 가능한 공정 ID 목록 조회
-        program_crud = ProgramCRUD(db)
-        accessible_process_ids = program_crud.get_accessible_process_ids(check_user_id)
 
         created_count = 0
         failed_count = 0
@@ -655,42 +610,31 @@ def batch_create_plcs(
         for item in request_body.items:
             try:
                 # process_id 기반 권한 체크
-                if accessible_process_ids is not None:  # None이면 모든 공정 접근 가능
-                    if not accessible_process_ids:  # 빈 리스트면 접근 불가
-                        errors.append(
-                            f"PLC ID {item.plc_id}: 공정 '{item.process_id}'에 접근할 권한이 없습니다."
-                        )
-                        failed_count += 1
-                        continue
-                    if item.process_id not in accessible_process_ids:
-                        errors.append(
-                            f"PLC ID {item.plc_id}: 공정 '{item.process_id}'에 접근할 권한이 없습니다."
-                        )
-                        failed_count += 1
-                        continue
-                
+                if not is_process_accessible(item.process_id, accessible_process_ids):
+                    error_msg = (
+                        f"PLC ID {item.plc_id}: "
+                        f"공정 '{item.process_id}'에 접근할 권한이 없습니다."
+                    )
+                    errors.append(error_msg)
+                    failed_count += 1
+                    continue
+
                 # 마스터 데이터 유효성 검사
                 plant = plant_crud.get_plant(item.plant_id)
                 if not plant:
-                    errors.append(
-                        f"PLC ID {item.plc_id}: 존재하지 않는 Plant ID입니다"
-                    )
+                    errors.append(f"PLC ID {item.plc_id}: 존재하지 않는 Plant ID입니다")
                     failed_count += 1
                     continue
 
                 process = process_crud.get_process(item.process_id)
                 if not process:
-                    errors.append(
-                        f"PLC ID {item.plc_id}: 존재하지 않는 공정 ID입니다"
-                    )
+                    errors.append(f"PLC ID {item.plc_id}: 존재하지 않는 공정 ID입니다")
                     failed_count += 1
                     continue
 
                 line = line_crud.get_line(item.line_id)
                 if not line:
-                    errors.append(
-                        f"PLC ID {item.plc_id}: 존재하지 않는 Line ID입니다"
-                    )
+                    errors.append(f"PLC ID {item.plc_id}: 존재하지 않는 Line ID입니다")
                     failed_count += 1
                     continue
 
@@ -707,7 +651,8 @@ def batch_create_plcs(
                     )
                     created_count += 1
                 except HandledException as e:
-                    error_msg = f"PLC ID {item.plc_id}: {e.msg or str(e)}"
+                    error_detail = e.msg_only or str(e)
+                    error_msg = f"PLC ID {item.plc_id}: {error_detail}"
                     errors.append(error_msg)
                     failed_count += 1
 
@@ -736,6 +681,236 @@ def batch_create_plcs(
         ) from e
 
 
+@router.post(
+    "/upload-excel",
+    response_model=PLCBatchCreateResponse,
+    summary="PLC 엑셀 업로드",
+    description="""
+    엑셀 파일을 업로드하여 PLC 데이터를 일괄 등록합니다.
+    
+    **엑셀 파일 형식:**
+    - 헤더: 번호, Plant, 공정, Line, 장비명 - 실 사용, 호기, PLC ID
+    - Plant, 공정, Line은 이름으로 입력하며, 시스템에서 ID를 자동으로 조회합니다.
+    
+    **매핑 규칙:**
+    - Plant (이름) → PlantMaster에서 조회 → plant_id 사용
+    - 공정 (이름) → ProcessMaster에서 조회 → process_id 사용
+    - Line (이름) → LineMaster에서 조회 → line_id 사용
+    - 장비명 - 실 사용 → plc_name
+    - 호기 → unit
+    - PLC ID → plc_id (공백이면 해당 행 무시)
+    
+    **주의사항:**
+    - PLC ID가 공백인 행은 건너뜁니다.
+    - Plant, 공정, Line 이름이 존재하지 않으면 해당 행은 실패 처리됩니다.
+    - 중복된 PLC ID가 있으면 해당 행은 실패 처리됩니다.
+    """,
+)
+def upload_plc_excel(
+    excel_file: UploadFile = File(
+        ..., description="PLC 데이터 엑셀 파일 (XLSX)", example="plc_data.xlsx"
+    ),
+    create_user: str = Form(..., description="생성 사용자", example="user001"),
+    db: Session = Depends(get_db),
+):
+    """
+    PLC 엑셀 업로드 API
+
+    엑셀 파일을 파싱하여 PLC 데이터를 일괄 등록합니다.
+    """
+    try:
+        # 엑셀 파일 읽기
+        excel_file.file.seek(0)
+        excel_content = excel_file.file.read()
+        excel_file.file.seek(0)
+
+        # pandas로 엑셀 파일 파싱
+        try:
+            df = pd.read_excel(io.BytesIO(excel_content), header=0)
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"엑셀 파일 파싱 실패: {str(e)}",
+            )
+
+        # 필수 컬럼 확인
+        required_columns = ["Plant", "공정", "Line", "장비명 - 실 사용", "PLC ID"]
+        missing_columns = [col for col in required_columns if col not in df.columns]
+        if missing_columns:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    f"필수 컬럼이 없습니다: {', '.join(missing_columns)}. "
+                    f"현재 컬럼: {', '.join(df.columns.tolist())}"
+                ),
+            )
+
+        # CRUD 인스턴스 생성
+        plc_crud = PLCCRUD(db)
+        from src.database.crud.master_crud import (
+            LineMasterCRUD,
+            PlantMasterCRUD,
+            ProcessMasterCRUD,
+        )
+
+        plant_crud = PlantMasterCRUD(db)
+        process_crud = ProcessMasterCRUD(db)
+        line_crud = LineMasterCRUD(db)
+
+        created_count = 0
+        failed_count = 0
+        errors = []
+
+        # Plant, 공정, Line 이름으로 ID 조회 캐시 (성능 최적화)
+        plant_name_to_id = {}
+        process_name_to_id = {}
+        line_name_to_id = {}
+
+        # 모든 활성 Plant 조회
+        all_plants = plant_crud.get_all_plants(include_inactive=False)
+        plant_name_to_id = {plant.plant_name: plant.plant_id for plant in all_plants}
+
+        # 모든 활성 Process 조회
+        all_processes = process_crud.get_all_processes(include_inactive=False)
+        process_name_to_id = {
+            process.process_name: process.process_id for process in all_processes
+        }
+
+        # 모든 활성 Line 조회
+        all_lines = line_crud.get_all_lines(include_inactive=False)
+        line_name_to_id = {line.line_name: line.line_id for line in all_lines}
+
+        # 각 행 처리
+        for idx, row in df.iterrows():
+            try:
+                # PLC ID 확인 (공백이면 무시)
+                plc_id = str(row.get("PLC ID", "")).strip()
+                if not plc_id or plc_id == "nan":
+                    continue  # PLC ID가 공백이면 해당 행 무시
+
+                # Plant 이름으로 ID 조회
+                plant_name = str(row.get("Plant", "")).strip()
+                if not plant_name or plant_name == "nan":
+                    errors.append(f"행 {idx + 2}: Plant 이름이 없습니다.")
+                    failed_count += 1
+                    continue
+
+                plant_id = plant_name_to_id.get(plant_name)
+                if not plant_id:
+                    errors.append(
+                        f"행 {idx + 2} (PLC ID: {plc_id}): "
+                        f"Plant '{plant_name}'를 찾을 수 없습니다."
+                    )
+                    failed_count += 1
+                    continue
+
+                # 공정 이름으로 ID 조회
+                process_name = str(row.get("공정", "")).strip()
+                if not process_name or process_name == "nan":
+                    errors.append(
+                        f"행 {idx + 2} (PLC ID: {plc_id}): 공정 이름이 없습니다."
+                    )
+                    failed_count += 1
+                    continue
+
+                process_id = process_name_to_id.get(process_name)
+                if not process_id:
+                    error_msg = (
+                        f"행 {idx + 2} (PLC ID: {plc_id}): "
+                        f"공정 '{process_name}'를 찾을 수 없습니다."
+                    )
+                    errors.append(error_msg)
+                    failed_count += 1
+                    continue
+
+                # Line 이름으로 ID 조회
+                line_name = str(row.get("Line", "")).strip()
+                if not line_name or line_name == "nan":
+                    errors.append(
+                        f"행 {idx + 2} (PLC ID: {plc_id}): Line 이름이 없습니다."
+                    )
+                    failed_count += 1
+                    continue
+
+                line_id = line_name_to_id.get(line_name)
+                if not line_id:
+                    error_msg = (
+                        f"행 {idx + 2} (PLC ID: {plc_id}): "
+                        f"Line '{line_name}'를 찾을 수 없습니다."
+                    )
+                    errors.append(error_msg)
+                    failed_count += 1
+                    continue
+
+                # 장비명 - 실 사용
+                plc_name = str(row.get("장비명 - 실 사용", "")).strip()
+                if not plc_name or plc_name == "nan":
+                    errors.append(
+                        f"행 {idx + 2} (PLC ID: {plc_id}): 장비명이 없습니다."
+                    )
+                    failed_count += 1
+                    continue
+
+                # 호기 (선택사항)
+                unit = row.get("호기", "")
+                if pd.notna(unit):
+                    unit = str(unit).strip()
+                    if unit == "nan" or unit == "":
+                        unit = None
+                else:
+                    unit = None
+
+                # PLC 생성 (기존 create_plc 함수 사용)
+                try:
+                    plc_crud.create_plc(
+                        plant_id=plant_id,
+                        process_id=process_id,
+                        line_id=line_id,
+                        plc_name=plc_name,
+                        plc_id=plc_id,
+                        create_user=create_user,
+                        unit=unit,
+                    )
+                    created_count += 1
+                except HandledException as e:
+                    error_detail = e.msg_only or str(e)
+                    error_msg = f"행 {idx + 2} (PLC ID: {plc_id}): {error_detail}"
+                    errors.append(error_msg)
+                    failed_count += 1
+                except Exception as e:
+                    error_msg = f"행 {idx + 2} (PLC ID: {plc_id}): {str(e)}"
+                    errors.append(error_msg)
+                    failed_count += 1
+
+            except Exception as e:
+                errors.append(f"행 {idx + 2}: 처리 중 오류 발생: {str(e)}")
+                failed_count += 1
+
+        # 성공 메시지 결정
+        if failed_count == 0:
+            message = f"{created_count}개의 PLC가 생성되었습니다."
+        else:
+            message = f"{created_count}개 성공, {failed_count}개 실패했습니다."
+
+        return PLCBatchCreateResponse(
+            success=failed_count == 0,
+            message=message,
+            created_count=created_count,
+            failed_count=failed_count,
+            errors=errors,
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("PLC 엑셀 업로드 실패: %s", str(e))
+        error_detail = f"PLC 엑셀 업로드 중 오류가 발생했습니다: {str(e)}"
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=error_detail,
+        ) from e
+
+
 @router.put(
     "/batch",
     response_model=PLCBatchUpdateResponse,
@@ -760,31 +935,23 @@ def batch_create_plcs(
 )
 def batch_update_plcs(
     request_body: PLCBatchUpdateRequest,
-    request: Request,
-    user_id: Optional[str] = Query(None, description="사용자 ID (SSO 미사용 시 필수)", example="user001"),
     db: Session = Depends(get_db),
     _: None = Depends(check_any_role_dependency),
+    accessible_process_ids: Optional[List[str]] = Depends(
+        get_accessible_process_ids_dependency
+    ),
 ):
     """
     PLC 다건 수정
-    
+
     기존 PLC 수정 시 호출되는 API입니다.
-    
+
     **권한 기반 필터링:**
     - 시스템 관리자/통합 관리자: 모든 공정의 PLC 수정 가능
     - 공정 관리자: 지정된 공정의 PLC만 수정 가능
     - 일반 사용자: 접근 불가 (403 에러)
     """
     try:
-        # request.state.user_id 우선 사용 (미들웨어에서 설정된 경우), 없으면 파라미터 user_id 사용 (테스트용)
-        check_user_id = resolve_user_id(request, user_id)
-        
-        if not check_user_id:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="사용자 ID가 필요합니다."
-            )
-        
         plc_crud = PLCCRUD(db)
         from src.database.crud.master_crud import (
             LineMasterCRUD,
@@ -795,10 +962,6 @@ def batch_update_plcs(
         plant_crud = PlantMasterCRUD(db)
         process_crud = ProcessMasterCRUD(db)
         line_crud = LineMasterCRUD(db)
-        
-        # 사용자 권한 기반 접근 가능한 공정 ID 목록 조회
-        program_crud = ProgramCRUD(db)
-        accessible_process_ids = program_crud.get_accessible_process_ids(check_user_id)
 
         updated_count = 0
         failed_count = 0
@@ -809,29 +972,26 @@ def batch_update_plcs(
                 # 기존 PLC 조회
                 existing_plc = plc_crud.get_plc(item.plc_uuid)
                 if not existing_plc:
-                    errors.append(
-                        f"PLC UUID {item.plc_uuid}: PLC를 찾을 수 없습니다"
-                    )
+                    errors.append(f"PLC UUID {item.plc_uuid}: PLC를 찾을 수 없습니다")
                     failed_count += 1
                     continue
-                
+
                 # process_id 변경 여부 확인 및 권한 체크
-                target_process_id = item.process_id if item.process_id else existing_plc.process_id
+                target_process_id = (
+                    item.process_id if item.process_id else existing_plc.process_id
+                )
                 if target_process_id:
-                    if accessible_process_ids is not None:  # None이면 모든 공정 접근 가능
-                        if not accessible_process_ids:  # 빈 리스트면 접근 불가
-                            errors.append(
-                                f"PLC UUID {item.plc_uuid}: 공정 '{target_process_id}'에 접근할 권한이 없습니다."
-                            )
-                            failed_count += 1
-                            continue
-                        if target_process_id not in accessible_process_ids:
-                            errors.append(
-                                f"PLC UUID {item.plc_uuid}: 공정 '{target_process_id}'에 접근할 권한이 없습니다."
-                            )
-                            failed_count += 1
-                            continue
-                
+                    if not is_process_accessible(
+                        target_process_id, accessible_process_ids
+                    ):
+                        error_msg = (
+                            f"PLC UUID {item.plc_uuid}: "
+                            f"공정 '{target_process_id}'에 접근할 권한이 없습니다."
+                        )
+                        errors.append(error_msg)
+                        failed_count += 1
+                        continue
+
                 # 마스터 데이터 유효성 검사 (plant_id, process_id, line_id가 제공된 경우)
                 if item.plant_id:
                     plant = plant_crud.get_plant(item.plant_id)
@@ -875,9 +1035,7 @@ def batch_update_plcs(
                 if updated_plc:
                     updated_count += 1
                 else:
-                    errors.append(
-                        f"PLC UUID {item.plc_uuid}: PLC를 찾을 수 없습니다"
-                    )
+                    errors.append(f"PLC UUID {item.plc_uuid}: PLC를 찾을 수 없습니다")
                     failed_count += 1
 
             except HandledException as e:
@@ -916,13 +1074,15 @@ def batch_update_plcs(
 # 동적 경로(/{plc_uuid})는 마지막에 정의해야 함
 # ==========================================
 
+
 @router.get("/{plc_uuid}", response_model=Optional[PLCBasicInfo])
 def get_plc_by_id(
     plc_uuid: str,
-    request: Request,
-    user_id: Optional[str] = Query(None, description="사용자 ID (SSO 미사용 시 필수)", example="user001"),
     db: Session = Depends(get_db),
     _: None = Depends(check_any_role_dependency),
+    accessible_process_ids: Optional[List[str]] = Depends(
+        get_accessible_process_ids_dependency
+    ),
 ):
     """
     PLC 정보 조회 (PLC_UUID로)
@@ -931,22 +1091,13 @@ def get_plc_by_id(
     - is_deleted가 false인 경우에만 조회합니다 (사용 중으로 인식).
     - 기본 정보만 반환합니다 (plc_uuid, plc_id, plc_name, 계층 구조, program_id).
     - 검색 결과가 없으면 200 OK와 함께 null을 반환합니다 (REST API 규칙).
-    
+
     **권한 기반 필터링:**
     - 시스템 관리자/통합 관리자: 모든 공정의 PLC 조회 가능
     - 공정 관리자: 지정된 공정의 PLC만 조회 가능
     - 일반 사용자: 접근 불가 (403 에러)
     """
     try:
-        # request.state.user_id 우선 사용 (미들웨어에서 설정된 경우), 없으면 파라미터 user_id 사용 (테스트용)
-        check_user_id = resolve_user_id(request, user_id)
-        
-        if not check_user_id:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="사용자 ID가 필요합니다."
-            )
-        
         # PLC 조회
         plc_crud = PLCCRUD(db)
         plc = plc_crud.get_plc(plc_uuid)
@@ -958,21 +1109,14 @@ def get_plc_by_id(
         # is_deleted 체크 (is_active는 deprecated)
         if plc.is_deleted:
             return None
-        
+
         # 권한 체크: PLC의 process_id에 접근 권한이 있는지 확인
         if plc.process_id:
-            from src.core.permissions import check_process_access
-            check_process_access(plc.process_id, check_user_id, db)
-        plc_crud = PLCCRUD(db)
-        plc = plc_crud.get_plc(plc_uuid)
-
-        # 검색 결과가 비어 있어도 200 OK 반환 (REST API 규칙)
-        if not plc:
-            return None
-
-        # is_deleted 체크 (is_active는 deprecated)
-        if plc.is_deleted:
-            return None
+            if not is_process_accessible(plc.process_id, accessible_process_ids):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="PLC에 접근할 권한이 없습니다.",
+                )
 
         # program_id 변경 여부 체크
         program_id_changed = (
