@@ -1,11 +1,15 @@
 # _*_ coding: utf-8 _*_
 """Master Data API endpoints."""
 import logging
-from typing import Optional
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
-from src.core.dependencies import get_db, resolve_user_id
+from src.core.dependencies import (
+    get_accessible_process_ids_dependency,
+    get_db,
+    resolve_user_id,
+)
 from src.core.permissions import check_any_role_dependency
 from src.database.crud.master_crud import MasterHierarchyCRUD, ProcessMasterCRUD
 from src.database.crud.program_crud import ProgramCRUD
@@ -73,12 +77,11 @@ router = APIRouter(prefix="/masters", tags=["master-data"])
     """,
 )
 def get_masters_for_dropdown(
-    request: Request,
-    user_id: Optional[str] = Query(
-        None, description="사용자 ID (테스트용)", example="user001"
-    ),
     db: Session = Depends(get_db),
     _: None = Depends(check_any_role_dependency),
+    accessible_process_ids: Optional[List[str]] = Depends(
+        get_accessible_process_ids_dependency
+    ),
 ):
     """
     권한 기반 마스터 데이터 조회 (드롭다운용)
@@ -89,19 +92,6 @@ def get_masters_for_dropdown(
     - 일반 사용자: 접근 불가 (403 에러)
     """
     try:
-        # request.state.user_id 우선 사용 (미들웨어에서 설정된 경우), 없으면 파라미터 user_id 사용 (테스트용)
-        check_user_id = resolve_user_id(request, user_id)
-
-        if not check_user_id:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="사용자 ID가 필요합니다.",
-            )
-
-        # 사용자 권한 기반 접근 가능한 공정 ID 목록 조회
-        # None이면 모든 공정 접근 가능, List[str]이면 특정 공정만, []이면 접근 불가
-        program_crud = ProgramCRUD(db)
-        accessible_process_ids = program_crud.get_accessible_process_ids(check_user_id)
 
         # 권한 필터링된 마스터 데이터 조회
         master_crud = MasterHierarchyCRUD(db)
@@ -180,10 +170,6 @@ def get_masters_for_dropdown(
     """,
 )
 def get_processes(
-    request: Request,
-    user_id: Optional[str] = Query(
-        None, description="사용자 ID (테스트용)", example="user001"
-    ),
     include_inactive: bool = Query(False, description="비활성 공정 포함 여부"),
     sort_by: str = Query(
         "process_name", description="정렬 기준 (process_id, process_name, create_dt)"
@@ -191,6 +177,9 @@ def get_processes(
     sort_order: str = Query("asc", description="정렬 순서 (asc, desc)"),
     db: Session = Depends(get_db),
     _: None = Depends(check_any_role_dependency),
+    accessible_process_ids: Optional[List[str]] = Depends(
+        get_accessible_process_ids_dependency
+    ),
 ):
     """
     공정 목록 조회
@@ -201,19 +190,6 @@ def get_processes(
     - 일반 사용자: 접근 불가 (403 에러)
     """
     try:
-        # request.state.user_id 우선 사용 (미들웨어에서 설정된 경우), 없으면 파라미터 user_id 사용 (테스트용)
-        check_user_id = resolve_user_id(request, user_id)
-
-        if not check_user_id:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="사용자 ID가 필요합니다.",
-            )
-
-        # 사용자 권한 기반 접근 가능한 공정 조회
-        program_crud = ProgramCRUD(db)
-        accessible_process_ids = program_crud.get_accessible_process_ids(check_user_id)
-
         process_crud = ProcessMasterCRUD(db)
 
         # 모든 공정 접근 가능한 경우 (system_admin 또는 integrated_admin)
