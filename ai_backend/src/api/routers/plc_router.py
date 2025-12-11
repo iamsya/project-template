@@ -2,6 +2,7 @@
 """PLC Management API endpoints."""
 import io
 import logging
+import zipfile
 from typing import List, Optional
 
 import pandas as pd
@@ -724,13 +725,89 @@ def upload_plc_excel(
         excel_content = excel_file.file.read()
         excel_file.file.seek(0)
 
-        # pandas로 엑셀 파일 파싱
-        try:
-            df = pd.read_excel(io.BytesIO(excel_content), header=0)
-        except Exception as e:
+        # 파일이 비어있는지 확인
+        if not excel_content:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"엑셀 파일 파싱 실패: {str(e)}",
+                detail="업로드된 파일이 비어있습니다.",
+            )
+
+        # 파일 확장자 확인
+        filename = excel_file.filename or ""
+        if filename and not filename.lower().endswith((".xlsx", ".xls")):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"엑셀 파일 형식이 아닙니다. 파일명: {filename}",
+            )
+
+        # XLSX 파일인 경우 ZIP 형식인지 확인 (XLSX는 ZIP 압축된 XML 파일)
+        is_xlsx = filename.lower().endswith(".xlsx")
+        if is_xlsx:
+            try:
+                is_zip = zipfile.is_zipfile(io.BytesIO(excel_content))
+                if not is_zip:
+                    logger.warning(
+                        "XLSX 파일이 ZIP 형식이 아닙니다. "
+                        "파일명: %s, 파일 크기: %d bytes",
+                        filename,
+                        len(excel_content),
+                    )
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=(
+                            "파일이 올바른 XLSX 형식이 아닙니다. "
+                            "다음 사항을 확인해주세요:\n"
+                            "1. 파일이 암호화되어 있지 않은지 확인 (암호화된 파일은 지원하지 않습니다)\n"
+                            "2. 파일이 손상되지 않았는지 확인\n"
+                            "3. 파일이 실제로 XLSX 형식인지 확인 (다른 형식을 .xlsx로 저장한 경우)\n"
+                            "4. 파일을 다시 저장하여 업로드해보세요"
+                        ),
+                    )
+            except HTTPException:
+                raise
+            except Exception as e:
+                logger.warning(
+                    "ZIP 형식 확인 중 오류: %s, 파일명: %s", str(e), filename
+                )
+
+        # pandas로 엑셀 파일 파싱
+        try:
+            # XLSX 파일인 경우 openpyxl, XLS 파일인 경우 xlrd 사용
+            if filename.lower().endswith(".xls"):
+                df = pd.read_excel(io.BytesIO(excel_content), header=0, engine="xlrd")
+            else:
+                df = pd.read_excel(
+                    io.BytesIO(excel_content), header=0, engine="openpyxl"
+                )
+        except Exception as e:
+            error_msg = str(e)
+            error_type = type(e).__name__
+            logger.error(
+                "엑셀 파일 파싱 실패: 파일명=%s, 오류 타입=%s, 메시지=%s",
+                filename,
+                error_type,
+                error_msg,
+            )
+
+            if (
+                "not a zip file" in error_msg.lower()
+                or "badzipfile" in error_msg.lower()
+                or "zipfile" in error_type.lower()
+            ):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=(
+                        "파일이 올바른 XLSX 형식이 아닙니다. "
+                        "다음 사항을 확인해주세요:\n"
+                        "1. 파일이 암호화되어 있지 않은지 확인 (암호화된 파일은 지원하지 않습니다)\n"
+                        "2. 파일이 손상되지 않았는지 확인\n"
+                        "3. 파일이 실제로 XLSX 형식인지 확인\n"
+                        "4. 파일을 다시 저장하여 업로드해보세요"
+                    ),
+                )
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"엑셀 파일 파싱 실패: {error_msg}",
             )
 
         # 필수 컬럼 확인
@@ -759,6 +836,7 @@ def upload_plc_excel(
 
         created_count = 0
         failed_count = 0
+        skipped_count = 0
         errors = []
 
         # Plant, 공정, Line 이름으로 ID 조회 캐시 (성능 최적화)
@@ -783,10 +861,26 @@ def upload_plc_excel(
         # 각 행 처리
         for idx, row in df.iterrows():
             try:
-                # PLC ID 확인 (공백이면 무시)
-                plc_id = str(row.get("PLC ID", "")).strip()
-                if not plc_id or plc_id == "nan":
-                    continue  # PLC ID가 공백이면 해당 행 무시
+                # PLC ID 확인 (공백 허용)
+                plc_id_raw = row.get("PLC ID", "")
+                if pd.notna(plc_id_raw):
+                    plc_id = str(plc_id_raw).strip()
+                    if plc_id == "nan":
+                        plc_id = ""
+                else:
+                    plc_id = ""
+
+                # PLC ID가 있는 경우에만 중복 확인 (스킵)
+                if plc_id:
+                    existing_plc = plc_crud.get_plc_by_plc_id(plc_id)
+                    if existing_plc:
+                        skipped_count += 1
+                        logger.info(
+                            "행 %d (PLC ID: %s): 이미 존재하는 PLC이므로 스킵합니다.",
+                            idx + 2,
+                            plc_id,
+                        )
+                        continue
 
                 # Plant 이름으로 ID 조회
                 plant_name = str(row.get("Plant", "")).strip()
@@ -797,8 +891,9 @@ def upload_plc_excel(
 
                 plant_id = plant_name_to_id.get(plant_name)
                 if not plant_id:
+                    plc_id_display = plc_id if plc_id else "(PLC ID 없음)"
                     errors.append(
-                        f"행 {idx + 2} (PLC ID: {plc_id}): "
+                        f"행 {idx + 2} (PLC ID: {plc_id_display}): "
                         f"Plant '{plant_name}'를 찾을 수 없습니다."
                     )
                     failed_count += 1
@@ -807,16 +902,18 @@ def upload_plc_excel(
                 # 공정 이름으로 ID 조회
                 process_name = str(row.get("공정", "")).strip()
                 if not process_name or process_name == "nan":
+                    plc_id_display = plc_id if plc_id else "(PLC ID 없음)"
                     errors.append(
-                        f"행 {idx + 2} (PLC ID: {plc_id}): 공정 이름이 없습니다."
+                        f"행 {idx + 2} (PLC ID: {plc_id_display}): 공정 이름이 없습니다."
                     )
                     failed_count += 1
                     continue
 
                 process_id = process_name_to_id.get(process_name)
                 if not process_id:
+                    plc_id_display = plc_id if plc_id else "(PLC ID 없음)"
                     error_msg = (
-                        f"행 {idx + 2} (PLC ID: {plc_id}): "
+                        f"행 {idx + 2} (PLC ID: {plc_id_display}): "
                         f"공정 '{process_name}'를 찾을 수 없습니다."
                     )
                     errors.append(error_msg)
@@ -826,16 +923,18 @@ def upload_plc_excel(
                 # Line 이름으로 ID 조회
                 line_name = str(row.get("Line", "")).strip()
                 if not line_name or line_name == "nan":
+                    plc_id_display = plc_id if plc_id else "(PLC ID 없음)"
                     errors.append(
-                        f"행 {idx + 2} (PLC ID: {plc_id}): Line 이름이 없습니다."
+                        f"행 {idx + 2} (PLC ID: {plc_id_display}): Line 이름이 없습니다."
                     )
                     failed_count += 1
                     continue
 
                 line_id = line_name_to_id.get(line_name)
                 if not line_id:
+                    plc_id_display = plc_id if plc_id else "(PLC ID 없음)"
                     error_msg = (
-                        f"행 {idx + 2} (PLC ID: {plc_id}): "
+                        f"행 {idx + 2} (PLC ID: {plc_id_display}): "
                         f"Line '{line_name}'를 찾을 수 없습니다."
                     )
                     errors.append(error_msg)
@@ -845,8 +944,9 @@ def upload_plc_excel(
                 # 장비명 - 실 사용
                 plc_name = str(row.get("장비명 - 실 사용", "")).strip()
                 if not plc_name or plc_name == "nan":
+                    plc_id_display = plc_id if plc_id else "(PLC ID 없음)"
                     errors.append(
-                        f"행 {idx + 2} (PLC ID: {plc_id}): 장비명이 없습니다."
+                        f"행 {idx + 2} (PLC ID: {plc_id_display}): 장비명이 없습니다."
                     )
                     failed_count += 1
                     continue
@@ -874,11 +974,15 @@ def upload_plc_excel(
                     created_count += 1
                 except HandledException as e:
                     error_detail = e.msg_only or str(e)
-                    error_msg = f"행 {idx + 2} (PLC ID: {plc_id}): {error_detail}"
+                    plc_id_display = plc_id if plc_id else "(PLC ID 없음)"
+                    error_msg = (
+                        f"행 {idx + 2} (PLC ID: {plc_id_display}): {error_detail}"
+                    )
                     errors.append(error_msg)
                     failed_count += 1
                 except Exception as e:
-                    error_msg = f"행 {idx + 2} (PLC ID: {plc_id}): {str(e)}"
+                    plc_id_display = plc_id if plc_id else "(PLC ID 없음)"
+                    error_msg = f"행 {idx + 2} (PLC ID: {plc_id_display}): {str(e)}"
                     errors.append(error_msg)
                     failed_count += 1
 
@@ -888,9 +992,21 @@ def upload_plc_excel(
 
         # 성공 메시지 결정
         if failed_count == 0:
-            message = f"{created_count}개의 PLC가 생성되었습니다."
+            if skipped_count > 0:
+                message = (
+                    f"{created_count}개의 PLC가 생성되었습니다. "
+                    f"(이미 존재하는 {skipped_count}개는 스킵되었습니다)"
+                )
+            else:
+                message = f"{created_count}개의 PLC가 생성되었습니다."
         else:
-            message = f"{created_count}개 성공, {failed_count}개 실패했습니다."
+            if skipped_count > 0:
+                message = (
+                    f"{created_count}개 성공, {failed_count}개 실패, "
+                    f"{skipped_count}개 스킵되었습니다."
+                )
+            else:
+                message = f"{created_count}개 성공, {failed_count}개 실패했습니다."
 
         return PLCBatchCreateResponse(
             success=failed_count == 0,
